@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #6b8e6f; /* Sage green */
+  --color-background: #faf8f3; /* Warm white */
+  --color-accent: #d4a574; /* Golden yellow */
+  --color-text: #2c2c2c; /* Dark charcoal */
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-background);
+  color: var(--color-text);
+}

@@ -1,0 +1,31 @@
+# Environment / secrets
+.env
+.env.local
+*.env
+!.env.example
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+
+# Python
+__pycache__/
+*.py[oc]
+.venv/
+
+# Supabase local dev
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

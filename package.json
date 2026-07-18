@@ -1,0 +1,12 @@
+{
+  "name": "burrow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Root tooling for the Burrow monorepo (Supabase CLI only — see /backend and /frontend for the apps)",
+  "scripts": {
+    "supabase": "supabase"
+  },
+  "devDependencies": {
+    "supabase": "^2.109.1"
+  }
+}
