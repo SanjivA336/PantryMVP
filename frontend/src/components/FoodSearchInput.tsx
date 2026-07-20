@@ -3,7 +3,11 @@ import { apiClient } from '../lib/apiClient'
 import type { FoodDefinition } from '../types/entities'
 
 interface Props {
-  value: FoodDefinition | null
+  // Callers that only have a food's id/name on hand (e.g. pre-filling an
+  // edit form from a recipe ingredient, which doesn't carry the full
+  // FoodDefinition) can pass just that much -- this component only ever
+  // reads `.name` off the current value.
+  value: Pick<FoodDefinition, 'id' | 'name'> | null
   onChange: (food: FoodDefinition | null) => void
 }
 

@@ -150,3 +150,34 @@ export interface ShoppingListItem {
   created_at: string
   updated_at: string
 }
+
+export interface Recipe {
+  id: string
+  household_id: string
+  created_by_member_id: string
+  name: string
+  description: string | null
+  servings: number
+  prep_time_minutes: number | null
+  cook_time_minutes: number | null
+  instructions: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface RecipeIngredient {
+  id: string
+  recipe_id: string
+  global_food_definition_id: string
+  food_name: string
+  quantity: string
+  unit: string
+  note: string | null
+  position: number
+  available: boolean
+  available_quantity: string | null
+}
+
+export interface RecipeDetail extends Recipe {
+  ingredients: RecipeIngredient[]
+}

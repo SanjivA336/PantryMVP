@@ -14,6 +14,11 @@ import { AddInventoryItemPage } from './pages/inventory/AddInventoryItemPage'
 import { BalancesPage } from './pages/ledger/BalancesPage'
 import { ShoppingListPage } from './pages/shopping-list'
 import { RecipesPage } from './pages/recipes'
+import { AddRecipePage } from './pages/recipes/AddRecipePage'
+import { EditRecipePage } from './pages/recipes/EditRecipePage'
+import { RecipeDetailPage } from './pages/recipes/RecipeDetailPage'
+import { ImportRecipePage } from './pages/recipes/ImportRecipePage'
+import { GenerateRecipePage } from './pages/recipes/GenerateRecipePage'
 import { ScanReceiptPage } from './pages/scan-receipt'
 
 function App() {
@@ -36,6 +41,11 @@ function App() {
               <Route path="storage" element={<StoragePage />} />
               <Route path="shopping-list" element={<ShoppingListPage />} />
               <Route path="recipes" element={<RecipesPage />} />
+              <Route path="recipes/new" element={<AddRecipePage />} />
+              <Route path="recipes/import" element={<ImportRecipePage />} />
+              <Route path="recipes/generate" element={<GenerateRecipePage />} />
+              <Route path="recipes/:recipeId" element={<RecipeDetailPage />} />
+              <Route path="recipes/:recipeId/edit" element={<EditRecipePage />} />
               <Route path="scan-receipt" element={<ScanReceiptPage />} />
             </Route>
           </Route>
