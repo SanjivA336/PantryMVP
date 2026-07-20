@@ -8,6 +8,7 @@ export const addInventoryItemSchema = z.object({
   expiry_date: z.string().optional(),
   best_by_date: z.string().optional(),
   allowed_member_ids: z.array(z.string()).min(1, 'Pick at least one member'),
+  accounting_type: z.enum(['PERSONAL', 'SHARED_CONSUMABLE', 'UNIT_BASED']),
 })
 // react-hook-form's raw state holds string inputs (z.input) before
 // submission; the resolver transforms them to the coerced types (z.output)

@@ -70,8 +70,31 @@ export interface InventoryItem {
   is_frozen: boolean
   freeze_date: string | null
   status: InventoryItemStatus
+  accounting_type: AccountingType
+  split_member_count: number | null
   created_at: string
   updated_at: string
   food_name: string
   storage_location_name: string
+}
+
+export type LedgerEntryReason = 'PURCHASE' | 'OVERAGE' | 'ADJUSTMENT'
+
+export interface LedgerEntry {
+  id: string
+  household_id: string
+  creditor_member_id: string
+  debtor_member_id: string
+  amount: string
+  reason: LedgerEntryReason
+  source_purchase_event_id: string | null
+  source_consumption_event_id: string | null
+  settled_at: string | null
+  created_at: string
+}
+
+export interface LedgerBalance {
+  debtor_member_id: string
+  creditor_member_id: string
+  amount: string
 }

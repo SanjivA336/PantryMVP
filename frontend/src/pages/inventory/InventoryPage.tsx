@@ -2,7 +2,14 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
-import type { InventoryItem, RemovalReason } from '../../types/entities'
+import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
+import type { AccountingType, InventoryItem, RemovalReason } from '../../types/entities'
+
+const ACCOUNTING_TYPE_LABELS: Record<AccountingType, string> = {
+  PERSONAL: 'Personal',
+  SHARED_CONSUMABLE: 'Shared',
+  UNIT_BASED: 'Unit-based',
+}
 
 export function InventoryPage() {
   const { householdId } = useParams<{ householdId: string }>()
@@ -14,6 +21,9 @@ export function InventoryPage() {
   } = useHouseholdResource<InventoryItem[]>(
     householdId ? `/api/households/${householdId}/inventory-items?status=ACTIVE` : null,
   )
+  // Another member consuming/adding/discarding an item on their own device
+  // shows up here without a manual refresh.
+  useRealtimeSubscription('inventory_items', householdId ?? null, reload)
   const [actionError, setActionError] = useState<string | null>(null)
   const [consumeAmounts, setConsumeAmounts] = useState<Record<string, string>>({})
 
@@ -72,6 +82,11 @@ export function InventoryPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <span className="font-medium">{item.food_name}</span>
+                  {item.accounting_type !== 'PERSONAL' && (
+                    <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                      {ACCOUNTING_TYPE_LABELS[item.accounting_type]}
+                    </span>
+                  )}
                   <p className="text-sm text-gray-500">
                     {item.quantity} / {item.total_quantity} {item.preferred_unit} —{' '}
                     {item.storage_location_name}

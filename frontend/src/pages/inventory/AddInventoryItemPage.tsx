@@ -27,7 +27,7 @@ export function AddInventoryItemPage() {
     formState: { errors, isSubmitting },
   } = useForm<AddInventoryItemFormInput, unknown, AddInventoryItemForm>({
     resolver: zodResolver(addInventoryItemSchema),
-    defaultValues: { allowed_member_ids: [] },
+    defaultValues: { allowed_member_ids: [], accounting_type: 'PERSONAL' },
   })
 
   useEffect(() => {
@@ -46,7 +46,13 @@ export function AddInventoryItemPage() {
   }, [householdId, setValue])
 
   useEffect(() => {
-    if (food) setValue('preferred_unit', food.preferred_unit)
+    if (food) {
+      setValue('preferred_unit', food.preferred_unit)
+      // Pre-fill from the food's own default, but the buyer can still
+      // override it below — some purchases of the same food are personal
+      // even if that food is usually shared, and vice versa.
+      setValue('accounting_type', food.accounting_type_default)
+    }
   }, [food, setValue])
 
   const selectedMemberIds = watch('allowed_member_ids') ?? []
@@ -75,6 +81,7 @@ export function AddInventoryItemPage() {
         expiry_date: values.expiry_date || null,
         best_by_date: values.best_by_date || null,
         allowed_member_ids: values.allowed_member_ids,
+        accounting_type: values.accounting_type,
       })
       navigate(`/households/${householdId}`)
     } catch (err) {
@@ -159,6 +166,20 @@ export function AddInventoryItemPage() {
               {...register('best_by_date')}
             />
           </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">How is the cost split?</label>
+          <select
+            className="w-full rounded-md border border-gray-300 px-3 py-2"
+            {...register('accounting_type')}
+          >
+            <option value="PERSONAL">Personal — just mine, no splitting</option>
+            <option value="SHARED_CONSUMABLE">Shared — split evenly, no usage tracking</option>
+            <option value="UNIT_BASED">
+              Unit-based — split evenly, but charge extra to whoever goes over their share
+            </option>
+          </select>
         </div>
 
         <div>

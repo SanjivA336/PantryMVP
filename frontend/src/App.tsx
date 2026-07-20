@@ -11,6 +11,7 @@ import { MembersPage } from './pages/members/MembersPage'
 import { StoragePage } from './pages/storage/StoragePage'
 import { InventoryPage } from './pages/inventory/InventoryPage'
 import { AddInventoryItemPage } from './pages/inventory/AddInventoryItemPage'
+import { BalancesPage } from './pages/ledger/BalancesPage'
 import { ShoppingListPage } from './pages/shopping-list'
 import { RecipesPage } from './pages/recipes'
 import { ScanReceiptPage } from './pages/scan-receipt'
@@ -30,6 +31,7 @@ function App() {
             <Route path="/households/:householdId" element={<HouseholdShell />}>
               <Route index element={<InventoryPage />} />
               <Route path="inventory/add" element={<AddInventoryItemPage />} />
+              <Route path="balances" element={<BalancesPage />} />
               <Route path="members" element={<MembersPage />} />
               <Route path="storage" element={<StoragePage />} />
               <Route path="shopping-list" element={<ShoppingListPage />} />

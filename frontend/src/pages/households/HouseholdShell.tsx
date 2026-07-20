@@ -5,6 +5,7 @@ import type { Household } from '../../types/entities'
 
 const NAV_ITEMS = [
   { to: '', label: 'Inventory', end: true },
+  { to: 'balances', label: 'Balances' },
   { to: 'members', label: 'Members' },
   { to: 'storage', label: 'Storage' },
   { to: 'shopping-list', label: 'Shopping List' },
