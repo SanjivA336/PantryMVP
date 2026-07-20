@@ -1,13 +1,41 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext'
+import { AuthGuard } from './components/AuthGuard'
+import { SignupPage } from './pages/auth/SignupPage'
+import { LoginPage } from './pages/auth/LoginPage'
+import { HouseholdPickerPage } from './pages/households/HouseholdPickerPage'
+import { CreateHouseholdPage } from './pages/households/CreateHouseholdPage'
+import { JoinHouseholdPage } from './pages/households/JoinHouseholdPage'
+import { HouseholdShell } from './pages/households/HouseholdShell'
+import { MembersPage } from './pages/members/MembersPage'
+import { StoragePage } from './pages/storage/StoragePage'
+import { ShoppingListPage } from './pages/shopping-list'
+import { RecipesPage } from './pages/recipes'
+import { ScanReceiptPage } from './pages/scan-receipt'
+
 function App() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-2 text-center">
-      <h1 className="text-3xl font-semibold" style={{ color: 'var(--color-primary)' }}>
-        Burrow
-      </h1>
-      <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-        A home for your food — scaffolding complete.
-      </p>
-    </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/login" element={<LoginPage />} />
+
+          <Route element={<AuthGuard />}>
+            <Route path="/" element={<HouseholdPickerPage />} />
+            <Route path="/households/new" element={<CreateHouseholdPage />} />
+            <Route path="/households/join" element={<JoinHouseholdPage />} />
+            <Route path="/households/:householdId" element={<HouseholdShell />}>
+              <Route index element={<MembersPage />} />
+              <Route path="storage" element={<StoragePage />} />
+              <Route path="shopping-list" element={<ShoppingListPage />} />
+              <Route path="recipes" element={<RecipesPage />} />
+              <Route path="scan-receipt" element={<ScanReceiptPage />} />
+            </Route>
+          </Route>
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   )
 }
 

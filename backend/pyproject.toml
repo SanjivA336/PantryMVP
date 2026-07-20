@@ -6,8 +6,10 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.139.2",
+    "httpx>=0.28.1",
     "pydantic-settings>=2.14.2",
     "python-jose[cryptography]>=3.5.0",
+    "supabase>=2.31.0",
     "uvicorn[standard]>=0.51.0",
 ]
 
@@ -22,6 +24,10 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-m 'not rls'"
+markers = [
+    "rls: hits the real linked Supabase project and costs Auth quota; run explicitly with `uv run pytest -m rls`",
+]
 
 [tool.ruff]
 line-length = 100
@@ -29,3 +35,8 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's DI system requires `= Depends(...)` in argument defaults — this
+# isn't the mutable-default-argument footgun B008 exists to catch.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query", "fastapi.Path"]

@@ -10,10 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
+    "@supabase/supabase-js": "^2.110.7",
     "@tailwindcss/vite": "^4.3.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "tailwindcss": "^4.3.3"
+    "react-hook-form": "^7.82.0",
+    "react-router-dom": "^7.18.1",
+    "tailwindcss": "^4.3.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
@@ -21,6 +26,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
+    "playwright": "^1.61.1",
     "prettier": "^3.9.5",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"

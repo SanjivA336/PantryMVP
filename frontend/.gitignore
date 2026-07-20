@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Playwright manual verification script's output (regenerated each run)
+e2e-shots
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
