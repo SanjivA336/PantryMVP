@@ -88,6 +88,7 @@ def compute_warnings(household_id: UUID) -> HouseholdWarnings:
                 preferred_unit=most_recent.preferred_unit,
                 remaining_quantity=active_quantity,
                 reference_quantity=reference_quantity,
+                reference_purchased_at=most_recent.purchased_at,
             )
         )
 

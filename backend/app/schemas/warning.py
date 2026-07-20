@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -37,6 +37,10 @@ class StockWarning(BaseModel):
     # that purchase's current status -- the baseline "what a normal buy looks
     # like" that remaining_quantity is judged against.
     reference_quantity: Decimal
+    # When that reference purchase happened -- the shopping list's suggest
+    # algorithm uses this to tell "dismissed, nothing's changed since" apart
+    # from "dismissed, but a new purchase since then means try again".
+    reference_purchased_at: datetime
 
 
 class HouseholdWarnings(BaseModel):

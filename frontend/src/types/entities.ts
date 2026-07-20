@@ -118,9 +118,35 @@ export interface StockWarning {
   preferred_unit: string
   remaining_quantity: string
   reference_quantity: string
+  reference_purchased_at: string
 }
 
 export interface HouseholdWarnings {
   expiry_warnings: ExpiryWarning[]
   stock_warnings: StockWarning[]
+}
+
+export type ShoppingListItemSource = 'MANUAL' | 'SUGGESTED'
+export type ShoppingListItemStatus = 'ACTIVE' | 'REMOVED'
+
+export interface ShoppingListSection {
+  id: string
+  household_id: string
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ShoppingListItem {
+  id: string
+  household_id: string
+  section_id: string | null
+  name: string
+  household_food_variant_id: string | null
+  source: ShoppingListItemSource
+  status: ShoppingListItemStatus
+  added_by_member_id: string
+  removed_at: string | null
+  created_at: string
+  updated_at: string
 }
