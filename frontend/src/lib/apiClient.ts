@@ -25,17 +25,22 @@ export class ApiError extends Error {
 
 // A hard page reload occasionally hits the network before the browser has
 // fully re-established itself (observed via Playwright: `TypeError: Failed
-// to fetch` on the first request right after `location.reload()`). Retrying
-// once is safe here because we only do it for GET — a lost POST/PATCH/DELETE
-// might have actually reached the server, and blindly retrying a mutation
-// risks duplicating it.
+// to fetch` on the first request right after `location.reload()`), and a
+// page that fires several concurrent GETs at once (e.g. household + items +
+// warnings all loading together) can occasionally trip a transient
+// connection-pool hiccup on the dev backend. Retrying is safe here because
+// we only do it for GET — a lost POST/PATCH/DELETE might have actually
+// reached the server, and blindly retrying a mutation risks duplicating it.
+const GET_RETRY_ATTEMPTS = 2
+
 async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
-  try {
-    return await fetch(url, init)
-  } catch (err) {
-    if (init.method !== 'GET') throw err
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    return fetch(url, init)
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetch(url, init)
+    } catch (err) {
+      if (init.method !== 'GET' || attempt >= GET_RETRY_ATTEMPTS) throw err
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    }
   }
 }
 

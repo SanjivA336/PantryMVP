@@ -7,6 +7,7 @@ from app.api.routers import (
     ledger,
     members,
     storage_locations,
+    warnings,
 )
 
 api_router = APIRouter(prefix="/api")
@@ -16,3 +17,4 @@ api_router.include_router(storage_locations.router)
 api_router.include_router(food_definitions.router)
 api_router.include_router(inventory_items.router)
 api_router.include_router(ledger.router)
+api_router.include_router(warnings.router)

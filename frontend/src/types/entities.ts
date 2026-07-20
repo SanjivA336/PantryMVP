@@ -98,3 +98,29 @@ export interface LedgerBalance {
   creditor_member_id: string
   amount: string
 }
+
+export type ExpiryWarningType = 'EXPIRING_SOON' | 'EXPIRED'
+export type StockWarningType = 'LOW_STOCK' | 'OUT_OF_STOCK'
+
+export interface ExpiryWarning {
+  type: ExpiryWarningType
+  inventory_item_id: string
+  food_name: string
+  storage_location_name: string
+  relevant_date: string
+  days_until: number
+}
+
+export interface StockWarning {
+  type: StockWarningType
+  household_food_variant_id: string
+  food_name: string
+  preferred_unit: string
+  remaining_quantity: string
+  reference_quantity: string
+}
+
+export interface HouseholdWarnings {
+  expiry_warnings: ExpiryWarning[]
+  stock_warnings: StockWarning[]
+}
