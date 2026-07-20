@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.food_definition import AccountingType
+
 
 class InventoryItemStatus(StrEnum):
     ACTIVE = "ACTIVE"
@@ -41,6 +43,8 @@ class InventoryItem(BaseModel):
     is_frozen: bool
     freeze_date: date | None
     status: InventoryItemStatus
+    accounting_type: AccountingType
+    split_member_count: int | None
     created_at: datetime
     updated_at: datetime
     # Resolved via joins in the service layer — never stored directly on this
@@ -59,6 +63,10 @@ class CreateInventoryItemRequest(BaseModel):
     expiry_date: date | None = None
     best_by_date: date | None = None
     allowed_member_ids: list[UUID] = Field(min_length=1)
+    # Optional: falls back to the chosen food definition's accounting_type_default
+    # when omitted (resolved in the service layer, not the RPC — this is a
+    # product-level fallback decision, not a database invariant).
+    accounting_type: AccountingType | None = None
 
 
 class ConsumeInventoryItemRequest(BaseModel):

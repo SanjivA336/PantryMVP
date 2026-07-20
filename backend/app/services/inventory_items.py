@@ -4,6 +4,7 @@ from uuid import UUID
 from postgrest.exceptions import APIError
 
 from app.core.supabase import get_service_client
+from app.schemas.food_definition import AccountingType
 from app.schemas.inventory_item import CreateInventoryItemRequest, InventoryItem, RemovalReason
 
 _TABLE = "inventory_items"
@@ -22,6 +23,10 @@ class InsufficientQuantityError(Exception):
     pass
 
 
+class MemberNotAllowedError(Exception):
+    pass
+
+
 def _flatten(row: dict) -> InventoryItem:
     variant = row.pop("household_food_variants", None) or {}
     storage = row.pop("storage_locations", None) or {}
@@ -35,9 +40,24 @@ def _flatten(row: dict) -> InventoryItem:
     return InventoryItem(**row)
 
 
+def _resolve_accounting_type(body: CreateInventoryItemRequest) -> AccountingType:
+    if body.accounting_type is not None:
+        return body.accounting_type
+    client = get_service_client()
+    result = (
+        client.table("global_food_definitions")
+        .select("accounting_type_default")
+        .eq("id", str(body.global_food_definition_id))
+        .single()
+        .execute()
+    )
+    return AccountingType(result.data["accounting_type_default"])
+
+
 def create_manual(
     household_id: UUID, member_id: UUID, body: CreateInventoryItemRequest
 ) -> InventoryItem:
+    accounting_type = _resolve_accounting_type(body)
     client = get_service_client()
     rpc_result = client.rpc(
         "create_manual_inventory_item",
@@ -52,6 +72,7 @@ def create_manual(
             "p_expiry_date": body.expiry_date.isoformat() if body.expiry_date else None,
             "p_best_by_date": body.best_by_date.isoformat() if body.best_by_date else None,
             "p_allowed_member_ids": [str(m) for m in body.allowed_member_ids],
+            "p_accounting_type": accounting_type.value,
         },
     ).execute()
     new_item_id = (
@@ -101,6 +122,8 @@ def consume(
     except APIError as exc:
         if "INSUFFICIENT_QUANTITY" in str(exc):
             raise InsufficientQuantityError from exc
+        if "MEMBER_NOT_ALLOWED" in str(exc):
+            raise MemberNotAllowedError from exc
         raise
     return get_by_id(household_id, item_id)  # type: ignore[return-value]
 

@@ -28,6 +28,8 @@ def _item(household_id: uuid.UUID, **overrides) -> InventoryItem:
         is_frozen=False,
         freeze_date=None,
         status="ACTIVE",
+        accounting_type="PERSONAL",
+        split_member_count=None,
         created_at=now,
         updated_at=now,
         food_name="Whole Milk",
@@ -192,6 +194,29 @@ async def test_consume_within_available_succeeds(client, fake_members, fake_inve
 
     assert response.status_code == 200
     assert response.json()["data"]["quantity"] == "3"
+
+
+async def test_consume_by_disallowed_member_is_rejected(
+    client, fake_members, fake_inventory, monkeypatch
+) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+    item = _item(household_id, quantity=Decimal("5"))
+    fake_inventory[item.id] = item
+
+    def consume(household_id, member_id, item_id, quantity_used):
+        raise inventory_service.MemberNotAllowedError
+
+    monkeypatch.setattr("app.services.inventory_items.consume", consume)
+
+    response = await client.post(
+        f"/api/households/{household_id}/inventory-items/{item.id}/consume",
+        json={"quantity_used": "2"},
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 403
 
 
 async def test_discard_nonactive_item_returns_404(client, fake_members, fake_inventory) -> None:

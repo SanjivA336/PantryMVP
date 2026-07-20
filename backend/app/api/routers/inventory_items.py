@@ -66,6 +66,11 @@ def consume_inventory_item(
             status.HTTP_400_BAD_REQUEST,
             "Cannot use more than the item's remaining quantity",
         ) from exc
+    except inventory_service.MemberNotAllowedError as exc:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "You are not on this item's allowed-members list",
+        ) from exc
     return ok(item)
 
 
