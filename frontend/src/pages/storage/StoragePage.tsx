@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import type { StorageLocation } from '../../types/entities'
 import { storageLocationSchema, type StorageLocationForm } from './schema'
 
@@ -16,9 +17,15 @@ const TYPE_OPTIONS: StorageLocationForm['type'][] = [
 
 export function StoragePage() {
   const { householdId } = useParams<{ householdId: string }>()
-  const [locations, setLocations] = useState<StorageLocation[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const {
+    data: locations,
+    loading,
+    error: loadError,
+    reload,
+  } = useHouseholdResource<StorageLocation[]>(
+    householdId ? `/api/households/${householdId}/storage-locations` : null,
+  )
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const {
     register,
@@ -27,43 +34,24 @@ export function StoragePage() {
     formState: { errors, isSubmitting },
   } = useForm<StorageLocationForm>({ resolver: zodResolver(storageLocationSchema) })
 
-  const load = useCallback(async () => {
-    if (!householdId) return
-    setLoading(true)
-    try {
-      const data = await apiClient.get<StorageLocation[]>(
-        `/api/households/${householdId}/storage-locations`,
-      )
-      setLocations(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load storage locations')
-    } finally {
-      setLoading(false)
-    }
-  }, [householdId])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
   const onCreate = async (values: StorageLocationForm) => {
-    setError(null)
+    setActionError(null)
     try {
       await apiClient.post(`/api/households/${householdId}/storage-locations`, values)
       reset()
-      await load()
+      reload()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong')
+      setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
     }
   }
 
   const onDelete = async (location: StorageLocation) => {
-    setError(null)
+    setActionError(null)
     try {
       await apiClient.delete(`/api/households/${householdId}/storage-locations/${location.id}`)
-      await load()
+      reload()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong')
+      setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
     }
   }
 
@@ -105,13 +93,15 @@ export function StoragePage() {
         </form>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(loadError || actionError) && (
+        <p className="text-sm text-red-600">{loadError ?? actionError}</p>
+      )}
 
       <div>
         <h2 className="mb-2 text-lg font-semibold">Storage locations</h2>
         {loading ? (
           <p className="text-sm">Loading…</p>
-        ) : locations.length === 0 ? (
+        ) : !locations || locations.length === 0 ? (
           <p className="text-sm text-gray-500">No storage locations yet.</p>
         ) : (
           <ul className="flex flex-col gap-2">

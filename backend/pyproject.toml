@@ -24,9 +24,10 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-m 'not rls'"
+addopts = "-m 'not rls and not integration'"
 markers = [
     "rls: hits the real linked Supabase project and costs Auth quota; run explicitly with `uv run pytest -m rls`",
+    "integration: hits the real linked Supabase project's RPCs/triggers (not RLS-focused); run explicitly with `uv run pytest -m integration`",
 ]
 
 [tool.ruff]

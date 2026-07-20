@@ -1,8 +1,16 @@
 from fastapi import APIRouter
 
-from app.api.routers import households, members, storage_locations
+from app.api.routers import (
+    food_definitions,
+    households,
+    inventory_items,
+    members,
+    storage_locations,
+)
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(households.router)
 api_router.include_router(members.router)
 api_router.include_router(storage_locations.router)
+api_router.include_router(food_definitions.router)
+api_router.include_router(inventory_items.router)

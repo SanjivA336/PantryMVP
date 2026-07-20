@@ -1,78 +1,7 @@
 import uuid
-from datetime import UTC, datetime
 
-import pytest
-
-from app.schemas.member import Member
 from tests.conftest import auth_header
-
-
-def _member(
-    household_id: uuid.UUID, user_id: uuid.UUID, *, is_admin: bool, is_active: bool = True
-) -> Member:
-    now = datetime.now(UTC)
-    return Member(
-        id=uuid.uuid4(),
-        household_id=household_id,
-        user_id=user_id,
-        nickname="Test Member",
-        is_admin=is_admin,
-        is_active=is_active,
-        created_at=now,
-        updated_at=now,
-    )
-
-
-class MemberStore(dict):
-    def seed(self, member: Member) -> Member:
-        self[(member.household_id, member.id)] = member
-        return member
-
-
-@pytest.fixture
-def fake_members(monkeypatch):
-    store: MemberStore = MemberStore()
-
-    def get_active_member(household_id, user_id):
-        return next(
-            (
-                m
-                for m in store.values()
-                if m.household_id == household_id and m.user_id == user_id and m.is_active
-            ),
-            None,
-        )
-
-    def get_member_by_id(household_id, member_id):
-        return store.get((household_id, member_id))
-
-    def list_members(household_id):
-        return [m for m in store.values() if m.household_id == household_id]
-
-    def count_active_admins(household_id):
-        return sum(
-            1
-            for m in store.values()
-            if m.household_id == household_id and m.is_admin and m.is_active
-        )
-
-    def update_member(household_id, member_id, updates):
-        current = store[(household_id, member_id)]
-        updated = current.model_copy(update=updates)
-        store[(household_id, member_id)] = updated
-        return updated
-
-    def deactivate_member(household_id, member_id):
-        return update_member(household_id, member_id, {"is_active": False})
-
-    monkeypatch.setattr("app.services.members.get_active_member", get_active_member)
-    monkeypatch.setattr("app.services.members.get_member_by_id", get_member_by_id)
-    monkeypatch.setattr("app.services.members.list_members", list_members)
-    monkeypatch.setattr("app.services.members.count_active_admins", count_active_admins)
-    monkeypatch.setattr("app.services.members.update_member", update_member)
-    monkeypatch.setattr("app.services.members.deactivate_member", deactivate_member)
-
-    return store
+from tests.conftest import make_member as _member
 
 
 async def test_non_member_cannot_list_members(client, fake_members) -> None:

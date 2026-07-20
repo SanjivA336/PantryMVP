@@ -1,42 +1,31 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { useAuth } from '../../hooks/useAuth'
+import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import type { Member } from '../../types/entities'
 
 export function MembersPage() {
   const { householdId } = useParams<{ householdId: string }>()
   const { user } = useAuth()
-  const [members, setMembers] = useState<Member[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const {
+    data: allMembers,
+    loading,
+    error: loadError,
+    reload,
+  } = useHouseholdResource<Member[]>(householdId ? `/api/households/${householdId}/members` : null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    if (!householdId) return
-    setLoading(true)
-    try {
-      const data = await apiClient.get<Member[]>(`/api/households/${householdId}/members`)
-      setMembers(data.filter((m) => m.is_active))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load members')
-    } finally {
-      setLoading(false)
-    }
-  }, [householdId])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
+  const members = (allMembers ?? []).filter((m) => m.is_active)
   const me = members.find((m) => m.user_id === user?.id)
 
   const runAction = async (action: () => Promise<unknown>) => {
-    setError(null)
+    setActionError(null)
     try {
       await action()
-      await load()
+      reload()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong')
+      setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
     }
   }
 
@@ -58,7 +47,9 @@ export function MembersPage() {
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold">Members</h2>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(loadError || actionError) && (
+        <p className="text-sm text-red-600">{loadError ?? actionError}</p>
+      )}
       <ul className="flex flex-col gap-2">
         {members.map((member) => {
           const isSelf = member.id === me?.id
