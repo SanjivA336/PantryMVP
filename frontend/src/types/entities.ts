@@ -181,3 +181,55 @@ export interface RecipeIngredient {
 export interface RecipeDetail extends Recipe {
   ingredients: RecipeIngredient[]
 }
+
+export type ReceiptImportSessionStatus =
+  'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'FINALIZED'
+export type ReceiptImportItemStatus = 'NEEDS_REVIEW' | 'CONFIRMED' | 'SKIPPED' | 'IMPORTED'
+
+export interface ReceiptImportSession {
+  id: string
+  household_id: string
+  created_by_member_id: string
+  status: ReceiptImportSessionStatus
+  image_path: string
+  ocr_engine: string | null
+  raw_ocr_text: string | null
+  error_message: string | null
+  processed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ReceiptImportItem {
+  id: string
+  session_id: string
+  position: number
+  raw_line_text: string
+  parsed_name: string | null
+  parsed_quantity: string | null
+  parsed_unit: string | null
+  parsed_price: string | null
+  global_food_definition_id: string | null
+  food_name: string | null
+  storage_location_id: string | null
+  storage_location_name: string | null
+  quantity: string | null
+  preferred_unit: string | null
+  cost: string | null
+  accounting_type: AccountingType | null
+  allowed_member_ids: string[]
+  status: ReceiptImportItemStatus
+  created_inventory_item_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ReceiptImportSessionWithItems extends ReceiptImportSession {
+  items: ReceiptImportItem[]
+}
+
+export interface CreateReceiptImportSessionResponse {
+  id: string
+  upload_bucket: string
+  upload_path: string
+}

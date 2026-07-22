@@ -20,6 +20,7 @@ import { RecipeDetailPage } from './pages/recipes/RecipeDetailPage'
 import { ImportRecipePage } from './pages/recipes/ImportRecipePage'
 import { GenerateRecipePage } from './pages/recipes/GenerateRecipePage'
 import { ScanReceiptPage } from './pages/scan-receipt'
+import { ReviewReceiptSessionPage } from './pages/scan-receipt/ReviewReceiptSessionPage'
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
               <Route path="recipes/:recipeId" element={<RecipeDetailPage />} />
               <Route path="recipes/:recipeId/edit" element={<EditRecipePage />} />
               <Route path="scan-receipt" element={<ScanReceiptPage />} />
+              <Route path="scan-receipt/:sessionId" element={<ReviewReceiptSessionPage />} />
             </Route>
           </Route>
         </Routes>

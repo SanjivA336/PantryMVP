@@ -6,6 +6,7 @@ from app.api.routers import (
     inventory_items,
     ledger,
     members,
+    receipt_imports,
     recipes,
     shopping_list,
     storage_locations,
@@ -22,3 +23,4 @@ api_router.include_router(ledger.router)
 api_router.include_router(warnings.router)
 api_router.include_router(shopping_list.router)
 api_router.include_router(recipes.router)
+api_router.include_router(receipt_imports.router)

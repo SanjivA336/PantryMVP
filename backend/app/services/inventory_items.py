@@ -55,7 +55,10 @@ def _resolve_accounting_type(body: CreateInventoryItemRequest) -> AccountingType
 
 
 def create_manual(
-    household_id: UUID, member_id: UUID, body: CreateInventoryItemRequest
+    household_id: UUID,
+    member_id: UUID,
+    body: CreateInventoryItemRequest,
+    receipt_image_path: str | None = None,
 ) -> InventoryItem:
     accounting_type = _resolve_accounting_type(body)
     client = get_service_client()
@@ -73,6 +76,7 @@ def create_manual(
             "p_best_by_date": body.best_by_date.isoformat() if body.best_by_date else None,
             "p_allowed_member_ids": [str(m) for m in body.allowed_member_ids],
             "p_accounting_type": accounting_type.value,
+            "p_receipt_image_path": receipt_image_path,
         },
     ).execute()
     new_item_id = (

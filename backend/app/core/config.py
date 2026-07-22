@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     supabase_jwt_secret: str = ""
 
+    # "google_vision" is the only engine actually implemented right now;
+    # the field exists so a later swap (or an alternate engine for
+    # tests/dev) is a config change, not a code change.
+    ocr_engine: str = "google_vision"
+    google_vision_api_key: str = ""
+
     environment: str = "development"
 
 
