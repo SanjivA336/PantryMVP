@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -23,6 +24,18 @@ def list_inventory_items(
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[list[InventoryItem]]:
     return ok(inventory_service.list_for_household(household_id, status_filter))
+
+
+@router.get("/last-cost", response_model=Envelope[Decimal | None])
+def get_last_cost(
+    household_id: UUID,
+    global_food_definition_id: UUID,
+    quantity: Decimal,
+    _member: Member = Depends(require_household_membership),
+) -> Envelope[Decimal | None]:
+    return ok(
+        inventory_service.find_last_cost(household_id, global_food_definition_id, quantity)
+    )
 
 
 @router.post("", response_model=Envelope[InventoryItem], status_code=status.HTTP_201_CREATED)

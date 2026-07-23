@@ -1,22 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import { apiClient } from '../lib/apiClient'
-import type { FoodDefinition } from '../types/entities'
+import { CategoryDot } from './CategoryDot'
+import { FOOD_CATEGORIES, FOOD_CATEGORY_LABELS } from '../lib/foodCategories'
+import type { FoodCategory, FoodDefinition } from '../types/entities'
 
 interface Props {
   // Callers that only have a food's id/name on hand (e.g. pre-filling an
   // edit form from a recipe ingredient, which doesn't carry the full
   // FoodDefinition) can pass just that much -- this component only ever
-  // reads `.name` off the current value.
-  value: Pick<FoodDefinition, 'id' | 'name'> | null
+  // reads `.name`/`.category` off the current value.
+  value: Pick<FoodDefinition, 'id' | 'name'> & Partial<Pick<FoodDefinition, 'category'>> | null
   onChange: (food: FoodDefinition | null) => void
+  // Pre-fills the search box (and fires the initial search) with a name
+  // suggested by something upstream, e.g. an AI-parsed ingredient name that
+  // hasn't been resolved to a real food yet. Only read once, on mount.
+  initialQuery?: string
 }
 
-export function FoodSearchInput({ value, onChange }: Props) {
-  const [query, setQuery] = useState('')
+export function FoodSearchInput({ value, onChange, initialQuery }: Props) {
+  const [query, setQuery] = useState(initialQuery ?? '')
   const [results, setResults] = useState<FoodDefinition[]>([])
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newUnit, setNewUnit] = useState('count')
+  const [newCategory, setNewCategory] = useState<FoodCategory>('OTHER')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
@@ -53,6 +60,7 @@ export function FoodSearchInput({ value, onChange }: Props) {
     const food = await apiClient.post<FoodDefinition>('/api/food-definitions', {
       name: query,
       preferred_unit: newUnit,
+      category: newCategory,
     })
     pick(food)
     setCreating(false)
@@ -60,9 +68,14 @@ export function FoodSearchInput({ value, onChange }: Props) {
 
   if (value) {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2">
+      <div className="flex items-center gap-2 rounded-control border border-subtle bg-surface-2 px-2 py-2">
+        {value.category !== undefined && <CategoryDot category={value.category} />}
         <span className="flex-1">{value.name}</span>
-        <button type="button" onClick={clear} className="text-sm text-gray-500 hover:underline">
+        <button
+          type="button"
+          onClick={clear}
+          className="text-sm text-muted hover:text-text hover:underline"
+        >
           Change
         </button>
       </div>
@@ -74,7 +87,7 @@ export function FoodSearchInput({ value, onChange }: Props) {
       <input
         type="text"
         placeholder="Search for a food (e.g. milk)"
-        className="w-full rounded-md border border-gray-300 px-3 py-2"
+        className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
         value={query}
         onChange={(e) => {
           setQuery(e.target.value)
@@ -83,46 +96,59 @@ export function FoodSearchInput({ value, onChange }: Props) {
         onFocus={() => setOpen(true)}
       />
       {open && query.trim().length > 0 && (
-        <div className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg">
+        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-card border border-subtle bg-surface-2 shadow-raised">
           {results.map((food) => (
             <button
               key={food.id}
               type="button"
               onClick={() => pick(food)}
-              className="block w-full px-3 py-2 text-left hover:bg-gray-50"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-hover"
             >
-              {food.name}
-              {!food.is_verified && (
-                <span className="ml-2 text-xs text-gray-400">(user-created)</span>
-              )}
+              <CategoryDot category={food.category} />
+              <span className="flex-1">{food.name}</span>
+              {!food.is_verified && <span className="text-xs text-faint">(user-created)</span>}
             </button>
           ))}
           {!creating ? (
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="block w-full px-3 py-2 text-left text-sm font-medium hover:bg-gray-50"
-              style={{ color: 'var(--color-primary)' }}
+              className="block w-full px-3 py-2 text-left text-sm font-medium text-primary hover:bg-surface-hover"
             >
               + Create "{query}"
             </button>
           ) : (
-            <div className="flex items-center gap-2 border-t border-gray-100 p-2">
-              <span className="text-sm">Unit:</span>
-              <select
-                className="rounded border border-gray-300 px-2 py-1 text-sm"
-                value={newUnit}
-                onChange={(e) => setNewUnit(e.target.value)}
-              >
-                <option value="count">count</option>
-                <option value="g">g</option>
-                <option value="ml">ml</option>
-              </select>
+            <div className="flex flex-col gap-3 p-3">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-muted">Unit</label>
+                <select
+                  className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text"
+                  value={newUnit}
+                  onChange={(e) => setNewUnit(e.target.value)}
+                >
+                  <option value="count">count</option>
+                  <option value="g">g</option>
+                  <option value="ml">ml</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-muted">Category</label>
+                <select
+                  className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value as FoodCategory)}
+                >
+                  {FOOD_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {FOOD_CATEGORY_LABELS[category]}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button
                 type="button"
                 onClick={createNew}
-                className="rounded px-2 py-1 text-sm font-medium text-white"
-                style={{ backgroundColor: 'var(--color-primary)' }}
+                className="rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
               >
                 Create
               </button>

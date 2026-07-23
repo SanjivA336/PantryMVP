@@ -47,6 +47,7 @@ def _item(session_id: uuid.UUID, **overrides) -> ReceiptImportItem:
         parsed_price="4.99",
         global_food_definition_id=None,
         food_name=None,
+        category=None,
         storage_location_id=None,
         storage_location_name=None,
         quantity=None,

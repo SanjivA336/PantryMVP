@@ -96,7 +96,7 @@ def get_recipe(household_id: UUID, recipe_id: UUID) -> RecipeDetail | None:
 
     ingredients_result = (
         client.table(_INGREDIENTS_TABLE)
-        .select("*, global_food_definitions(name)")
+        .select("*, global_food_definitions(name, category)")
         .eq("recipe_id", str(recipe_id))
         .order("position")
         .execute()
@@ -111,6 +111,7 @@ def get_recipe(household_id: UUID, recipe_id: UUID) -> RecipeDetail | None:
             RecipeIngredient(
                 **row,
                 food_name=food.get("name", "Unknown food"),
+                category=food.get("category"),
                 available=available,
                 available_quantity=available_quantity,
             )

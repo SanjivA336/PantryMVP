@@ -34,6 +34,7 @@ def _ingredient(**overrides) -> RecipeIngredient:
         recipe_id=uuid.uuid4(),
         global_food_definition_id=uuid.uuid4(),
         food_name="Flour",
+        category="GRAINS_BREADS",
         quantity=Decimal("2"),
         unit="cup",
         note=None,

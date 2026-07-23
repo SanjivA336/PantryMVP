@@ -11,11 +11,25 @@ class AccountingType(StrEnum):
     PERSONAL = "PERSONAL"
 
 
+class FoodCategory(StrEnum):
+    PROTEINS = "PROTEINS"
+    VEGETABLES_HERBS = "VEGETABLES_HERBS"
+    FRUITS = "FRUITS"
+    GRAINS_BREADS = "GRAINS_BREADS"
+    DAIRY_ALTERNATIVES = "DAIRY_ALTERNATIVES"
+    SEASONINGS_SPICES = "SEASONINGS_SPICES"
+    OILS_FATS = "OILS_FATS"
+    SAUCES_CONDIMENTS = "SAUCES_CONDIMENTS"
+    SNACKS_SWEETS = "SNACKS_SWEETS"
+    BEVERAGES = "BEVERAGES"
+    OTHER = "OTHER"
+
+
 class FoodDefinition(BaseModel):
     id: UUID
     name: str
     preferred_unit: str
-    food_group: str | None
+    category: FoodCategory
     accounting_type_default: AccountingType
     shelf_life_days: int | None
     freezer_shelf_life_days: int | None
@@ -31,7 +45,7 @@ class FoodDefinition(BaseModel):
 class CreateFoodDefinitionRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     preferred_unit: str = Field(min_length=1, max_length=20)
-    food_group: str | None = None
+    category: FoodCategory = FoodCategory.OTHER
     accounting_type_default: AccountingType = AccountingType.SHARED_CONSUMABLE
     shelf_life_days: int | None = Field(default=None, gt=0)
     freezer_shelf_life_days: int | None = Field(default=None, gt=0)

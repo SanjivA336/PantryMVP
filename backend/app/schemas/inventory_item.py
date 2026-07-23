@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.food_definition import AccountingType
+from app.schemas.food_definition import AccountingType, FoodCategory
 
 
 class InventoryItemStatus(StrEnum):
@@ -47,10 +47,19 @@ class InventoryItem(BaseModel):
     split_member_count: int | None
     created_at: datetime
     updated_at: datetime
+    # A label on this specific physical item (e.g. "HEB milk" vs "Costco
+    # milk" for two jugs that are both Whole Milk underneath) — distinct
+    # from food_name below, which is what actually displays (this item's
+    # own override if set, else the food's name).
+    name_override: str | None
     # Resolved via joins in the service layer — never stored directly on this
     # table — so the UI can show "Whole Milk" / "Garage Fridge" without a
     # separate round-trip per item.
     food_name: str
+    # Optional, unlike FoodDefinition.category itself: the variant's
+    # global_food_definition_id can be null'd out (food deleted upstream),
+    # in which case the enrichment join comes back empty.
+    category: FoodCategory | None
     storage_location_name: str
 
 
@@ -67,6 +76,9 @@ class CreateInventoryItemRequest(BaseModel):
     # when omitted (resolved in the service layer, not the RPC — this is a
     # product-level fallback decision, not a database invariant).
     accounting_type: AccountingType | None = None
+    # A per-item label (see InventoryItem.name_override) -- not the food's
+    # name, just how this household tells its own jugs/cartons apart.
+    name_override: str | None = Field(default=None, max_length=200)
 
 
 class ConsumeInventoryItemRequest(BaseModel):

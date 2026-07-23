@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "beautifulsoup4>=4.15.0",
     "fastapi>=0.139.2",
     "httpx>=0.28.1",
     "pydantic-settings>=2.14.2",
@@ -24,10 +25,11 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-m 'not rls and not integration'"
+addopts = "-m 'not rls and not integration and not ollama'"
 markers = [
     "rls: hits the real linked Supabase project and costs Auth quota; run explicitly with `uv run pytest -m rls`",
     "integration: hits the real linked Supabase project's RPCs/triggers (not RLS-focused); run explicitly with `uv run pytest -m integration`",
+    "ollama: hits a real local Ollama instance; requires `ollama serve` running with the configured model pulled; run explicitly with `uv run pytest -m ollama`",
 ]
 
 [tool.ruff]

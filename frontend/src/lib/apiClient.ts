@@ -38,13 +38,22 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
     try {
       return await fetch(url, init)
     } catch (err) {
-      if (init.method !== 'GET' || attempt >= GET_RETRY_ATTEMPTS) throw err
+      // An aborted request (our own timeout firing) should never be
+      // retried — retrying would just wait out a second full timeout
+      // before the caller ever sees an error.
+      if (init.method !== 'GET' || attempt >= GET_RETRY_ATTEMPTS || (err as Error)?.name === 'AbortError') {
+        throw err
+      }
       await new Promise((resolve) => setTimeout(resolve, 300))
     }
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  timeoutMs?: number,
+): Promise<T> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -53,14 +62,32 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new ApiError('NO_SESSION', 'You must be signed in to do that.')
   }
 
-  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-      ...options.headers,
-    },
-  })
+  // Only used by the AI recipe endpoints today — a local Ollama call can
+  // take 10-20+ seconds, well past what's reasonable to let a normal CRUD
+  // request hang for, so this is opt-in per call rather than a global default.
+  const controller = timeoutMs !== undefined ? new AbortController() : undefined
+  const timeoutId =
+    controller !== undefined ? setTimeout(() => controller.abort(), timeoutMs) : undefined
+
+  let response: Response
+  try {
+    response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
+      ...options,
+      signal: controller?.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...options.headers,
+      },
+    })
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') {
+      throw new ApiError('TIMEOUT', 'That took too long to respond. Please try again.')
+    }
+    throw err
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
 
   const envelope: Envelope<T> = await response.json()
 
@@ -76,11 +103,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const apiClient = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
-  post: <T>(path: string, body?: unknown) =>
-    request<T>(path, {
-      method: 'POST',
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    }),
+  post: <T>(path: string, body?: unknown, opts?: { timeoutMs?: number }) =>
+    request<T>(
+      path,
+      {
+        method: 'POST',
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      },
+      opts?.timeoutMs,
+    ),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: 'PATCH',

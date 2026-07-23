@@ -33,11 +33,24 @@ export interface StorageLocation {
 
 export type AccountingType = 'UNIT_BASED' | 'SHARED_CONSUMABLE' | 'PERSONAL'
 
+export type FoodCategory =
+  | 'PROTEINS'
+  | 'VEGETABLES_HERBS'
+  | 'FRUITS'
+  | 'GRAINS_BREADS'
+  | 'DAIRY_ALTERNATIVES'
+  | 'SEASONINGS_SPICES'
+  | 'OILS_FATS'
+  | 'SAUCES_CONDIMENTS'
+  | 'SNACKS_SWEETS'
+  | 'BEVERAGES'
+  | 'OTHER'
+
 export interface FoodDefinition {
   id: string
   name: string
   preferred_unit: string
-  food_group: string | null
+  category: FoodCategory
   accounting_type_default: AccountingType
   shelf_life_days: number | null
   freezer_shelf_life_days: number | null
@@ -74,7 +87,9 @@ export interface InventoryItem {
   split_member_count: number | null
   created_at: string
   updated_at: string
+  name_override: string | null
   food_name: string
+  category: FoodCategory | null
   storage_location_name: string
 }
 
@@ -170,6 +185,7 @@ export interface RecipeIngredient {
   recipe_id: string
   global_food_definition_id: string
   food_name: string
+  category: FoodCategory | null
   quantity: string
   unit: string
   note: string | null
@@ -180,6 +196,32 @@ export interface RecipeIngredient {
 
 export interface RecipeDetail extends Recipe {
   ingredients: RecipeIngredient[]
+}
+
+// AI-produced, never persisted directly -- the frontend holds this only in
+// memory until the user reviews it (via RecipeForm) and saves it through
+// the normal recipe-create endpoint, same as a hand-typed recipe.
+export interface DraftRecipeIngredient {
+  name: string
+  quantity: string | null
+  unit: string | null
+  note: string | null
+}
+
+export interface DraftRecipe {
+  name: string
+  description: string | null
+  servings: number | null
+  prep_time_minutes: number | null
+  cook_time_minutes: number | null
+  instructions: string[]
+  ingredients: DraftRecipeIngredient[]
+  source_url: string | null
+}
+
+export interface SubstitutionSuggestion {
+  name: string
+  note: string | null
 }
 
 export type ReceiptImportSessionStatus =
@@ -211,6 +253,7 @@ export interface ReceiptImportItem {
   parsed_price: string | null
   global_food_definition_id: string | null
   food_name: string | null
+  category: FoodCategory | null
   storage_location_id: string | null
   storage_location_name: string | null
   quantity: string | null

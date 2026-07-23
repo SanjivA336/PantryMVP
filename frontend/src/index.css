@@ -1,14 +1,81 @@
 @import "tailwindcss";
 
-:root {
-  --color-primary: #6b8e6f; /* Sage green */
-  --color-background: #faf8f3; /* Warm white */
-  --color-accent: #d4a574; /* Golden yellow */
-  --color-text: #2c2c2c; /* Dark charcoal */
+/*
+  Dark, off-black + green design system. Tokens are declared inside @theme
+  so Tailwind auto-generates matching utilities (bg-surface, text-muted,
+  border-subtle, rounded-card, shadow-card, ...) -- new pages should reach
+  for these instead of raw gray or red Tailwind utilities so the app stays
+  visually consistent as it grows.
+*/
+@theme {
+  /* Backgrounds -- layered, not flat: each step up reads as "closer" */
+  --color-bg: #0b0d0c;
+  --color-surface: #15181a;
+  --color-surface-2: #1c201f;
+  --color-surface-hover: #212623;
+
+  /* Borders -- hairline, low-contrast on purpose */
+  --color-subtle: #262b28;
+  --color-subtle-strong: #333a36;
+
+  /* Text */
+  --color-text: #edefec;
+  --color-muted: #98a39c;
+  --color-faint: #676f6b;
+
+  /* Accent green */
+  --color-primary: #3ecf8e;
+  --color-primary-hover: #34b87c;
+  --color-primary-soft: #12291d;
+
+  /* Status */
+  --color-danger: #f16565;
+  --color-danger-soft: #2b1717;
+  --color-warning: #f0b84f;
+  --color-warning-soft: #2b2314;
+
+  /* Food categories -- one color per FoodCategory value (backend enum),
+     used as small identifying dots next to food names. Kept as their own
+     namespace rather than reusing --color-primary/-danger/etc, since these
+     are identity colors (which food group is this?) not status colors. */
+  --color-category-proteins: #e8695e;
+  --color-category-vegetables-herbs: #5b8c3a;
+  --color-category-fruits: #e2793d;
+  --color-category-grains-breads: #c9a878;
+  --color-category-dairy-alternatives: #e8e4d8;
+  --color-category-seasonings-spices: #a876c4;
+  --color-category-oils-fats: #d4af37;
+  --color-category-sauces-condiments: #8b6544;
+  --color-category-snacks-sweets: #e17fa6;
+  --color-category-beverages: #5b9bd5;
+  --color-category-other: #8a9490;
+
+  /* Shape -- rounded rectangles for controls (buttons, inputs, selects),
+     not full pills (tried it -- caused more layout/spacing headaches than
+     it was worth, e.g. joined-field seams and select-arrow crowding).
+     --radius-pill stays fully round for small badges (status/category
+     tags), which are a different, genuinely pill-shaped case. */
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+
+  /* Shadow -- soft, dark-mode-appropriate (a hairline border does most of
+     the edge definition; the shadow just adds depth/lift). */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-raised: 0 4px 12px rgba(0, 0, 0, 0.45), 0 16px 40px rgba(0, 0, 0, 0.3);
+
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 body {
   margin: 0;
-  background-color: var(--color-background);
+  background-color: var(--color-bg);
   color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  border-color: var(--color-subtle);
 }

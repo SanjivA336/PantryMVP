@@ -33,6 +33,8 @@ def _item(household_id: uuid.UUID, **overrides) -> InventoryItem:
         created_at=now,
         updated_at=now,
         food_name="Whole Milk",
+        category="DAIRY_ALTERNATIVES",
+        name_override=None,
         storage_location_name="Test Fridge",
     )
     defaults.update(overrides)
@@ -81,6 +83,9 @@ def fake_inventory(monkeypatch):
     monkeypatch.setattr("app.services.inventory_items.discard", discard)
     monkeypatch.setattr(
         "app.services.inventory_items.allowed_member_ids_are_valid", lambda h, ids: True
+    )
+    monkeypatch.setattr(
+        "app.services.inventory_items.find_last_cost", lambda h, food_id, qty: None
     )
 
     return store
@@ -233,6 +238,58 @@ async def test_discard_nonactive_item_returns_404(client, fake_members, fake_inv
     )
 
     assert response.status_code == 404
+
+
+async def test_non_member_cannot_get_last_cost(client, fake_members, fake_inventory) -> None:
+    household_id = uuid.uuid4()
+    outsider_id = uuid.uuid4()
+
+    response = await client.get(
+        f"/api/households/{household_id}/inventory-items/last-cost",
+        params={"global_food_definition_id": str(uuid.uuid4()), "quantity": "2"},
+        headers=auth_header(outsider_id),
+    )
+
+    assert response.status_code == 403
+
+
+async def test_last_cost_returns_null_when_no_history(
+    client, fake_members, fake_inventory
+) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+
+    response = await client.get(
+        f"/api/households/{household_id}/inventory-items/last-cost",
+        params={"global_food_definition_id": str(uuid.uuid4()), "quantity": "2"},
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] is None
+
+
+async def test_last_cost_returns_match_when_found(
+    client, fake_members, fake_inventory, monkeypatch
+) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    food_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+    monkeypatch.setattr(
+        "app.services.inventory_items.find_last_cost",
+        lambda h, fid, qty: Decimal("4.99") if fid == food_id else None,
+    )
+
+    response = await client.get(
+        f"/api/households/{household_id}/inventory-items/last-cost",
+        params={"global_food_definition_id": str(food_id), "quantity": "2"},
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == "4.99"
 
 
 async def test_discard_active_item_succeeds(client, fake_members, fake_inventory) -> None:

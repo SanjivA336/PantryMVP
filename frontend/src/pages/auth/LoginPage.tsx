@@ -27,45 +27,43 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-4 text-2xl font-semibold" style={{ color: 'var(--color-primary)' }}>
-          Log in to Burrow
-        </h1>
+    <div className="flex min-h-screen items-center justify-center bg-bg p-4 text-text">
+      <div className="w-full max-w-sm rounded-card border border-subtle bg-surface p-7 shadow-card">
+        <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
+        <h1 className="mb-6 text-2xl font-semibold">Welcome back</h1>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div>
-            <label className="mb-1 block text-sm font-medium">Email</label>
+            <label className="mb-1.5 block text-sm font-medium text-muted">Email</label>
             <input
               type="email"
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
               {...register('email')}
             />
-            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+            {errors.email && <p className="mt-1.5 text-sm text-danger">{errors.email.message}</p>}
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">Password</label>
+            <label className="mb-1.5 block text-sm font-medium text-muted">Password</label>
             <input
               type="password"
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
               {...register('password')}
             />
             {errors.password && (
-              <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+              <p className="mt-1.5 text-sm text-danger">{errors.password.message}</p>
             )}
           </div>
-          {serverError && <p className="text-sm text-red-600">{serverError}</p>}
+          {serverError && <p className="text-sm text-danger">{serverError}</p>}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="rounded-md px-4 py-2 font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-primary)' }}
+            className="mt-1 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
           >
             {isSubmitting ? 'Logging in…' : 'Log in'}
           </button>
         </form>
-        <p className="mt-4 text-center text-sm">
+        <p className="mt-6 text-center text-sm text-muted">
           Don't have an account?{' '}
-          <Link to="/signup" className="font-medium" style={{ color: 'var(--color-primary)' }}>
+          <Link to="/signup" className="font-medium text-primary hover:text-primary-hover">
             Sign up
           </Link>
         </p>

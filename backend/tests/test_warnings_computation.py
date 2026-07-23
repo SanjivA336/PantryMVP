@@ -30,6 +30,8 @@ def _item(*, variant_id=None, purchased_at=None, **overrides) -> InventoryItem:
         created_at=now,
         updated_at=now,
         food_name="Whole Milk",
+        category="DAIRY_ALTERNATIVES",
+        name_override=None,
         storage_location_name="Test Fridge",
     )
     defaults.update(overrides)

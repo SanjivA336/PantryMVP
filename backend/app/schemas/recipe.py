@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.food_definition import FoodCategory
+
 
 class RecipeIngredientInput(BaseModel):
     global_food_definition_id: UUID
@@ -45,6 +47,7 @@ class RecipeIngredient(BaseModel):
     recipe_id: UUID
     global_food_definition_id: UUID
     food_name: str
+    category: FoodCategory | None
     quantity: Decimal
     unit: str
     note: str | None

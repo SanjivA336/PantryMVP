@@ -14,7 +14,7 @@ _TABLE = "inventory_items"
 # stitch together multiple lookups just to show "Whole Milk" instead of a
 # food_definition UUID.
 _ENRICHED_SELECT = (
-    "*, household_food_variants(name_override, global_food_definitions(name)), "
+    "*, household_food_variants(global_food_definitions(name, category)), "
     "storage_locations(name)"
 )
 
@@ -32,9 +32,11 @@ def _flatten(row: dict) -> InventoryItem:
     storage = row.pop("storage_locations", None) or {}
     global_definition = variant.get("global_food_definitions") or {}
 
-    row["food_name"] = (
-        variant.get("name_override") or global_definition.get("name") or "Unknown food"
-    )
+    # This item's own label wins over the food's name -- two jugs of the
+    # same food definition can be told apart ("HEB milk" vs "Costco milk")
+    # without needing separate variants or losing the shared running total.
+    row["food_name"] = row.get("name_override") or global_definition.get("name") or "Unknown food"
+    row["category"] = global_definition.get("category")
     row["storage_location_name"] = storage.get("name") or "Unknown location"
 
     return InventoryItem(**row)
@@ -77,6 +79,7 @@ def create_manual(
             "p_allowed_member_ids": [str(m) for m in body.allowed_member_ids],
             "p_accounting_type": accounting_type.value,
             "p_receipt_image_path": receipt_image_path,
+            "p_name_override": body.name_override,
         },
     ).execute()
     new_item_id = (
@@ -145,6 +148,43 @@ def discard(household_id: UUID, item_id: UUID, reason: RemovalReason) -> Invento
     if not result.data:
         raise ValueError("Item not found or not currently active")
     return get_by_id(household_id, item_id)  # type: ignore[return-value]
+
+
+def find_last_cost(
+    household_id: UUID, global_food_definition_id: UUID, quantity: Decimal
+) -> Decimal | None:
+    """Cost of the most recent past purchase of this exact food + quantity in
+    this household, if any -- powers the Add Item form's "same as last time"
+    cost autofill. Two plain single-table lookups rather than one filtered
+    join: PostgREST needs an explicit !inner hint to filter on an embedded
+    table's column, which is easy to get subtly wrong; a household only has
+    one variant per food definition anyway; both look up rows.
+    """
+    client = get_service_client()
+    variant_result = (
+        client.table("household_food_variants")
+        .select("id")
+        .eq("household_id", str(household_id))
+        .eq("global_food_definition_id", str(global_food_definition_id))
+        .maybe_single()
+        .execute()
+    )
+    if not variant_result or not variant_result.data:
+        return None
+
+    item_result = (
+        client.table(_TABLE)
+        .select("cost")
+        .eq("household_id", str(household_id))
+        .eq("household_food_variant_id", variant_result.data["id"])
+        .eq("total_quantity", str(quantity))
+        .order("purchased_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not item_result.data:
+        return None
+    return Decimal(str(item_result.data[0]["cost"]))
 
 
 def allowed_member_ids_are_valid(household_id: UUID, member_ids: list[UUID]) -> bool:

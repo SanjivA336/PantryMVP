@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.food_definition import AccountingType
+from app.schemas.food_definition import AccountingType, FoodCategory
 
 
 class ReceiptImportSessionStatus(StrEnum):
@@ -48,6 +48,7 @@ class ReceiptImportItem(BaseModel):
     parsed_price: Decimal | None
     global_food_definition_id: UUID | None
     food_name: str | None
+    category: FoodCategory | None
     storage_location_id: UUID | None
     storage_location_name: str | None
     quantity: Decimal | None

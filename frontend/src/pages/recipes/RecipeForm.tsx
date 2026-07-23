@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { FoodSearchInput } from '../../components/FoodSearchInput'
 import { ApiError } from '../../lib/apiClient'
-import type { FoodDefinition, RecipeDetail } from '../../types/entities'
+import type { FoodDefinition } from '../../types/entities'
 import { recipeSchema, type RecipeForm as RecipeFormValues, type RecipeFormInput } from './schema'
 
 export interface RecipeIngredientBody {
@@ -23,17 +23,44 @@ export interface RecipeSubmitBody {
   ingredients: RecipeIngredientBody[]
 }
 
+// The shape RecipeForm needs to seed itself, regardless of where the data
+// came from -- a saved RecipeDetail (editing) or an AI-produced DraftRecipe
+// (import/generate) never persisted anywhere yet. Each source adapts into
+// this via its own small mapping function rather than RecipeForm knowing
+// about either source directly.
+export interface RecipeFormInitialIngredient {
+  food: Pick<FoodDefinition, 'id' | 'name'> | null
+  quantity: string
+  unit: string
+  note: string
+  // Only meaningful when `food` is null -- an AI-suggested ingredient name
+  // to pre-seed FoodSearchInput's search box with, so the user isn't stuck
+  // re-typing what the AI already told us before they can even search.
+  suggestedName?: string
+}
+
+export interface RecipeFormInitial {
+  name: string
+  description: string | null
+  servings: number | null
+  prep_time_minutes: number | null
+  cook_time_minutes: number | null
+  instructions: string[]
+  ingredients: RecipeFormInitialIngredient[]
+}
+
 interface IngredientRow {
   food: Pick<FoodDefinition, 'id' | 'name'> | null
   quantity: string
   unit: string
   note: string
+  suggestedName?: string
 }
 
 const emptyIngredientRow = (): IngredientRow => ({ food: null, quantity: '', unit: '', note: '' })
 
 interface Props {
-  initial?: RecipeDetail
+  initial?: RecipeFormInitial
   submitLabel: string
   onSubmit: (body: RecipeSubmitBody) => Promise<void>
 }
@@ -49,7 +76,11 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
       ? {
           name: initial.name,
           description: initial.description ?? '',
-          servings: initial.servings,
+          // AI-generated drafts don't always state servings -- fall back to
+          // the same default a blank form starts with rather than leaving
+          // the field empty and failing the "positive integer" validation
+          // the instant the user touches submit without noticing why.
+          servings: initial.servings ?? 4,
           prep_time_minutes: initial.prep_time_minutes ?? undefined,
           cook_time_minutes: initial.cook_time_minutes ?? undefined,
         }
@@ -59,10 +90,11 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
   const [ingredients, setIngredients] = useState<IngredientRow[]>(
     initial && initial.ingredients.length > 0
       ? initial.ingredients.map((ing) => ({
-          food: { id: ing.global_food_definition_id, name: ing.food_name },
+          food: ing.food,
           quantity: ing.quantity,
           unit: ing.unit,
-          note: ing.note ?? '',
+          note: ing.note,
+          suggestedName: ing.suggestedName,
         }))
       : [emptyIngredientRow()],
   )
@@ -174,6 +206,7 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
                 <FoodSearchInput
                   value={row.food}
                   onChange={(food) => updateIngredient(index, { food })}
+                  initialQuery={row.suggestedName}
                 />
               </div>
               <input

@@ -22,7 +22,7 @@ _SESSIONS_TABLE = "receipt_import_sessions"
 _ITEMS_TABLE = "receipt_import_items"
 _BUCKET = "receipt-images"
 
-_ENRICHED_ITEM_SELECT = "*, global_food_definitions(name), storage_locations(name)"
+_ENRICHED_ITEM_SELECT = "*, global_food_definitions(name, category), storage_locations(name)"
 
 
 class SessionNotFoundError(Exception):
@@ -45,6 +45,7 @@ def _flatten_item(row: dict) -> ReceiptImportItem:
     food = row.pop("global_food_definitions", None) or {}
     storage = row.pop("storage_locations", None) or {}
     row["food_name"] = food.get("name")
+    row["category"] = food.get("category")
     row["storage_location_name"] = storage.get("name")
     return ReceiptImportItem(**row)
 

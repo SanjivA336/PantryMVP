@@ -1,3 +1,4 @@
+import { TriangleAlert } from 'lucide-react'
 import type { StockWarning } from '../../types/entities'
 
 interface Props {
@@ -14,16 +15,20 @@ export function StockWarningsBanner({ stockWarnings }: Props) {
   const lowStock = stockWarnings.filter((w) => w.type === 'LOW_STOCK')
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm">
+    <div className="flex flex-col gap-2 rounded-card border border-warning/25 bg-warning-soft p-4 text-sm">
+      <div className="flex items-center gap-2 text-warning">
+        <TriangleAlert size={16} strokeWidth={2} />
+        <span className="font-medium">Stock warnings</span>
+      </div>
       {outOfStock.length > 0 && (
-        <p>
-          <span className="font-medium text-red-600">Out of stock: </span>
+        <p className="text-text">
+          <span className="font-medium text-danger">Out of stock: </span>
           {outOfStock.map((w) => w.food_name).join(', ')}
         </p>
       )}
       {lowStock.length > 0 && (
-        <p>
-          <span className="font-medium text-amber-700">Running low: </span>
+        <p className="text-text">
+          <span className="font-medium text-warning">Running low: </span>
           {lowStock
             .map((w) => `${w.food_name} (${w.remaining_quantity} ${w.preferred_unit} left)`)
             .join(', ')}

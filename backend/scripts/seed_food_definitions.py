@@ -21,7 +21,7 @@ def main() -> None:
         {
             "name": entry["name"],
             "preferred_unit": entry["preferred_unit"],
-            "food_group": entry.get("food_group"),
+            "category": entry["category"],
             "accounting_type_default": entry["accounting_type_default"],
             "shelf_life_days": entry.get("shelf_life_days"),
             "freezer_shelf_life_days": entry.get("freezer_shelf_life_days"),
