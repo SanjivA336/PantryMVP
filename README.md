@@ -69,7 +69,11 @@ A home for your food — shared-household kitchen/pantry management system.
 
 ### Receipt scanning
 - Upload or camera-capture a receipt photo
-- OCR (Google Cloud Vision) + regex-based line-item parsing
+- OCR (Google Cloud Vision) extracts raw text, which the local LLM then
+  parses into structured line items (name + price guaranteed, quantity/unit
+  best-effort) and auto-links to a real food-catalog entry the same way AI
+  recipe ingredients do; falls back to a plain regex line-splitter (no food-
+  type guess) if the AI provider is unreachable
 - Per-item review/edit before import, reusing the same food-search UI as
   manual add
 - Resumable after an OCR failure; finalize is idempotent (safe to retry)
