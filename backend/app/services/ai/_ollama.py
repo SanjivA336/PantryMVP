@@ -72,19 +72,23 @@ _PARSE_RECEIPT_SYSTEM = """You are a receipt-extraction assistant. Given raw OCR
 text from a grocery or retail receipt, extract every purchased line item into a
 JSON ARRAY (not a single object) of objects, each with exactly these keys:
 "name" (string -- the product name/description as printed, cleaned up from
-obvious OCR noise but never invented), "price" (a decimal number as a string --
-the item's own price as printed, e.g. "4.99"), "quantity" (a decimal number as a
-string, or null if the receipt doesn't clearly state how many/how much of this
-item were bought), "unit" (a short string like "lb", "oz", "ct", or null).
-Every returned item MUST have both a "name" and a "price" -- if either is
-missing or unreadable for a line, leave that line out of the array entirely
-rather than guessing. Do not include lines that aren't purchased items:
-subtotal, tax, total, payment/card info, loyalty/coupon lines, store name or
-address, cashier/register info, barcodes. Extract only from the ACTUAL receipt
-text provided. Respond with ONLY the JSON array. No commentary, no markdown
-fences.
-Example shape only, do not copy this content: [{"name": "...", "price": "...",
-"quantity": "...", "unit": "..."}, {"name": "...", "price": "...", "quantity":
+obvious OCR noise but never invented), "price" (a PLAIN decimal number as a
+string, with NO currency symbol and NO commas -- "4.99", never "$4.99" -- the
+item's own price as printed), "quantity" (a PLAIN decimal number as a string
+with nothing else attached -- "0.778", never "0.778kg NET @ $5.99/kg" -- or
+null if the receipt doesn't clearly state a single number for how many/how
+much of this item were bought), "unit" (a short string like "lb", "oz", "ct",
+or null). A weight/rate breakdown line like "0.778kg NET @ $5.99/kg" printed
+under an item belongs in "quantity" (just "0.778") and "unit" (just "kg"), NOT
+copied verbatim into either field. Every returned item MUST have both a "name"
+and a "price" -- if either is missing or unreadable for a line, leave that
+line out of the array entirely rather than guessing. Do not include lines that
+aren't purchased items: subtotal, tax, total, payment/card info, loyalty/
+coupon lines, store name or address, cashier/register info, barcodes. Extract
+only from the ACTUAL receipt text provided. Respond with ONLY the JSON array.
+No commentary, no markdown fences.
+Example shape only, do not copy this content: [{"name": "...", "price": "4.99",
+"quantity": "0.778", "unit": "kg"}, {"name": "...", "price": "1.50", "quantity":
 null, "unit": null}]."""
 
 

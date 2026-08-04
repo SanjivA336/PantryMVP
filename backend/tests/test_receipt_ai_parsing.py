@@ -19,6 +19,35 @@ def test_ai_items_to_parsed_lines_converts_valid_items() -> None:
     assert line.parsed_unit == "gal"
 
 
+def test_ai_items_to_parsed_lines_strips_currency_symbol_and_commas() -> None:
+    # A weak local model doesn't always follow the "no $" instruction --
+    # confirmed against the real model returning "$4.66" for a plain 4.66.
+    items = [ParsedReceiptItem(name="Zucchini", price="$1,234.66", quantity="$0.778")]
+
+    lines = receipt_imports_service._ai_items_to_parsed_lines(items)
+
+    assert len(lines) == 1
+    assert lines[0].parsed_price == Decimal("1234.66")
+    assert lines[0].parsed_quantity == Decimal("0.778")
+
+
+def test_parse_receipt_lines_falls_back_to_regex_when_nothing_survives_coercion(
+    monkeypatch,
+) -> None:
+    class GarbledProvider:
+        def parse_receipt_items(self, raw_text: str) -> list[ParsedReceiptItem]:
+            return [ParsedReceiptItem(name="Whole Milk", price="not-a-number-even-after-stripping")]
+
+    monkeypatch.setattr(
+        "app.services.receipt_imports.get_ai_provider", lambda: GarbledProvider()
+    )
+
+    lines = receipt_imports_service._parse_receipt_lines("WHOLE MILK 4.99\nSUBTOTAL 4.99")
+
+    assert len(lines) == 1
+    assert lines[0].parsed_name == "WHOLE MILK"
+
+
 def test_ai_items_to_parsed_lines_drops_items_with_unparseable_price() -> None:
     items = [
         ParsedReceiptItem(name="Whole Milk", price="4.99"),

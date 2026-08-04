@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID, uuid4
@@ -27,6 +28,8 @@ _ITEMS_TABLE = "receipt_import_items"
 _BUCKET = "receipt-images"
 
 _ENRICHED_ITEM_SELECT = "*, global_food_definitions(name, category), storage_locations(name)"
+
+_logger = logging.getLogger(__name__)
 
 
 class SessionNotFoundError(Exception):
@@ -112,22 +115,31 @@ def get_by_id(household_id: UUID, session_id: UUID) -> ReceiptImportSessionWithI
     return ReceiptImportSessionWithItems(**session_result.data, items=items)
 
 
+def _coerce_decimal(raw: str | None) -> Decimal | None:
+    """The prompt asks for a bare decimal string with no currency symbol,
+    but a weak local model doesn't always comply (observed returning
+    "$4.66" for price despite the instruction) -- strip common formatting
+    before giving up on an otherwise-good value.
+    """
+    if not raw:
+        return None
+    cleaned = raw.strip().lstrip("$").replace(",", "")
+    try:
+        return Decimal(cleaned)
+    except InvalidOperation:
+        return None
+
+
 def _ai_items_to_parsed_lines(items: list[ParsedReceiptItem]) -> list[receipt_parsing.ParsedLine]:
     lines: list[receipt_parsing.ParsedLine] = []
     for item in items:
-        try:
-            price = Decimal(item.price)
-        except InvalidOperation:
+        price = _coerce_decimal(item.price)
+        if price is None:
             # The one field the AI is expected to always get right for a
-            # real line item -- if it didn't, don't guess, just drop it
-            # the same way parse_receipt_text() drops lines it can't parse.
+            # real line item -- if it still doesn't parse after stripping
+            # common formatting, don't guess, just drop it the same way
+            # parse_receipt_text() drops lines it can't parse.
             continue
-        quantity: Decimal | None = None
-        if item.quantity:
-            try:
-                quantity = Decimal(item.quantity)
-            except InvalidOperation:
-                quantity = None
         lines.append(
             receipt_parsing.ParsedLine(
                 # No single OCR source line maps cleanly to an AI-extracted
@@ -136,7 +148,7 @@ def _ai_items_to_parsed_lines(items: list[ParsedReceiptItem]) -> list[receipt_pa
                 # for the "what did we detect" context this column exists for.
                 raw_line_text=item.name,
                 parsed_name=item.name,
-                parsed_quantity=quantity,
+                parsed_quantity=_coerce_decimal(item.quantity),
                 parsed_unit=item.unit,
                 parsed_price=price,
             )
@@ -150,15 +162,30 @@ def _parse_receipt_lines(raw_text: str) -> list[receipt_parsing.ParsedLine]:
     best-effort), which handles real-world receipt formatting far better
     than the plain regex fallback below. Falls back to the regex parser --
     worse, but still gives the user something to start from -- if the AI
-    provider is unreachable, times out, or produces output that still
-    doesn't parse after its own repair-retry, rather than failing the
-    whole session over it.
+    provider is unreachable, times out, produces output that still doesn't
+    parse after its own repair-retry, or (after coercion) yields zero
+    usable items, rather than failing the whole session or returning
+    nothing over it.
     """
     try:
         ai_items = get_ai_provider().parse_receipt_items(raw_text)
-        return _ai_items_to_parsed_lines(ai_items)
-    except AiProviderError:
+    except AiProviderError as exc:
+        _logger.warning(
+            "AI receipt parsing failed (%s: %s); falling back to regex parser",
+            type(exc).__name__,
+            exc,
+        )
         return receipt_parsing.parse_receipt_text(raw_text)
+
+    lines = _ai_items_to_parsed_lines(ai_items)
+    if not lines and ai_items:
+        _logger.warning(
+            "AI receipt parsing returned %d item(s) but none survived coercion; "
+            "falling back to regex parser",
+            len(ai_items),
+        )
+        return receipt_parsing.parse_receipt_text(raw_text)
+    return lines
 
 
 def process_session(household_id: UUID, session_id: UUID) -> ReceiptImportSessionWithItems:
