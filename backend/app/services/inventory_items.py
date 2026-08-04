@@ -99,7 +99,10 @@ def create_manual(
 
 
 def list_for_household(
-    household_id: UUID, status: str | None = None, storage_location_id: UUID | None = None
+    household_id: UUID,
+    status: str | None = None,
+    storage_location_id: UUID | None = None,
+    household_food_variant_id: UUID | None = None,
 ) -> list[InventoryItem]:
     client = get_service_client()
     query = client.table(_TABLE).select(_ENRICHED_SELECT).eq("household_id", str(household_id))
@@ -107,6 +110,8 @@ def list_for_household(
         query = query.eq("status", status)
     if storage_location_id:
         query = query.eq("storage_location_id", str(storage_location_id))
+    if household_food_variant_id:
+        query = query.eq("household_food_variant_id", str(household_food_variant_id))
     result = query.order("created_at", desc=True).execute()
     return [_flatten(row) for row in result.data]
 
@@ -211,3 +216,35 @@ def allowed_member_ids_are_valid(household_id: UUID, member_ids: list[UUID]) -> 
         .execute()
     )
     return len(result.data) == len(set(member_ids))
+
+
+def list_active_member_ids(household_id: UUID) -> set[UUID]:
+    """Batch counterpart to allowed_member_ids_are_valid, for callers
+    validating many items' allowed_member_ids in one pass (e.g. receipt
+    finalize) without a query per item."""
+    client = get_service_client()
+    result = (
+        client.table("members")
+        .select("id")
+        .eq("household_id", str(household_id))
+        .eq("is_active", True)
+        .execute()
+    )
+    return {UUID(row["id"]) for row in result.data}
+
+
+def resolve_accounting_types(
+    global_food_definition_ids: list[UUID],
+) -> dict[UUID, AccountingType]:
+    """Batch counterpart to _resolve_accounting_type's default lookup, for
+    callers processing multiple items at once (e.g. receipt finalize)."""
+    if not global_food_definition_ids:
+        return {}
+    client = get_service_client()
+    result = (
+        client.table("global_food_definitions")
+        .select("id, accounting_type_default")
+        .in_("id", [str(i) for i in set(global_food_definition_ids)])
+        .execute()
+    )
+    return {UUID(row["id"]): AccountingType(row["accounting_type_default"]) for row in result.data}

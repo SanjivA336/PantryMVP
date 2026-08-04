@@ -155,23 +155,35 @@ def ignore_stock_warning(household_id: UUID, household_food_variant_id: UUID) ->
     reference purchase, not the variant alone, so a later restock (which
     changes reference_purchased_at) naturally un-suppresses it again without
     an explicit "unignore" action or a cleanup job.
+
+    Scoped to just this variant's items via list_for_household's filter,
+    rather than compute_warnings()'s full household recompute, since this
+    only ever needs one variant's current signal.
     """
-    current = compute_warnings(household_id)
-    match = next(
-        (
-            w
-            for w in current.stock_warnings
-            if w.household_food_variant_id == household_food_variant_id
-        ),
-        None,
+    variant_items = inventory_service.list_for_household(
+        household_id, household_food_variant_id=household_food_variant_id
     )
-    if match is None:
+    if not variant_items:
         return
+
+    active_quantity = sum((i.quantity for i in variant_items if i.status == "ACTIVE"), Decimal(0))
+    most_recent = max(variant_items, key=lambda i: i.purchased_at)
+    reference_quantity = most_recent.total_quantity
+
+    is_out_of_stock = active_quantity == 0
+    is_low_stock = (
+        not is_out_of_stock
+        and reference_quantity > 0
+        and active_quantity < reference_quantity * LOW_STOCK_FRACTION
+    )
+    if not is_out_of_stock and not is_low_stock:
+        return
+
     client = get_service_client()
     client.table(_STOCK_IGNORES_TABLE).upsert(
         {
             "household_id": str(household_id),
             "household_food_variant_id": str(household_food_variant_id),
-            "reference_purchased_at": match.reference_purchased_at.isoformat(),
+            "reference_purchased_at": most_recent.purchased_at.isoformat(),
         }
     ).execute()

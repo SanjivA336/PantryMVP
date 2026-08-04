@@ -241,15 +241,26 @@ def finalize(
         raise FinalizeValidationError("Every item must be confirmed or skipped before finalizing")
 
     client = get_service_client()
-    for item in session.items:
-        if item.status != ReceiptImportItemStatus.CONFIRMED:
-            continue
-        # Idempotency: finalize is N separate RPC calls, not one transaction
-        # -- a retry after a partial failure must skip items already
-        # imported rather than double-importing them.
-        if item.created_inventory_item_id is not None:
-            continue
 
+    # Idempotency: finalize is N separate RPC calls, not one transaction --
+    # a retry after a partial failure must skip items already imported
+    # rather than double-importing them.
+    pending_items = [
+        item
+        for item in session.items
+        if item.status == ReceiptImportItemStatus.CONFIRMED
+        and item.created_inventory_item_id is None
+    ]
+
+    # Batched once up front instead of once per item below -- a receipt
+    # with dozens of confirmed lines would otherwise cost a query per item
+    # for both of these.
+    active_member_ids = inventory_service.list_active_member_ids(household_id)
+    accounting_types = inventory_service.resolve_accounting_types(
+        [item.global_food_definition_id for item in pending_items if item.accounting_type is None]
+    )
+
+    for item in pending_items:
         if (
             not item.global_food_definition_id
             or not item.storage_location_id
@@ -263,9 +274,7 @@ def finalize(
         # The RPC's own guard only rejects an *empty* array, not a *stale*
         # one -- a member could've been deactivated since this item was
         # confirmed. Re-validate here, same as the manual add-item path does.
-        if not inventory_service.allowed_member_ids_are_valid(
-            household_id, item.allowed_member_ids
-        ):
+        if not set(item.allowed_member_ids) <= active_member_ids:
             raise FinalizeValidationError(f"Item {item.id} has invalid allowed members")
 
         body = CreateInventoryItemRequest(
@@ -275,7 +284,9 @@ def finalize(
             preferred_unit=item.preferred_unit,
             cost=item.cost or Decimal(0),
             allowed_member_ids=item.allowed_member_ids,
-            accounting_type=item.accounting_type,
+            accounting_type=(
+                item.accounting_type or accounting_types.get(item.global_food_definition_id)
+            ),
         )
         created = inventory_service.create_manual(
             household_id, member_id, body, receipt_image_path=session.image_path

@@ -38,7 +38,7 @@ function NetBalanceOverTimeChart({
   entries: LedgerEntryDetail[]
   members: Member[]
 }) {
-  const nicknameById = new Map(members.map((m) => [m.id, m.nickname]))
+  const nicknameById = useMemo(() => new Map(members.map((m) => [m.id, m.nickname])), [members])
 
   const seriesByMember = useMemo(() => {
     const sorted = [...entries].sort(

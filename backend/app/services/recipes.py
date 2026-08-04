@@ -88,7 +88,14 @@ def _ingredient_availability(
     return result
 
 
-def get_recipe(household_id: UUID, recipe_id: UUID) -> RecipeDetail | None:
+def _fetch_recipe_and_ingredients(
+    household_id: UUID, recipe_id: UUID
+) -> tuple[dict, list[dict]] | None:
+    """The two raw-row queries get_recipe builds on. Split out so
+    update_recipe's pre-update defaulting fetch (which only reads these
+    stored fields) can skip get_recipe's extra availability computation --
+    2 queries instead of 4 for every PATCH.
+    """
     client = get_service_client()
     recipe_result = (
         client.table(_RECIPES_TABLE)
@@ -108,10 +115,18 @@ def get_recipe(household_id: UUID, recipe_id: UUID) -> RecipeDetail | None:
         .order("position")
         .execute()
     )
-    availability = _ingredient_availability(household_id, ingredients_result.data)
+    return recipe_result.data, ingredients_result.data
+
+
+def get_recipe(household_id: UUID, recipe_id: UUID) -> RecipeDetail | None:
+    fetched = _fetch_recipe_and_ingredients(household_id, recipe_id)
+    if fetched is None:
+        return None
+    recipe_row, ingredient_rows = fetched
+    availability = _ingredient_availability(household_id, ingredient_rows)
 
     ingredients: list[RecipeIngredient] = []
-    for row in ingredients_result.data:
+    for row in ingredient_rows:
         food = row.pop("global_food_definitions", None) or {}
         available, available_quantity = availability.get(UUID(row["id"]), (False, None))
         ingredients.append(
@@ -124,7 +139,7 @@ def get_recipe(household_id: UUID, recipe_id: UUID) -> RecipeDetail | None:
             )
         )
 
-    return RecipeDetail(**recipe_result.data, ingredients=ingredients)
+    return RecipeDetail(**recipe_row, ingredients=ingredients)
 
 
 def create_recipe(household_id: UUID, member_id: UUID, body: CreateRecipeRequest) -> RecipeDetail:
@@ -165,9 +180,10 @@ def update_recipe(household_id: UUID, recipe_id: UUID, body: UpdateRecipeRequest
     sent" from "sent as null" for the genuinely nullable fields like
     description.
     """
-    existing = get_recipe(household_id, recipe_id)
-    if existing is None:
+    fetched = _fetch_recipe_and_ingredients(household_id, recipe_id)
+    if fetched is None:
         raise RecipeNotFoundError
+    existing_row, existing_ingredient_rows = fetched
 
     fields = body.model_fields_set
     ingredients: list[RecipeIngredientInput] = (
@@ -175,12 +191,12 @@ def update_recipe(household_id: UUID, recipe_id: UUID, body: UpdateRecipeRequest
         if "ingredients" in fields and body.ingredients is not None
         else [
             RecipeIngredientInput(
-                global_food_definition_id=ing.global_food_definition_id,
-                quantity=ing.quantity,
-                unit=ing.unit,
-                note=ing.note,
+                global_food_definition_id=row["global_food_definition_id"],
+                quantity=row["quantity"],
+                unit=row["unit"],
+                note=row["note"],
             )
-            for ing in existing.ingredients
+            for row in existing_ingredient_rows
         ]
     )
 
@@ -191,23 +207,27 @@ def update_recipe(household_id: UUID, recipe_id: UUID, body: UpdateRecipeRequest
             {
                 "p_household_id": str(household_id),
                 "p_recipe_id": str(recipe_id),
-                "p_name": body.name if "name" in fields else existing.name,
+                "p_name": body.name if "name" in fields else existing_row["name"],
                 "p_description": (
-                    body.description if "description" in fields else existing.description
+                    body.description if "description" in fields else existing_row["description"]
                 ),
-                "p_servings": body.servings if "servings" in fields else existing.servings,
+                "p_servings": (
+                    body.servings if "servings" in fields else existing_row["servings"]
+                ),
                 "p_prep_time_minutes": (
                     body.prep_time_minutes
                     if "prep_time_minutes" in fields
-                    else existing.prep_time_minutes
+                    else existing_row["prep_time_minutes"]
                 ),
                 "p_cook_time_minutes": (
                     body.cook_time_minutes
                     if "cook_time_minutes" in fields
-                    else existing.cook_time_minutes
+                    else existing_row["cook_time_minutes"]
                 ),
                 "p_instructions": (
-                    body.instructions if "instructions" in fields else existing.instructions
+                    body.instructions
+                    if "instructions" in fields
+                    else existing_row["instructions"]
                 ),
                 "p_ingredients": [
                     {

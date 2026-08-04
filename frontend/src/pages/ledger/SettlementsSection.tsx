@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { ArrowRight, PartyPopper } from 'lucide-react'
 import type { Member, Settlement } from '../../types/entities'
 
@@ -8,7 +9,10 @@ interface Props {
 }
 
 export function SettlementsSection({ settlements, members, loading }: Props) {
-  const nicknameById = new Map((members ?? []).map((m) => [m.id, m.nickname]))
+  const nicknameById = useMemo(
+    () => new Map((members ?? []).map((m) => [m.id, m.nickname])),
+    [members],
+  )
 
   return (
     <div className="flex flex-col gap-3">

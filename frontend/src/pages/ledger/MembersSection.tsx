@@ -19,7 +19,7 @@ export function MembersSection({ members, balances, entries, loading, myUserId }
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
 
-  const activeMembers = (members ?? []).filter((m) => m.is_active)
+  const activeMembers = useMemo(() => (members ?? []).filter((m) => m.is_active), [members])
   const myMemberId = activeMembers.find((m) => m.user_id === myUserId)?.id
 
   const netByMemberId = useMemo(() => {
@@ -37,7 +37,10 @@ export function MembersSection({ members, balances, entries, loading, myUserId }
     return net
   }, [balances])
 
-  const nicknameById = new Map(activeMembers.map((m) => [m.id, m.nickname]))
+  const nicknameById = useMemo(
+    () => new Map(activeMembers.map((m) => [m.id, m.nickname])),
+    [activeMembers],
+  )
 
   const breakdown = useMemo(() => {
     if (!selectedMember || !entries) return []

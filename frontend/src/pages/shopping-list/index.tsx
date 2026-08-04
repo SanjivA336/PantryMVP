@@ -224,6 +224,23 @@ export function ShoppingListPage() {
     }
     return map
   }, [items])
+  // Sorted once here rather than inline in the render loop below, so
+  // re-renders that don't touch itemsBySection (e.g. opening the rename
+  // input) don't re-sort every bucket.
+  const sortedItemsBySection = useMemo(() => {
+    const map = new Map<string | null, ShoppingListItem[]>()
+    for (const [key, bucketItems] of itemsBySection) {
+      map.set(
+        key,
+        [...bucketItems].sort((a, b) => a.sort_order - b.sort_order),
+      )
+    }
+    return map
+  }, [itemsBySection])
+  const sectionById = useMemo(
+    () => new Map(sortedSections.map((s) => [s.id, s])),
+    [sortedSections],
+  )
   const sectionBuckets: { id: string | null; name: string }[] = [
     ...sortedSections.map((s) => ({ id: s.id, name: s.name })),
     { id: null, name: 'Other' },
@@ -338,10 +355,8 @@ export function ShoppingListPage() {
 
       <div className="flex flex-col gap-4">
         {sectionBuckets.map((bucket, bucketIndex) => {
-          const sectionItems = (itemsBySection.get(bucket.id) ?? []).slice().sort(
-            (a, b) => a.sort_order - b.sort_order,
-          )
-          const section = bucket.id ? sortedSections.find((s) => s.id === bucket.id) : null
+          const sectionItems = sortedItemsBySection.get(bucket.id) ?? []
+          const section = bucket.id ? sectionById.get(bucket.id) : null
           const isEditingName = section != null && editingSectionId === section.id
           return (
             <div
