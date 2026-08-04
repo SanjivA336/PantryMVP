@@ -71,6 +71,17 @@ def join_household_by_code(user_id: UUID, join_code: str, nickname: str) -> Hous
     return _coerce_household(result.data)
 
 
+def update_household(household_id: UUID, updates: dict) -> Household | None:
+    # An empty update dict (a PATCH with nothing actually changed) would
+    # otherwise reach PostgREST as a no-op write that returns no matching
+    # row, making the caller think the household doesn't exist.
+    if not updates:
+        return get_household(household_id)
+    client = get_service_client()
+    result = client.table(_TABLE).update(updates).eq("id", str(household_id)).execute()
+    return Household(**result.data[0]) if result.data else None
+
+
 def delete_household(household_id: UUID) -> None:
     client = get_service_client()
     client.table(_TABLE).delete().eq("id", str(household_id)).execute()

@@ -35,9 +35,15 @@ class Settings(BaseSettings):
     ollama_model: str = "llama2"
     # Deliberately much longer than this app's other timeouts (Google
     # Vision's is 30s) -- a cold-started local model pays a real weight-load
-    # cost on top of inference before it emits a single token.
-    ai_request_timeout_seconds: float = 60.0
-    ai_max_retries: int = 1
+    # cost on top of inference before it emits a single token. Measured
+    # 43-68s end to end for llama2 on CPU, so 60s was clipping real (not
+    # hung) responses.
+    ai_request_timeout_seconds: float = 120.0
+    # Whether a malformed AI response gets one repair attempt (a second call
+    # asking the model to fix its own output) before giving up. A count in
+    # name only -- the code only ever attempts exactly one repair regardless
+    # of the value, so this is a plain on/off switch, not a retry budget.
+    ai_retry_enabled: bool = True
 
     environment: str = "development"
 

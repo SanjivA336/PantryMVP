@@ -17,3 +17,23 @@ def get_household_warnings(
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[HouseholdWarnings]:
     return ok(warnings_service.compute_warnings(household_id))
+
+
+@router.post("/stock/{household_food_variant_id}/ignore", response_model=Envelope[None])
+def ignore_stock_warning(
+    household_id: UUID,
+    household_food_variant_id: UUID,
+    _member: Member = Depends(require_household_membership),
+) -> Envelope[None]:
+    warnings_service.ignore_stock_warning(household_id, household_food_variant_id)
+    return ok(None)
+
+
+@router.post("/expiry/{inventory_item_id}/ignore", response_model=Envelope[None])
+def ignore_expiry_warning(
+    household_id: UUID,
+    inventory_item_id: UUID,
+    _member: Member = Depends(require_household_membership),
+) -> Envelope[None]:
+    warnings_service.ignore_expiry_warning(household_id, inventory_item_id)
+    return ok(None)

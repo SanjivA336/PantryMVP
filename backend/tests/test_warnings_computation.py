@@ -30,6 +30,7 @@ def _item(*, variant_id=None, purchased_at=None, **overrides) -> InventoryItem:
         created_at=now,
         updated_at=now,
         food_name="Whole Milk",
+        food_type_name="Whole Milk",
         category="DAIRY_ALTERNATIVES",
         name_override=None,
         storage_location_name="Test Fridge",
@@ -38,9 +39,15 @@ def _item(*, variant_id=None, purchased_at=None, **overrides) -> InventoryItem:
     return InventoryItem(**defaults)
 
 
-def _compute(monkeypatch, items):
+def _compute(monkeypatch, items, *, ignored_expiry_ids=frozenset(), ignored_stock=None):
     monkeypatch.setattr(
         "app.services.warnings.inventory_service.list_for_household", lambda hh: items
+    )
+    monkeypatch.setattr(
+        "app.services.warnings._fetch_ignored_expiry_item_ids", lambda hh: set(ignored_expiry_ids)
+    )
+    monkeypatch.setattr(
+        "app.services.warnings._fetch_ignored_stock_references", lambda hh: ignored_stock or {}
     )
     return warnings_service.compute_warnings(uuid.uuid4())
 
@@ -146,3 +153,29 @@ def test_multiple_active_items_for_same_variant_are_summed(monkeypatch) -> None:
     # 2 combined out of a 20-unit reference (20% cutoff = 4) is low stock.
     assert len(result.stock_warnings) == 1
     assert result.stock_warnings[0].remaining_quantity == Decimal("2")
+
+
+def test_ignored_expiry_warning_is_suppressed(monkeypatch) -> None:
+    item = _item(expiry_date=date.today() - timedelta(days=1))
+    result = _compute(monkeypatch, [item], ignored_expiry_ids={item.id})
+
+    assert result.expiry_warnings == []
+
+
+def test_ignored_stock_warning_is_suppressed_only_for_same_reference_purchase(
+    monkeypatch,
+) -> None:
+    variant_id = uuid.uuid4()
+    item = _item(variant_id=variant_id, quantity=Decimal("0"), status="EMPTY")
+
+    suppressed = _compute(monkeypatch, [item], ignored_stock={variant_id: item.purchased_at})
+    assert suppressed.stock_warnings == []
+
+    # A different reference_purchased_at (e.g. a newer purchase happened
+    # since the ignore was recorded) means the old ignore no longer applies.
+    still_shown = _compute(
+        monkeypatch,
+        [item],
+        ignored_stock={variant_id: item.purchased_at - timedelta(days=1)},
+    )
+    assert len(still_shown.stock_warnings) == 1

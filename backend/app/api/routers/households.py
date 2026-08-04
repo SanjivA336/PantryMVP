@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import get_current_user_id, require_household_admin, require_household_membership
 from app.core.responses import Envelope, ok
-from app.schemas.household import CreateHouseholdRequest, Household, JoinHouseholdRequest
+from app.schemas.household import (
+    CreateHouseholdRequest,
+    Household,
+    JoinHouseholdRequest,
+    UpdateHouseholdRequest,
+)
 from app.schemas.member import Member
 from app.services import households as households_service
 
@@ -44,6 +49,19 @@ def get_household(
     household_id: UUID, _member: Member = Depends(require_household_membership)
 ) -> Envelope[Household]:
     household = households_service.get_household(household_id)
+    if household is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Household not found")
+    return ok(household)
+
+
+@router.patch("/{household_id}", response_model=Envelope[Household])
+def update_household(
+    household_id: UUID,
+    body: UpdateHouseholdRequest,
+    _member: Member = Depends(require_household_admin),
+) -> Envelope[Household]:
+    updates = body.model_dump(exclude_none=True)
+    household = households_service.update_household(household_id, updates)
     if household is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Household not found")
     return ok(household)

@@ -93,6 +93,8 @@ def fake_recipes(monkeypatch):
         existing = store.get(recipe_id)
         if existing and existing.household_id == household_id:
             store.pop(recipe_id, None)
+            return True
+        return False
 
     monkeypatch.setattr("app.services.recipes.list_recipes", list_recipes)
     monkeypatch.setattr("app.services.recipes.get_recipe", get_recipe)

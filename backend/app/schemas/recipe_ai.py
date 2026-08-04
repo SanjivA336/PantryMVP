@@ -1,17 +1,22 @@
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class DraftRecipeIngredient(BaseModel):
-    """Plain text, never a resolved food id -- the human always picks the
-    real catalog food via FoodSearchInput, same as receipt-import lines
-    never auto-resolve a food id either."""
+    """`name` is always the AI's raw text -- `global_food_definition_id` is
+    filled in afterward (see recipe_ai.py's resolve step) when an exact or
+    close name match exists, preferring foods already in the household's
+    inventory. Left null when no confident match was found, same as
+    receipt-import lines never auto-resolve a food id either -- the human
+    picks via FoodSearchInput in that case."""
 
     name: str = Field(min_length=1)
     quantity: str | None = None
     unit: str | None = None
     note: str | None = None
+    global_food_definition_id: UUID | None = None
 
     @field_validator("quantity", "unit", "note", mode="before")
     @classmethod
@@ -77,19 +82,53 @@ class ImportRecipeRequest(BaseModel):
 
 
 class GenerateRecipeParams(BaseModel):
-    cuisine: str | None = None
+    # A multi-select of cuisine options -- the AI picks one, rather than the
+    # user committing to a single cuisine up front.
+    cuisines: list[str] = Field(default_factory=list)
+    # A range, not just an upper bound -- "5-10 min" and "under 45 min" read
+    # very differently to a recipe-writer even though both cap at some
+    # number. max with no min left open-ended (the "1hr+" preset).
+    min_total_time_minutes: int | None = Field(default=None, gt=0)
     max_total_time_minutes: int | None = Field(default=None, gt=0)
     dietary_restrictions: list[str] = Field(default_factory=list)
+    # Free-text names, not ids -- the user picks these from their current
+    # inventory client-side, but the AI only needs the name to work with.
     required_ingredients: list[str] = Field(default_factory=list)
-    servings: int | None = Field(default=None, gt=0)
+    # A short freeform ask ("something with leftover rice", "kid-friendly"),
+    # folded into the prompt as one more constraint line.
+    description: str | None = Field(default=None, max_length=500)
+    # When set, the service layer resolves the household's current ACTIVE
+    # inventory into available_ingredients below before calling the AI
+    # provider -- the client only needs to flip this flag, not enumerate
+    # its own inventory (which the server already knows and the client
+    # could otherwise send stale or spoofed).
+    pantry_only: bool = False
+    # Populated server-side only (see generate_recipe in services/recipe_ai.py)
+    # -- any value sent by the client here is ignored and overwritten.
+    available_ingredients: list[str] = Field(default_factory=list)
 
 
 class SubstitutionRequest(BaseModel):
     ingredient_name: str = Field(min_length=1)
+    ingredient_quantity: str | None = None
+    ingredient_unit: str | None = None
     recipe_name: str | None = None
     other_ingredient_names: list[str] = Field(default_factory=list)
 
 
 class SubstitutionSuggestion(BaseModel):
     name: str
+    # How much of the substitute is needed to match the original ingredient's
+    # contribution -- not always the same amount, and not always even the
+    # same unit (e.g. bananas by count, oatmeal by weight), so this can't be
+    # assumed equal to the original ingredient's own quantity/unit.
+    quantity: str | None = None
+    unit: str | None = None
     note: str | None = None
+
+    @field_validator("quantity", mode="before")
+    @classmethod
+    def _coerce_quantity_to_string(cls, value: object) -> object:
+        if value is None or isinstance(value, str):
+            return value
+        return str(value)

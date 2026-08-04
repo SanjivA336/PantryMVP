@@ -8,7 +8,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Guards the same React StrictMode double-invoke race
+    // useHouseholdResource documents and guards against: without it, a
+    // stale first-invocation getSession() result resolving after a second
+    // invocation could overwrite real session state with stale data in dev.
+    let cancelled = false
+
     supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return
       setSession(data.session)
       setLoading(false)
     })
@@ -16,10 +23,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession)
+      if (!cancelled) setSession(newSession)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signUp = async (email: string, password: string) => {

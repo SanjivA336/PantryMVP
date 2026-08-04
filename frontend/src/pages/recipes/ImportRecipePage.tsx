@@ -54,8 +54,8 @@ export function ImportRecipePage() {
   if (draft) {
     return (
       <div className="mx-auto max-w-2xl">
-        <h2 className="mb-1 text-lg font-semibold">Review imported recipe</h2>
-        <p className="mb-4 text-sm text-gray-500">
+        <h2 className="mb-1 text-xl font-semibold">Review imported recipe</h2>
+        <p className="mb-4 text-sm text-muted">
           Check the AI's work below, especially quantities and units, then pick a real food for
           each ingredient before saving.
         </p>
@@ -70,30 +70,28 @@ export function ImportRecipePage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h2 className="mb-4 text-lg font-semibold">Import a recipe</h2>
+      <h2 className="mb-4 text-xl font-semibold">Import a recipe</h2>
 
       <div className="mb-4 flex gap-2 text-sm">
         <button
           type="button"
           onClick={() => setSource('text')}
-          className={`rounded-md px-3 py-2 font-medium ${
+          className={`rounded-control px-2 py-2 font-medium transition-colors ${
             source === 'text'
-              ? 'text-white'
-              : 'border border-gray-300 text-gray-700'
+              ? 'bg-primary text-bg'
+              : 'border border-subtle text-muted hover:bg-surface-hover'
           }`}
-          style={source === 'text' ? { backgroundColor: 'var(--color-primary)' } : undefined}
         >
           Paste text
         </button>
         <button
           type="button"
           onClick={() => setSource('url')}
-          className={`rounded-md px-3 py-2 font-medium ${
+          className={`rounded-control px-2 py-2 font-medium transition-colors ${
             source === 'url'
-              ? 'text-white'
-              : 'border border-gray-300 text-gray-700'
+              ? 'bg-primary text-bg'
+              : 'border border-subtle text-muted hover:bg-surface-hover'
           }`}
-          style={source === 'url' ? { backgroundColor: 'var(--color-primary)' } : undefined}
         >
           From a URL
         </button>
@@ -103,7 +101,7 @@ export function ImportRecipePage() {
         <textarea
           rows={10}
           placeholder="Paste the full recipe text here…"
-          className="w-full rounded-md border border-gray-300 px-3 py-2"
+          className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -111,20 +109,19 @@ export function ImportRecipePage() {
         <input
           type="url"
           placeholder="https://example.com/some-recipe"
-          className="w-full rounded-md border border-gray-300 px-3 py-2"
+          className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
       )}
 
-      {importError && <p className="mt-3 text-sm text-red-600">{importError}</p>}
+      {importError && <p className="mt-3 text-sm text-danger">{importError}</p>}
 
       <button
         type="button"
         onClick={runImport}
         disabled={importing || (source === 'text' ? !text.trim() : !url.trim())}
-        className="mt-4 rounded-md px-4 py-2 font-medium text-white disabled:opacity-50"
-        style={{ backgroundColor: 'var(--color-primary)' }}
+        className="mt-4 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
       >
         {importing ? 'Importing…' : 'Import'}
       </button>

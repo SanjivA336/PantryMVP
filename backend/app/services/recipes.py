@@ -4,7 +4,14 @@ from uuid import UUID
 from postgrest.exceptions import APIError
 
 from app.core.supabase import get_service_client
-from app.schemas.recipe import CreateRecipeRequest, Recipe, RecipeDetail, RecipeIngredient
+from app.schemas.recipe import (
+    CreateRecipeRequest,
+    Recipe,
+    RecipeDetail,
+    RecipeIngredient,
+    RecipeIngredientInput,
+    UpdateRecipeRequest,
+)
 
 _RECIPES_TABLE = "recipes"
 _INGREDIENTS_TABLE = "recipe_ingredients"
@@ -150,7 +157,33 @@ def create_recipe(household_id: UUID, member_id: UUID, body: CreateRecipeRequest
     return get_recipe(household_id, UUID(new_id))  # type: ignore[return-value]
 
 
-def update_recipe(household_id: UUID, recipe_id: UUID, body: CreateRecipeRequest) -> RecipeDetail:
+def update_recipe(household_id: UUID, recipe_id: UUID, body: UpdateRecipeRequest) -> RecipeDetail:
+    """A genuine partial update: update_recipe (the RPC) still expects every
+    field, since it atomically replaces the recipe's ingredient rows, so
+    anything the caller didn't send is filled in from the recipe's current
+    values -- model_fields_set (not None-checks) is what distinguishes "not
+    sent" from "sent as null" for the genuinely nullable fields like
+    description.
+    """
+    existing = get_recipe(household_id, recipe_id)
+    if existing is None:
+        raise RecipeNotFoundError
+
+    fields = body.model_fields_set
+    ingredients: list[RecipeIngredientInput] = (
+        body.ingredients
+        if "ingredients" in fields and body.ingredients is not None
+        else [
+            RecipeIngredientInput(
+                global_food_definition_id=ing.global_food_definition_id,
+                quantity=ing.quantity,
+                unit=ing.unit,
+                note=ing.note,
+            )
+            for ing in existing.ingredients
+        ]
+    )
+
     client = get_service_client()
     try:
         client.rpc(
@@ -158,12 +191,24 @@ def update_recipe(household_id: UUID, recipe_id: UUID, body: CreateRecipeRequest
             {
                 "p_household_id": str(household_id),
                 "p_recipe_id": str(recipe_id),
-                "p_name": body.name,
-                "p_description": body.description,
-                "p_servings": body.servings,
-                "p_prep_time_minutes": body.prep_time_minutes,
-                "p_cook_time_minutes": body.cook_time_minutes,
-                "p_instructions": body.instructions,
+                "p_name": body.name if "name" in fields else existing.name,
+                "p_description": (
+                    body.description if "description" in fields else existing.description
+                ),
+                "p_servings": body.servings if "servings" in fields else existing.servings,
+                "p_prep_time_minutes": (
+                    body.prep_time_minutes
+                    if "prep_time_minutes" in fields
+                    else existing.prep_time_minutes
+                ),
+                "p_cook_time_minutes": (
+                    body.cook_time_minutes
+                    if "cook_time_minutes" in fields
+                    else existing.cook_time_minutes
+                ),
+                "p_instructions": (
+                    body.instructions if "instructions" in fields else existing.instructions
+                ),
                 "p_ingredients": [
                     {
                         "global_food_definition_id": str(ing.global_food_definition_id),
@@ -171,7 +216,7 @@ def update_recipe(household_id: UUID, recipe_id: UUID, body: CreateRecipeRequest
                         "unit": ing.unit,
                         "note": ing.note,
                     }
-                    for ing in body.ingredients
+                    for ing in ingredients
                 ],
             },
         ).execute()
@@ -182,8 +227,13 @@ def update_recipe(household_id: UUID, recipe_id: UUID, body: CreateRecipeRequest
     return get_recipe(household_id, recipe_id)  # type: ignore[return-value]
 
 
-def delete_recipe(household_id: UUID, recipe_id: UUID) -> None:
+def delete_recipe(household_id: UUID, recipe_id: UUID) -> bool:
     client = get_service_client()
-    client.table(_RECIPES_TABLE).delete().eq("household_id", str(household_id)).eq(
-        "id", str(recipe_id)
-    ).execute()
+    result = (
+        client.table(_RECIPES_TABLE)
+        .delete()
+        .eq("household_id", str(household_id))
+        .eq("id", str(recipe_id))
+        .execute()
+    )
+    return bool(result.data)

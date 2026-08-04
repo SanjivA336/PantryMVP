@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Plus, X } from 'lucide-react'
 import { FoodSearchInput } from '../../components/FoodSearchInput'
 import { ApiError } from '../../lib/apiClient'
 import type { FoodDefinition } from '../../types/entities'
@@ -58,6 +59,14 @@ interface IngredientRow {
 }
 
 const emptyIngredientRow = (): IngredientRow => ({ food: null, quantity: '', unit: '', note: '' })
+
+// Deliberately no `w-full` here -- fixed-width fields below combine this
+// with their own w-* class, and Tailwind resolves conflicting same-layer
+// utilities by CSS declaration order (not class-string order), so pairing
+// "w-20" with a "w-full"-bearing constant silently lets w-full win.
+const fieldClass =
+  'rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+const inputClass = `w-full ${fieldClass}`
 
 interface Props {
   initial?: RecipeFormInitial
@@ -146,129 +155,113 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
   return (
     <form onSubmit={handleSubmit(submit)} className="flex flex-col gap-6">
       <div>
-        <label className="mb-1 block text-sm font-medium">Recipe name</label>
-        <input
-          type="text"
-          className="w-full rounded-md border border-gray-300 px-3 py-2"
-          {...register('name')}
-        />
-        {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
+        <label className="mb-1.5 block text-sm font-medium text-muted">Recipe name</label>
+        <input type="text" className={inputClass} {...register('name')} />
+        {errors.name && <p className="mt-1.5 text-sm text-danger">{errors.name.message}</p>}
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium">Description (optional)</label>
-        <textarea
-          rows={2}
-          className="w-full rounded-md border border-gray-300 px-3 py-2"
-          {...register('description')}
-        />
+        <label className="mb-1.5 block text-sm font-medium text-muted">
+          Description (optional)
+        </label>
+        <textarea rows={2} className={inputClass} {...register('description')} />
       </div>
 
       <div className="flex gap-3">
         <div className="flex-1">
-          <label className="mb-1 block text-sm font-medium">Servings</label>
-          <input
-            type="number"
-            min={1}
-            className="w-full rounded-md border border-gray-300 px-3 py-2"
-            {...register('servings')}
-          />
+          <label className="mb-1.5 block text-sm font-medium text-muted">Servings</label>
+          <input type="number" min={1} className={inputClass} {...register('servings')} />
           {errors.servings && (
-            <p className="mt-1 text-sm text-red-600">{errors.servings.message}</p>
+            <p className="mt-1.5 text-sm text-danger">{errors.servings.message}</p>
           )}
         </div>
         <div className="flex-1">
-          <label className="mb-1 block text-sm font-medium">Prep time (min)</label>
-          <input
-            type="number"
-            min={0}
-            className="w-full rounded-md border border-gray-300 px-3 py-2"
-            {...register('prep_time_minutes')}
-          />
+          <label className="mb-1.5 block text-sm font-medium text-muted">Prep time (min)</label>
+          <input type="number" min={0} className={inputClass} {...register('prep_time_minutes')} />
         </div>
         <div className="flex-1">
-          <label className="mb-1 block text-sm font-medium">Cook time (min)</label>
-          <input
-            type="number"
-            min={0}
-            className="w-full rounded-md border border-gray-300 px-3 py-2"
-            {...register('cook_time_minutes')}
-          />
+          <label className="mb-1.5 block text-sm font-medium text-muted">Cook time (min)</label>
+          <input type="number" min={0} className={inputClass} {...register('cook_time_minutes')} />
         </div>
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-medium">Ingredients</label>
-        <div className="flex flex-col gap-3">
+        <label className="mb-2 block text-sm font-medium text-muted">Ingredients</label>
+        <div className="flex flex-col gap-2">
           {ingredients.map((row, index) => (
-            <div key={index} className="flex items-start gap-2">
-              <div className="flex-1">
-                <FoodSearchInput
-                  value={row.food}
-                  onChange={(food) => updateIngredient(index, { food })}
-                  initialQuery={row.suggestedName}
+            <div
+              key={index}
+              className="flex flex-col gap-2 rounded-card border border-subtle bg-surface p-3"
+            >
+              <FoodSearchInput
+                value={row.food}
+                onChange={(food) => updateIngredient(index, { food })}
+                initialQuery={row.suggestedName}
+              />
+              <div className="flex flex-wrap gap-2">
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="Qty"
+                  className={`w-20 ${fieldClass}`}
+                  value={row.quantity}
+                  onChange={(e) => updateIngredient(index, { quantity: e.target.value })}
                 />
+                <input
+                  type="text"
+                  placeholder="Unit"
+                  className={`w-24 ${fieldClass}`}
+                  value={row.unit}
+                  onChange={(e) => updateIngredient(index, { unit: e.target.value })}
+                />
+                <input
+                  type="text"
+                  placeholder="Note (optional)"
+                  className={`min-w-32 flex-1 ${fieldClass}`}
+                  value={row.note}
+                  onChange={(e) => updateIngredient(index, { note: e.target.value })}
+                />
+                <button
+                  type="button"
+                  title="Remove"
+                  onClick={() => removeIngredient(index)}
+                  className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                >
+                  <X size={16} strokeWidth={1.75} />
+                </button>
               </div>
-              <input
-                type="number"
-                step="any"
-                placeholder="Qty"
-                className="w-20 rounded-md border border-gray-300 px-2 py-2"
-                value={row.quantity}
-                onChange={(e) => updateIngredient(index, { quantity: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Unit"
-                className="w-24 rounded-md border border-gray-300 px-2 py-2"
-                value={row.unit}
-                onChange={(e) => updateIngredient(index, { unit: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Note (optional)"
-                className="w-32 rounded-md border border-gray-300 px-2 py-2"
-                value={row.note}
-                onChange={(e) => updateIngredient(index, { note: e.target.value })}
-              />
-              <button
-                type="button"
-                onClick={() => removeIngredient(index)}
-                className="px-2 py-2 text-sm text-red-600 hover:underline"
-              >
-                Remove
-              </button>
             </div>
           ))}
         </div>
         <button
           type="button"
           onClick={() => setIngredients((prev) => [...prev, emptyIngredientRow()])}
-          className="mt-2 text-sm font-medium"
-          style={{ color: 'var(--color-primary)' }}
+          className="mt-2 flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-hover"
         >
-          + Add ingredient
+          <Plus size={16} strokeWidth={2.25} />
+          Add ingredient
         </button>
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-medium">Instructions</label>
+        <label className="mb-2 block text-sm font-medium text-muted">Instructions</label>
         <div className="flex flex-col gap-2">
           {instructions.map((step, index) => (
             <div key={index} className="flex items-start gap-2">
-              <span className="mt-2 text-sm text-gray-400">{index + 1}.</span>
+              <span className="mt-2 text-sm text-faint">{index + 1}.</span>
               <textarea
                 rows={1}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2"
+                className={`flex-1 ${inputClass}`}
                 value={step}
                 onChange={(e) => updateInstruction(index, e.target.value)}
               />
               <button
                 type="button"
+                title="Remove"
                 onClick={() => removeInstruction(index)}
-                className="px-2 py-2 text-sm text-red-600 hover:underline"
+                className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
               >
-                Remove
+                <X size={16} strokeWidth={1.75} />
               </button>
             </div>
           ))}
@@ -276,20 +269,19 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
         <button
           type="button"
           onClick={() => setInstructions((prev) => [...prev, ''])}
-          className="mt-2 text-sm font-medium"
-          style={{ color: 'var(--color-primary)' }}
+          className="mt-2 flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-hover"
         >
-          + Add step
+          <Plus size={16} strokeWidth={2.25} />
+          Add step
         </button>
       </div>
 
-      {formError && <p className="text-sm text-red-600">{formError}</p>}
+      {formError && <p className="text-sm text-danger">{formError}</p>}
 
       <button
         type="submit"
         disabled={isSubmitting}
-        className="self-start rounded-md px-4 py-2 font-medium text-white disabled:opacity-50"
-        style={{ backgroundColor: 'var(--color-primary)' }}
+        className="self-start rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
       >
         {isSubmitting ? 'Saving…' : submitLabel}
       </button>

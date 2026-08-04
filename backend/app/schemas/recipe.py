@@ -24,8 +24,21 @@ class CreateRecipeRequest(BaseModel):
     ingredients: list[RecipeIngredientInput] = Field(min_length=1)
 
 
-class UpdateRecipeRequest(CreateRecipeRequest):
-    pass
+class UpdateRecipeRequest(BaseModel):
+    """Unlike CreateRecipeRequest, every field here is optional -- a PATCH
+    only needs to send what's actually changing (matching every other
+    Update*Request in the app). The service layer fills in anything omitted
+    from the recipe's current values before calling the update_recipe RPC,
+    which itself still expects the full row -- see update_recipe in
+    services/recipes.py."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    servings: int | None = Field(default=None, gt=0)
+    prep_time_minutes: int | None = Field(default=None, ge=0)
+    cook_time_minutes: int | None = Field(default=None, ge=0)
+    instructions: list[str] | None = None
+    ingredients: list[RecipeIngredientInput] | None = Field(default=None, min_length=1)
 
 
 class Recipe(BaseModel):

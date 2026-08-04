@@ -35,7 +35,10 @@ strings, in order), "ingredients" (array of objects each with "name" (the food
 only, no quantity/unit baked in), "quantity" (a decimal number as a string --
 convert fractions like "1/2" to "0.5" -- or null if not stated), "unit" (string or
 null), "note" (string or null)). Extract from the ACTUAL recipe text the user
-provides. Respond with ONLY the JSON object. No commentary, no markdown fences."""
+provides. Respond with ONLY the JSON object. No commentary, no markdown fences.
+Do not put ingredient lines inside "instructions" -- ingredients belong only in
+the "ingredients" array. Do not prefix each instruction string with its own step
+number (e.g. "1.", "Step 2:") -- the array's order already conveys that."""
 
 _GENERATE_RECIPE_SYSTEM = """You are a recipe-writing assistant. Invent an original
 recipe matching the constraints the user gives you, as JSON with exactly these
@@ -45,15 +48,24 @@ null), "instructions" (array of short step strings, in order), "ingredients"
 (array of objects each with "name" (the food only, no quantity/unit baked in),
 "quantity" (a decimal number as a string, or null), "unit" (string or null),
 "note" (string or null)). Respond with ONLY the JSON object. No commentary, no
-markdown fences."""
+markdown fences. Do not put ingredient lines inside "instructions" -- ingredients
+belong only in the "ingredients" array. Do not prefix each instruction string
+with its own step number (e.g. "1.", "Step 2:") -- the array's order already
+conveys that."""
 
 _SUBSTITUTION_SYSTEM = """You are a cooking assistant suggesting ingredient
-substitutions. Given one ingredient plus the rest of a recipe for context, respond
-with a JSON ARRAY (not a single object) of 3 to 5 substitution objects, each with
-"name" (string) and "note" (a short reason or usage tip, under 15 words, or null).
-Example shape only, do not copy this content: [{"name": "...", "note": "..."},
-{"name": "...", "note": "..."}]. Respond with ONLY the JSON array. No commentary,
-no markdown fences."""
+substitutions. Given one ingredient (with its quantity and unit, if known) plus
+the rest of a recipe for context, respond with a JSON ARRAY (not a single object)
+of 3 to 5 substitution objects, each with "name" (string), "quantity" (a decimal
+number as a string, or null -- how much of the SUBSTITUTE is needed to match the
+original ingredient's contribution, which may differ from the original amount),
+"unit" (string or null -- the substitute's own natural unit, which may differ
+from the original ingredient's unit, e.g. counted vs weighed), and "note" (a
+short reason or usage tip, under 15 words, or null).
+Example shape only, do not copy this content: [{"name": "...", "quantity": "...",
+"unit": "...", "note": "..."}, {"name": "...", "quantity": "...", "unit": "...",
+"note": "..."}]. Respond with ONLY the JSON array. No commentary, no markdown
+fences."""
 
 
 def _extract_json_span(text: str) -> str | None:
@@ -152,14 +164,26 @@ class OllamaProvider(AiProvider):
 
     def generate_recipe(self, params: GenerateRecipeParams) -> DraftRecipe:
         lines = ["Generate a recipe with these constraints:"]
-        if params.cuisine:
-            lines.append(f"- Cuisine: {params.cuisine}")
-        if params.max_total_time_minutes:
+        if params.cuisines:
+            # The model picks one from the given options, rather than the
+            # request forcing a single cuisine before generation even starts.
+            lines.append(
+                "- Pick ONE cuisine from this list and write the recipe in that "
+                "style: " + ", ".join(params.cuisines)
+            )
+        if params.min_total_time_minutes and params.max_total_time_minutes:
+            lines.append(
+                "- Total prep+cook time MUST be between "
+                f"{params.min_total_time_minutes} and {params.max_total_time_minutes} minutes"
+            )
+        elif params.min_total_time_minutes:
+            lines.append(
+                f"- Total prep+cook time MUST be at least {params.min_total_time_minutes} minutes"
+            )
+        elif params.max_total_time_minutes:
             lines.append(
                 f"- Total prep+cook time MUST NOT exceed {params.max_total_time_minutes} minutes"
             )
-        if params.servings:
-            lines.append(f"- Servings: {params.servings}")
         if params.dietary_restrictions:
             lines.append(
                 "- MUST respect these dietary restrictions: "
@@ -169,6 +193,14 @@ class OllamaProvider(AiProvider):
             lines.append(
                 "- MUST include these ingredients: " + ", ".join(params.required_ingredients)
             )
+        if params.pantry_only and params.available_ingredients:
+            lines.append(
+                "- MUST ONLY use ingredients from this list, plus basic seasonings, oil, "
+                "and water if needed -- do not introduce any other new ingredient: "
+                + ", ".join(params.available_ingredients)
+            )
+        if params.description:
+            lines.append(f"- Additional request from the user: {params.description}")
         draft = self._call_and_parse(
             system=_GENERATE_RECIPE_SYSTEM,
             prompt="\n".join(lines),
@@ -178,9 +210,18 @@ class OllamaProvider(AiProvider):
         return self._normalize_ingredients(draft)
 
     def suggest_substitutions(
-        self, ingredient_name: str, recipe_name: str | None, other_ingredient_names: list[str]
+        self,
+        ingredient_name: str,
+        ingredient_quantity: str | None,
+        ingredient_unit: str | None,
+        recipe_name: str | None,
+        other_ingredient_names: list[str],
     ) -> list[SubstitutionSuggestion]:
-        lines = [f'Ingredient to substitute: "{ingredient_name}"']
+        amount = " ".join(p for p in (ingredient_quantity, ingredient_unit) if p)
+        lines = [
+            f'Ingredient to substitute: "{ingredient_name}"'
+            + (f" (amount used: {amount})" if amount else "")
+        ]
         if recipe_name:
             lines.append(f'Recipe: "{recipe_name}"')
         if other_ingredient_names:
@@ -248,7 +289,7 @@ class OllamaProvider(AiProvider):
                 validation_error = exc
 
         settings = get_settings()
-        if settings.ai_max_retries < 1:
+        if not settings.ai_retry_enabled:
             raise AiOutputParsingError(f"Ollama produced unparseable output: {raw[:300]}")
 
         error_summary = str(validation_error) if validation_error else "not valid JSON"
@@ -275,7 +316,7 @@ class OllamaProvider(AiProvider):
         items = _coerce_to_list(_extract_json(raw))
         if items is None:
             settings = get_settings()
-            if settings.ai_max_retries < 1:
+            if not settings.ai_retry_enabled:
                 raise AiOutputParsingError(f"Ollama produced unparseable output: {raw[:300]}")
             repair_prompt = (
                 f"Your previous output was not a JSON array.\nOriginal request: {prompt}\n"

@@ -31,8 +31,14 @@ def create_storage_location(household_id: UUID, data: dict) -> StorageLocation:
     return StorageLocation(**result.data[0])
 
 
-def update_storage_location(household_id: UUID, location_id: UUID, data: dict) -> StorageLocation:
+def update_storage_location(
+    household_id: UUID, location_id: UUID, data: dict
+) -> StorageLocation | None:
     client = get_service_client()
+    # An empty update dict would otherwise reach PostgREST as a no-op write
+    # that matches no row, making an existing location look like a 404.
+    if not data:
+        return get_storage_location(household_id, location_id)
     result = (
         client.table(_TABLE)
         .update(data)
@@ -40,11 +46,16 @@ def update_storage_location(household_id: UUID, location_id: UUID, data: dict) -
         .eq("id", str(location_id))
         .execute()
     )
-    return StorageLocation(**result.data[0])
+    return StorageLocation(**result.data[0]) if result.data else None
 
 
-def delete_storage_location(household_id: UUID, location_id: UUID) -> None:
+def delete_storage_location(household_id: UUID, location_id: UUID) -> bool:
     client = get_service_client()
-    client.table(_TABLE).delete().eq("household_id", str(household_id)).eq(
-        "id", str(location_id)
-    ).execute()
+    result = (
+        client.table(_TABLE)
+        .delete()
+        .eq("household_id", str(household_id))
+        .eq("id", str(location_id))
+        .execute()
+    )
+    return bool(result.data)

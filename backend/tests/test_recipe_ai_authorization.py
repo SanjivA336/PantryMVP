@@ -26,20 +26,22 @@ def _draft_dict(**overrides) -> dict:
 def fake_recipe_ai(monkeypatch):
     state = {"import": _draft_dict(), "generate": _draft_dict(), "raise": None}
 
-    def import_recipe(body):
+    def import_recipe(household_id, body):
         if state["raise"]:
             raise state["raise"]
         return state["import"]
 
-    def generate_recipe(params):
+    def generate_recipe(household_id, params):
         if state["raise"]:
             raise state["raise"]
         return state["generate"]
 
-    def suggest_substitutions(ingredient_name, recipe_name, other_ingredient_names):
+    def suggest_substitutions(
+        ingredient_name, ingredient_quantity, ingredient_unit, recipe_name, other_ingredient_names
+    ):
         if state["raise"]:
             raise state["raise"]
-        return [{"name": "almond milk", "note": "dairy-free"}]
+        return [{"name": "almond milk", "quantity": "1", "unit": "cup", "note": "dairy-free"}]
 
     monkeypatch.setattr("app.services.recipe_ai.import_recipe", import_recipe)
     monkeypatch.setattr("app.services.recipe_ai.generate_recipe", generate_recipe)
@@ -99,7 +101,7 @@ async def test_member_can_generate(client, fake_members, fake_recipe_ai) -> None
 
     response = await client.post(
         f"/api/households/{household_id}/recipes/ai/generate",
-        json={"cuisine": "Mexican"},
+        json={"cuisines": ["Mexican"]},
         headers=auth_header(user_id),
     )
 

@@ -1,8 +1,20 @@
+import { useCallback } from 'react'
 import { useParams } from 'react-router-dom'
+import { Handshake, LayoutDashboard, Users } from 'lucide-react'
+import { ScrollSpy } from '../../components/ScrollSpy'
 import { useAuth } from '../../hooks/useAuth'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
-import type { LedgerBalance, Member } from '../../types/entities'
+import type { LedgerBalance, LedgerEntryDetail, Member, Settlement } from '../../types/entities'
+import { BalancesDashboard } from './BalancesDashboard'
+import { MembersSection } from './MembersSection'
+import { SettlementsSection } from './SettlementsSection'
+
+const SPY_SECTIONS = [
+  { id: 'members', label: 'Members', icon: Users },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'settlements', label: 'Settlements', icon: Handshake },
+]
 
 export function BalancesPage() {
   const { householdId } = useParams<{ householdId: string }>()
@@ -19,52 +31,62 @@ export function BalancesPage() {
   const { data: members, loading: membersLoading } = useHouseholdResource<Member[]>(
     householdId ? `/api/households/${householdId}/members` : null,
   )
+  const {
+    data: entries,
+    loading: entriesLoading,
+    reload: reloadEntries,
+  } = useHouseholdResource<LedgerEntryDetail[]>(
+    householdId ? `/api/households/${householdId}/ledger/entries` : null,
+  )
+  const {
+    data: settlements,
+    loading: settlementsLoading,
+    reload: reloadSettlements,
+  } = useHouseholdResource<Settlement[]>(
+    householdId ? `/api/households/${householdId}/ledger/settlements` : null,
+  )
 
-  // Purchases/consumption on any device change balances immediately — this
-  // keeps the numbers here from going stale without the user having to
-  // manually refresh.
-  useRealtimeSubscription('ledger_entries', householdId ?? null, reloadBalances)
-
-  const nicknameById = new Map((members ?? []).map((m) => [m.id, m.nickname]))
-  const myMemberId = (members ?? []).find((m) => m.user_id === user?.id)?.id
-
-  const loading = balancesLoading || membersLoading
+  const reloadAll = useCallback(() => {
+    reloadBalances()
+    reloadEntries()
+    reloadSettlements()
+  }, [reloadBalances, reloadEntries, reloadSettlements])
+  // A purchase/consumption on any device changes balances, the dashboard's
+  // charts, and the settle-up plan all at once -- one subscription driving
+  // all three keeps them from silently going stale independently.
+  useRealtimeSubscription('ledger_entries', householdId ?? null, reloadAll)
 
   return (
-    <div className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold">Balances</h2>
-      {balancesError && <p className="text-sm text-red-600">{balancesError}</p>}
+    <div className="flex flex-col gap-10">
+      <h2 className="text-xl font-semibold">Balances</h2>
+      {balancesError && <p className="text-sm text-danger">{balancesError}</p>}
 
-      {loading ? (
-        <p className="text-sm">Loading…</p>
-      ) : !balances || balances.length === 0 ? (
-        <p className="text-sm text-gray-500">All settled up — nobody owes anybody anything.</p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {balances.map((balance) => {
-            const debtorName = nicknameById.get(balance.debtor_member_id) ?? 'Unknown member'
-            const creditorName = nicknameById.get(balance.creditor_member_id) ?? 'Unknown member'
-            const involvesMe =
-              balance.debtor_member_id === myMemberId || balance.creditor_member_id === myMemberId
-            return (
-              <li
-                key={`${balance.debtor_member_id}-${balance.creditor_member_id}`}
-                className="flex items-center justify-between rounded-md border border-gray-200 bg-white px-4 py-3"
-              >
-                <span className={involvesMe ? 'font-medium' : ''}>
-                  {debtorName} owes {creditorName}
-                </span>
-                <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>
-                  {/* The backend keeps full Decimal precision internally and never
-                      rounds it — this Number()/toFixed() is purely a display-layer
-                      formatting choice, not a change to any stored or computed value. */}
-                  ${Number(balance.amount).toFixed(2)}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+      <ScrollSpy sections={SPY_SECTIONS} />
+
+      <section id="members" className="scroll-mt-6">
+        <h3 className="mb-3 text-sm font-semibold text-muted">Members</h3>
+        <MembersSection
+          members={members}
+          balances={balances}
+          entries={entries}
+          loading={balancesLoading || membersLoading}
+          myUserId={user?.id}
+        />
+      </section>
+
+      <section id="dashboard" className="scroll-mt-6">
+        <h3 className="mb-3 text-sm font-semibold text-muted">Dashboard</h3>
+        <BalancesDashboard entries={entries} members={members} loading={entriesLoading} />
+      </section>
+
+      <section id="settlements" className="scroll-mt-6">
+        <h3 className="mb-3 text-sm font-semibold text-muted">Settlements</h3>
+        <SettlementsSection
+          settlements={settlements}
+          members={members}
+          loading={settlementsLoading}
+        />
+      </section>
     </div>
   )
 }

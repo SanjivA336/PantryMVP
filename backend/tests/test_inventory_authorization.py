@@ -33,6 +33,7 @@ def _item(household_id: uuid.UUID, **overrides) -> InventoryItem:
         created_at=now,
         updated_at=now,
         food_name="Whole Milk",
+        food_type_name="Whole Milk",
         category="DAIRY_ALTERNATIVES",
         name_override=None,
         storage_location_name="Test Fridge",
@@ -50,10 +51,12 @@ def fake_inventory(monkeypatch):
         store[item.id] = item
         return item
 
-    def list_for_household(household_id, status=None):
+    def list_for_household(household_id, status=None, storage_location_id=None):
         items = [i for i in store.values() if i.household_id == household_id]
         if status:
             items = [i for i in items if i.status == status]
+        if storage_location_id:
+            items = [i for i in items if i.storage_location_id == storage_location_id]
         return items
 
     def get_by_id(household_id, item_id):
@@ -130,6 +133,84 @@ async def test_member_can_create_item(client, fake_members, fake_inventory) -> N
 
     assert response.status_code == 201
     assert response.json()["data"]["quantity"] == "5"
+
+
+async def test_default_buyer_is_caller(client, fake_members, monkeypatch) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    caller_member = make_member(household_id, user_id)
+    fake_members.seed(caller_member)
+    captured: dict = {}
+
+    def create_manual(household_id, member_id, body):
+        captured["member_id"] = member_id
+        return _item(household_id, quantity=body.quantity, total_quantity=body.quantity)
+
+    monkeypatch.setattr("app.services.inventory_items.create_manual", create_manual)
+    monkeypatch.setattr(
+        "app.services.inventory_items.allowed_member_ids_are_valid", lambda h, ids: True
+    )
+
+    response = await client.post(
+        f"/api/households/{household_id}/inventory-items",
+        json=_create_body(),
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 201
+    assert captured["member_id"] == caller_member.id
+
+
+async def test_explicit_buyer_is_used_when_valid(client, fake_members, monkeypatch) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    buyer_id = uuid.uuid4()  # some other member.id, distinct from the caller's own
+    fake_members.seed(make_member(household_id, user_id))
+    captured: dict = {}
+
+    def create_manual(household_id, member_id, body):
+        captured["member_id"] = member_id
+        return _item(household_id, quantity=body.quantity, total_quantity=body.quantity)
+
+    monkeypatch.setattr("app.services.inventory_items.create_manual", create_manual)
+    monkeypatch.setattr(
+        "app.services.inventory_items.allowed_member_ids_are_valid", lambda h, ids: True
+    )
+
+    response = await client.post(
+        f"/api/households/{household_id}/inventory-items",
+        json=_create_body(buyer_member_id=str(buyer_id)),
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 201
+    assert captured["member_id"] == buyer_id
+
+
+async def test_create_item_rejects_invalid_buyer(client, fake_members, monkeypatch) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+
+    def allowed_member_ids_are_valid(h, ids):
+        return len(ids) != 1  # the buyer check always passes a single-element list
+
+    monkeypatch.setattr("app.services.inventory_items.create_manual", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "app.services.inventory_items.allowed_member_ids_are_valid",
+        allowed_member_ids_are_valid,
+    )
+
+    response = await client.post(
+        f"/api/households/{household_id}/inventory-items",
+        json=_create_body(
+            allowed_member_ids=[str(uuid.uuid4()), str(uuid.uuid4())],
+            buyer_member_id=str(uuid.uuid4()),
+        ),
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 400
 
 
 async def test_create_item_rejects_invalid_allowed_members(

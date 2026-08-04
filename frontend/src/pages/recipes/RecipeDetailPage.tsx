@@ -80,6 +80,8 @@ export function RecipeDetailPage() {
         `/api/households/${householdId}/recipes/ai/substitutions`,
         {
           ingredient_name: ingredient.food_name,
+          ingredient_quantity: ingredient.quantity,
+          ingredient_unit: ingredient.unit,
           recipe_name: recipe.name,
           other_ingredient_names: otherNames,
         },
@@ -190,6 +192,11 @@ export function RecipeDetailPage() {
                     {substitution.suggestions.map((suggestion, index) => (
                       <li key={index} className="text-xs text-muted">
                         <span className="font-medium text-text">{suggestion.name}</span>
+                        {(suggestion.quantity || suggestion.unit) && (
+                          <span className="ml-1 text-faint">
+                            ({[suggestion.quantity, suggestion.unit].filter(Boolean).join(' ')})
+                          </span>
+                        )}
                         {suggestion.note && <span className="ml-1">— {suggestion.note}</span>}
                       </li>
                     ))}

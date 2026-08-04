@@ -37,12 +37,12 @@ export function EditRecipePage() {
     navigate(`/households/${householdId}/recipes/${recipeId}`)
   }
 
-  if (loading) return <p className="text-sm">Loading…</p>
-  if (error || !recipe) return <p className="text-sm text-red-600">{error ?? 'Recipe not found'}</p>
+  if (loading) return <p className="text-sm text-muted">Loading…</p>
+  if (error || !recipe) return <p className="text-sm text-danger">{error ?? 'Recipe not found'}</p>
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h2 className="mb-4 text-lg font-semibold">Edit recipe</h2>
+      <h2 className="mb-4 text-xl font-semibold">Edit recipe</h2>
       <RecipeForm
         initial={recipeDetailToFormInitial(recipe)}
         submitLabel="Save changes"

@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useParams } from 'react-router-dom'
 import {
+  Check,
   ChefHat,
+  Copy,
   Home,
   LogOut,
   MoreHorizontal,
   Receipt,
-  Refrigerator,
   Scale,
+  Settings,
   ShoppingCart,
-  Users,
   X,
 } from 'lucide-react'
 import { apiClient } from '../../lib/apiClient'
@@ -23,11 +24,7 @@ const PRIMARY_NAV_ITEMS = [
   { to: 'balances', label: 'Balances', icon: Scale },
 ]
 
-const SECONDARY_NAV_ITEMS = [
-  { to: 'scan-receipt', label: 'Scan Receipt', icon: Receipt },
-  { to: 'members', label: 'Members', icon: Users },
-  { to: 'storage', label: 'Storage', icon: Refrigerator },
-]
+const SECONDARY_NAV_ITEMS = [{ to: 'scan-receipt', label: 'Scan Receipt', icon: Receipt }]
 
 const ALL_NAV_ITEMS = [...PRIMARY_NAV_ITEMS, ...SECONDARY_NAV_ITEMS]
 
@@ -62,9 +59,10 @@ export function HouseholdShell() {
         <div className="p-5">
           <p className="truncate text-base font-semibold">{household?.name ?? 'Burrow'}</p>
           {household && (
-            <p className="mt-0.5 font-mono text-xs tracking-wide text-faint">
-              {household.join_code}
-            </p>
+            <div className="mt-0.5 flex items-center gap-1">
+              <p className="font-mono text-xs tracking-wide text-faint">{household.join_code}</p>
+              <CopyCodeButton code={household.join_code} />
+            </div>
           )}
         </div>
 
@@ -75,14 +73,30 @@ export function HouseholdShell() {
         </nav>
 
         <div className="border-t border-subtle p-3">
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="flex w-full items-center gap-3 rounded-control px-2 py-2 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <LogOut size={18} strokeWidth={1.75} />
-            Sign out
-          </button>
+          <div className="flex items-center gap-2">
+            <NavLink
+              to="settings"
+              className={({ isActive }) =>
+                `flex flex-1 items-center gap-2 rounded-control px-2 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-primary-soft text-primary'
+                    : 'text-muted hover:bg-surface-hover hover:text-text'
+                }`
+              }
+            >
+              <Settings size={18} strokeWidth={1.75} />
+              Settings
+            </NavLink>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              title="Sign out"
+              aria-label="Sign out"
+              className="flex shrink-0 items-center justify-center rounded-control p-2.5 text-muted transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              <LogOut size={18} strokeWidth={1.75} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -91,19 +105,35 @@ export function HouseholdShell() {
         <div>
           <p className="truncate text-sm font-semibold">{household?.name ?? 'Burrow'}</p>
           {household && (
-            <p className="font-mono text-[11px] tracking-wide text-faint">
-              {household.join_code}
-            </p>
+            <div className="mt-0.5 flex items-center gap-1">
+              <p className="font-mono text-[11px] tracking-wide text-faint">
+                {household.join_code}
+              </p>
+              <CopyCodeButton code={household.join_code} />
+            </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          className="rounded-control p-2 text-muted hover:bg-surface-hover hover:text-text"
-          aria-label="Sign out"
-        >
-          <LogOut size={18} strokeWidth={1.75} />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <NavLink
+            to="settings"
+            aria-label="Settings"
+            className={({ isActive }) =>
+              `rounded-control p-2 transition-colors ${
+                isActive ? 'text-primary' : 'text-muted hover:bg-surface-hover hover:text-text'
+              }`
+            }
+          >
+            <Settings size={18} strokeWidth={1.75} />
+          </NavLink>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="rounded-control p-2 text-muted hover:bg-surface-hover hover:text-text"
+            aria-label="Sign out"
+          >
+            <LogOut size={18} strokeWidth={1.75} />
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-8 md:pt-8">
@@ -157,6 +187,33 @@ export function HouseholdShell() {
         </div>
       )}
     </div>
+  )
+}
+
+function CopyCodeButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard API can be unavailable (e.g. insecure context) -- a
+      // silent no-op is fine for this low-stakes convenience action.
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy join code"
+      aria-label="Copy join code"
+      className="rounded-control p-0.5 text-faint transition-colors hover:bg-surface-hover hover:text-text"
+    >
+      {copied ? <Check size={12} strokeWidth={2.25} /> : <Copy size={12} strokeWidth={1.75} />}
+    </button>
   )
 }
 

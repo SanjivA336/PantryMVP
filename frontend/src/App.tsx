@@ -7,8 +7,7 @@ import { HouseholdPickerPage } from './pages/households/HouseholdPickerPage'
 import { CreateHouseholdPage } from './pages/households/CreateHouseholdPage'
 import { JoinHouseholdPage } from './pages/households/JoinHouseholdPage'
 import { HouseholdShell } from './pages/households/HouseholdShell'
-import { MembersPage } from './pages/members/MembersPage'
-import { StoragePage } from './pages/storage/StoragePage'
+import { SettingsPage } from './pages/settings/SettingsPage'
 import { InventoryPage } from './pages/inventory/InventoryPage'
 import { AddInventoryItemPage } from './pages/inventory/AddInventoryItemPage'
 import { BalancesPage } from './pages/ledger/BalancesPage'
@@ -38,8 +37,8 @@ function App() {
               <Route index element={<InventoryPage />} />
               <Route path="inventory/add" element={<AddInventoryItemPage />} />
               <Route path="balances" element={<BalancesPage />} />
-              <Route path="members" element={<MembersPage />} />
-              <Route path="storage" element={<StoragePage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="storage/:storageLocationId" element={<InventoryPage />} />
               <Route path="shopping-list" element={<ShoppingListPage />} />
               <Route path="recipes" element={<RecipesPage />} />
               <Route path="recipes/new" element={<AddRecipePage />} />

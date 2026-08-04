@@ -19,7 +19,7 @@ export interface Member {
   updated_at: string
 }
 
-export type StorageLocationType = 'FRIDGE' | 'FREEZER' | 'PANTRY' | 'GARDEN' | 'OTHER'
+export type StorageLocationType = 'FRIDGE' | 'FREEZER' | 'PANTRY' | 'OTHER'
 
 export interface StorageLocation {
   id: string
@@ -89,6 +89,7 @@ export interface InventoryItem {
   updated_at: string
   name_override: string | null
   food_name: string
+  food_type_name: string
   category: FoodCategory | null
   storage_location_name: string
 }
@@ -109,6 +110,16 @@ export interface LedgerEntry {
 }
 
 export interface LedgerBalance {
+  debtor_member_id: string
+  creditor_member_id: string
+  amount: string
+}
+
+export interface LedgerEntryDetail extends LedgerEntry {
+  food_name: string | null
+}
+
+export interface Settlement {
   debtor_member_id: string
   creditor_member_id: string
   amount: string
@@ -148,6 +159,7 @@ export interface ShoppingListSection {
   id: string
   household_id: string
   name: string
+  sort_order: number
   created_at: string
   updated_at: string
 }
@@ -160,6 +172,8 @@ export interface ShoppingListItem {
   household_food_variant_id: string | null
   source: ShoppingListItemSource
   status: ShoppingListItemStatus
+  collected: boolean
+  sort_order: number
   added_by_member_id: string
   removed_at: string | null
   created_at: string
@@ -206,6 +220,10 @@ export interface DraftRecipeIngredient {
   quantity: string | null
   unit: string | null
   note: string | null
+  // Filled in server-side when the AI's ingredient name exactly matches a
+  // real food (inventory first, then the wider catalog) -- null means no
+  // confident match, same as today's manual-pick-required state.
+  global_food_definition_id: string | null
 }
 
 export interface DraftRecipe {
@@ -221,6 +239,8 @@ export interface DraftRecipe {
 
 export interface SubstitutionSuggestion {
   name: string
+  quantity: string | null
+  unit: string | null
   note: string | null
 }
 

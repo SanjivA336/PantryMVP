@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { apiClient } from '../lib/apiClient'
+import { apiClient, ApiError } from '../lib/apiClient'
 import { CategoryDot } from './CategoryDot'
 import { Modal } from './Modal'
 import { FOOD_CATEGORIES, FOOD_CATEGORY_LABELS } from '../lib/foodCategories'
@@ -22,6 +22,7 @@ export function TypeSearchField({ value, onChange }: Props) {
   const [creatingOpen, setCreatingOpen] = useState(false)
   const [newUnit, setNewUnit] = useState('count')
   const [newCategory, setNewCategory] = useState<FoodCategory>('OTHER')
+  const [createError, setCreateError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
@@ -41,7 +42,11 @@ export function TypeSearchField({ value, onChange }: Props) {
       }
     }, 250)
     return () => clearTimeout(debounceRef.current)
-  }, [query, value])
+    // value's identity changes on every parent render even when the food it
+    // represents hasn't -- keying on its id instead avoids re-running this
+    // debounce effect for unrelated re-renders while a food is selected.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, value?.id])
 
   const pick = (food: FoodDefinition) => {
     onChange(food)
@@ -56,17 +61,23 @@ export function TypeSearchField({ value, onChange }: Props) {
   const openCreateModal = () => {
     setNewUnit('count')
     setNewCategory('OTHER')
+    setCreateError(null)
     setCreatingOpen(true)
   }
 
   const createNew = async () => {
-    const food = await apiClient.post<FoodDefinition>('/api/food-definitions', {
-      name: query,
-      preferred_unit: newUnit,
-      category: newCategory,
-    })
-    setCreatingOpen(false)
-    pick(food)
+    setCreateError(null)
+    try {
+      const food = await apiClient.post<FoodDefinition>('/api/food-definitions', {
+        name: query,
+        preferred_unit: newUnit,
+        category: newCategory,
+      })
+      setCreatingOpen(false)
+      pick(food)
+    } catch (err) {
+      setCreateError(err instanceof ApiError ? err.message : 'Something went wrong')
+    }
   }
 
   if (value) {
@@ -152,6 +163,7 @@ export function TypeSearchField({ value, onChange }: Props) {
                 ))}
               </select>
             </div>
+            {createError && <p className="text-sm text-danger">{createError}</p>}
             <button
               type="button"
               onClick={createNew}

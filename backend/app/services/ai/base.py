@@ -38,6 +38,8 @@ class AiProvider(ABC):
     def suggest_substitutions(
         self,
         ingredient_name: str,
+        ingredient_quantity: str | None,
+        ingredient_unit: str | None,
         recipe_name: str | None,
         other_ingredient_names: list[str],
     ) -> list[SubstitutionSuggestion]: ...

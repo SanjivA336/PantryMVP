@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 /**
@@ -8,9 +8,10 @@ import { supabase } from '../lib/supabaseClient'
  * useHouseholdResource rather than trying to hand-patch local state from
  * the change payload.
  *
- * `onChange` must be stable across renders (e.g. useHouseholdResource's
- * `reload`, which is already wrapped in useCallback) — an inline arrow
- * function would resubscribe the channel on every render.
+ * `onChange` can be a fresh inline function on every render -- it's read via
+ * a ref, not a hook dependency, specifically so the channel only
+ * resubscribes when `table`/`householdId` actually change, never because
+ * the caller happened to pass a new callback identity.
  *
  * Relies on migration 0011 (table added to the `supabase_realtime`
  * publication) and each table's existing RLS SELECT policy — Realtime
@@ -22,6 +23,9 @@ export function useRealtimeSubscription(
   householdId: string | null,
   onChange: () => void,
 ): void {
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+
   useEffect(() => {
     if (!householdId) return
     // StrictMode's dev-only double-invoke (mount -> cleanup -> mount again)
@@ -44,7 +48,7 @@ export function useRealtimeSubscription(
           filter: `household_id=eq.${householdId}`,
         },
         () => {
-          if (active) onChange()
+          if (active) onChangeRef.current()
         },
       )
       .subscribe()
@@ -53,5 +57,5 @@ export function useRealtimeSubscription(
       active = false
       supabase.removeChannel(channel)
     }
-  }, [table, householdId, onChange])
+  }, [table, householdId])
 }

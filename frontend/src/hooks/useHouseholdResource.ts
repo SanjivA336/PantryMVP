@@ -20,12 +20,20 @@ export function useHouseholdResource<T>(path: string | null) {
   const reload = useCallback(() => setReloadToken((t) => t + 1), [])
 
   useEffect(() => {
-    if (!path) return
+    if (!path) {
+      // Without this, a resource whose path is conditionally (and
+      // sometimes permanently) null -- e.g. one only fetched on a
+      // different route -- would leave loading stuck at its true initial
+      // value forever, since the effect returns before ever settling it.
+      setLoading(false)
+      return
+    }
     let cancelled = false
+    const controller = new AbortController()
 
     setLoading(true)
     apiClient
-      .get<T>(path)
+      .get<T>(path, { signal: controller.signal })
       .then((result) => {
         if (!cancelled) {
           setData(result)
@@ -41,6 +49,10 @@ export function useHouseholdResource<T>(path: string | null) {
 
     return () => {
       cancelled = true
+      // Lets a request that's no longer wanted (path changed again, or the
+      // component unmounted) actually stop instead of running to
+      // completion in the background just to have its result discarded.
+      controller.abort()
     }
   }, [path, reloadToken])
 

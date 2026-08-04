@@ -55,13 +55,10 @@ def update_storage_location(
     body: UpdateStorageLocationRequest,
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[StorageLocation]:
-    existing = storage_service.get_storage_location(household_id, location_id)
-    if existing is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Storage location not found")
     updates = body.model_dump(exclude_none=True)
-    if not updates:
-        return ok(existing)
     updated = storage_service.update_storage_location(household_id, location_id, updates)
+    if updated is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Storage location not found")
     return ok(updated)
 
 
@@ -71,8 +68,7 @@ def delete_storage_location(
     location_id: UUID,
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[None]:
-    existing = storage_service.get_storage_location(household_id, location_id)
-    if existing is None:
+    deleted = storage_service.delete_storage_location(household_id, location_id)
+    if not deleted:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Storage location not found")
-    storage_service.delete_storage_location(household_id, location_id)
     return ok(None)

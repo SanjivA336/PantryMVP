@@ -9,7 +9,6 @@ class StorageLocationType(StrEnum):
     FRIDGE = "FRIDGE"
     FREEZER = "FREEZER"
     PANTRY = "PANTRY"
-    GARDEN = "GARDEN"
     OTHER = "OTHER"
 
 

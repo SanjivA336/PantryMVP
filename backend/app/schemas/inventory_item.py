@@ -56,6 +56,10 @@ class InventoryItem(BaseModel):
     # table — so the UI can show "Whole Milk" / "Garage Fridge" without a
     # separate round-trip per item.
     food_name: str
+    # The underlying food definition's own name, always -- unlike food_name,
+    # this doesn't get replaced by name_override. Lets search match "Whole
+    # Milk" even on an item nicknamed "Costco milk", alongside name_override.
+    food_type_name: str
     # Optional, unlike FoodDefinition.category itself: the variant's
     # global_food_definition_id can be null'd out (food deleted upstream),
     # in which case the enrichment join comes back empty.
@@ -79,6 +83,11 @@ class CreateInventoryItemRequest(BaseModel):
     # A per-item label (see InventoryItem.name_override) -- not the food's
     # name, just how this household tells its own jugs/cartons apart.
     name_override: str | None = Field(default=None, max_length=200)
+    # Who actually bought this -- defaults to the caller when omitted, but
+    # any active member can be picked (e.g. entering a purchase your
+    # roommate made). Becomes purchase_events.member_id, same as it always
+    # has been; this just lets the caller name someone other than themselves.
+    buyer_member_id: UUID | None = None
 
 
 class ConsumeInventoryItemRequest(BaseModel):

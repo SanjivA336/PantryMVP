@@ -7,6 +7,12 @@ export const createHouseholdSchema = z.object({
 })
 export type CreateHouseholdForm = z.infer<typeof createHouseholdSchema>
 
+export const updateHouseholdSchema = z.object({
+  name: z.string().min(1, 'Give your household a name'),
+  address: z.string().optional(),
+})
+export type UpdateHouseholdForm = z.infer<typeof updateHouseholdSchema>
+
 export const joinHouseholdSchema = z.object({
   join_code: z
     .string()

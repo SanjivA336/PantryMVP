@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { apiClient } from '../lib/apiClient'
+import { apiClient, ApiError } from '../lib/apiClient'
 import { CategoryDot } from './CategoryDot'
 import { FOOD_CATEGORIES, FOOD_CATEGORY_LABELS } from '../lib/foodCategories'
 import type { FoodCategory, FoodDefinition } from '../types/entities'
@@ -24,6 +24,7 @@ export function FoodSearchInput({ value, onChange, initialQuery }: Props) {
   const [creating, setCreating] = useState(false)
   const [newUnit, setNewUnit] = useState('count')
   const [newCategory, setNewCategory] = useState<FoodCategory>('OTHER')
+  const [createError, setCreateError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
@@ -43,7 +44,11 @@ export function FoodSearchInput({ value, onChange, initialQuery }: Props) {
       }
     }, 250)
     return () => clearTimeout(debounceRef.current)
-  }, [query, value])
+    // value's identity changes on every parent render even when the food it
+    // represents hasn't -- keying on its id instead avoids re-running this
+    // debounce effect for unrelated re-renders while a food is selected.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, value?.id])
 
   const pick = (food: FoodDefinition) => {
     onChange(food)
@@ -57,13 +62,18 @@ export function FoodSearchInput({ value, onChange, initialQuery }: Props) {
   }
 
   const createNew = async () => {
-    const food = await apiClient.post<FoodDefinition>('/api/food-definitions', {
-      name: query,
-      preferred_unit: newUnit,
-      category: newCategory,
-    })
-    pick(food)
-    setCreating(false)
+    setCreateError(null)
+    try {
+      const food = await apiClient.post<FoodDefinition>('/api/food-definitions', {
+        name: query,
+        preferred_unit: newUnit,
+        category: newCategory,
+      })
+      pick(food)
+      setCreating(false)
+    } catch (err) {
+      setCreateError(err instanceof ApiError ? err.message : 'Something went wrong')
+    }
   }
 
   if (value) {
@@ -145,6 +155,7 @@ export function FoodSearchInput({ value, onChange, initialQuery }: Props) {
                   ))}
                 </select>
               </div>
+              {createError && <p className="text-sm text-danger">{createError}</p>}
               <button
                 type="button"
                 onClick={createNew}

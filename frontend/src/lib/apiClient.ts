@@ -73,7 +73,12 @@ async function request<T>(
   try {
     response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
       ...options,
-      signal: controller?.signal,
+      // The internal timeout controller (POST-only, see opts.timeoutMs)
+      // takes priority when present; otherwise fall back to whatever signal
+      // the caller passed in directly (e.g. GET's own cancellation signal
+      // below) -- these two never overlap in practice today, since only
+      // GET accepts an external signal and only POST uses a timeout.
+      signal: controller?.signal ?? options.signal,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
@@ -89,7 +94,15 @@ async function request<T>(
     if (timeoutId !== undefined) clearTimeout(timeoutId)
   }
 
-  const envelope: Envelope<T> = await response.json()
+  let envelope: Envelope<T>
+  try {
+    envelope = await response.json()
+  } catch {
+    // A non-JSON error body (a dead backend, a proxy's own error page)
+    // would otherwise throw a raw SyntaxError instead of the app's own
+    // ApiError, which every caller already knows how to handle.
+    throw new ApiError(String(response.status), 'Request failed')
+  }
 
   if (envelope.status === 'error' || !response.ok) {
     throw new ApiError(
@@ -102,7 +115,8 @@ async function request<T>(
 }
 
 export const apiClient = {
-  get: <T>(path: string) => request<T>(path, { method: 'GET' }),
+  get: <T>(path: string, opts?: { signal?: AbortSignal }) =>
+    request<T>(path, { method: 'GET', signal: opts?.signal }),
   post: <T>(path: string, body?: unknown, opts?: { timeoutMs?: number }) =>
     request<T>(
       path,

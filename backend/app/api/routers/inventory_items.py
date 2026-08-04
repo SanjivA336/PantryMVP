@@ -21,9 +21,12 @@ router = APIRouter(prefix="/households/{household_id}/inventory-items", tags=["i
 def list_inventory_items(
     household_id: UUID,
     status_filter: str | None = Query(default=None, alias="status"),
+    storage_location_id: UUID | None = Query(default=None),
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[list[InventoryItem]]:
-    return ok(inventory_service.list_for_household(household_id, status_filter))
+    return ok(
+        inventory_service.list_for_household(household_id, status_filter, storage_location_id)
+    )
 
 
 @router.get("/last-cost", response_model=Envelope[Decimal | None])
@@ -49,7 +52,18 @@ def create_inventory_item(
             status.HTTP_400_BAD_REQUEST,
             "allowed_member_ids must all be active members of this household",
         )
-    item = inventory_service.create_manual(household_id, caller.id, body)
+    buyer_id = body.buyer_member_id or caller.id
+    if body.buyer_member_id and not inventory_service.allowed_member_ids_are_valid(
+        household_id, [body.buyer_member_id]
+    ):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "buyer_member_id must be an active member of this household",
+        )
+    try:
+        item = inventory_service.create_manual(household_id, buyer_id, body)
+    except inventory_service.FoodDefinitionNotFoundError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Food definition not found") from exc
     return ok(item)
 
 

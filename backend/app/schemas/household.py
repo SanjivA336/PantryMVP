@@ -23,3 +23,8 @@ class CreateHouseholdRequest(BaseModel):
 class JoinHouseholdRequest(BaseModel):
     join_code: str = Field(min_length=8, max_length=8)
     nickname: str = Field(min_length=1, max_length=100)
+
+
+class UpdateHouseholdRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    address: str | None = None

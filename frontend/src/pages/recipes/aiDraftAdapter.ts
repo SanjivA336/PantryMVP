@@ -10,9 +10,13 @@ export function draftRecipeToFormInitial(draft: DraftRecipe): RecipeFormInitial 
     cook_time_minutes: draft.cook_time_minutes,
     instructions: draft.instructions.length > 0 ? draft.instructions : [''],
     ingredients: draft.ingredients.map((ing) => ({
-      // The AI never resolves a real food id -- the human always picks the
-      // real catalog food via FoodSearchInput, same as receipt-import lines.
-      food: null,
+      // The backend resolves an exact/close name match where it can
+      // (inventory first, then the wider catalog) -- pre-select that food
+      // directly rather than just seeding the search box with its name.
+      // No match found -> same as before, the human picks via FoodSearchInput.
+      food: ing.global_food_definition_id
+        ? { id: ing.global_food_definition_id, name: ing.name }
+        : null,
       quantity: ing.quantity ?? '',
       unit: ing.unit ?? '',
       note: ing.note ?? '',

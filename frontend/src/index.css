@@ -50,6 +50,15 @@
   --color-category-beverages: #5b9bd5;
   --color-category-other: #8a9490;
 
+  /* Storage location types -- same identity-color idea as food categories,
+     one per StorageLocationType. Pantry/Other intentionally reuse the same
+     hex as their closest food-category counterparts rather than inventing
+     a near-duplicate shade. */
+  --color-storage-fridge: #7ec8e3;
+  --color-storage-freezer: #2e7da0;
+  --color-storage-pantry: #8b6544;
+  --color-storage-other: #8a9490;
+
   /* Shape -- rounded rectangles for controls (buttons, inputs, selects),
      not full pills (tried it -- caused more layout/spacing headaches than
      it was worth, e.g. joined-field seams and select-arrow crowding).
@@ -68,14 +77,24 @@
     'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-body {
-  margin: 0;
-  background-color: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-}
+/*
+  In `@layer base` so these participate in Tailwind's own layer ordering --
+  left unlayered, plain CSS rules always beat every utility class regardless
+  of specificity, which silently defeated any `border-{color}` utility
+  anywhere in the app (a component could carry the `border-primary` class
+  and still render `--color-subtle`, since this rule doesn't compete on
+  specificity with a layered utility, it just always wins outright).
+*/
+@layer base {
+  body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
 
-* {
-  border-color: var(--color-subtle);
+  * {
+    border-color: var(--color-subtle);
+  }
 }

@@ -27,6 +27,10 @@ class MemberNotAllowedError(Exception):
     pass
 
 
+class FoodDefinitionNotFoundError(Exception):
+    pass
+
+
 def _flatten(row: dict) -> InventoryItem:
     variant = row.pop("household_food_variants", None) or {}
     storage = row.pop("storage_locations", None) or {}
@@ -36,6 +40,7 @@ def _flatten(row: dict) -> InventoryItem:
     # same food definition can be told apart ("HEB milk" vs "Costco milk")
     # without needing separate variants or losing the shared running total.
     row["food_name"] = row.get("name_override") or global_definition.get("name") or "Unknown food"
+    row["food_type_name"] = global_definition.get("name") or "Unknown food"
     row["category"] = global_definition.get("category")
     row["storage_location_name"] = storage.get("name") or "Unknown location"
 
@@ -46,13 +51,16 @@ def _resolve_accounting_type(body: CreateInventoryItemRequest) -> AccountingType
     if body.accounting_type is not None:
         return body.accounting_type
     client = get_service_client()
-    result = (
-        client.table("global_food_definitions")
-        .select("accounting_type_default")
-        .eq("id", str(body.global_food_definition_id))
-        .single()
-        .execute()
-    )
+    try:
+        result = (
+            client.table("global_food_definitions")
+            .select("accounting_type_default")
+            .eq("id", str(body.global_food_definition_id))
+            .single()
+            .execute()
+        )
+    except APIError as exc:
+        raise FoodDefinitionNotFoundError from exc
     return AccountingType(result.data["accounting_type_default"])
 
 
@@ -90,11 +98,15 @@ def create_manual(
     return get_by_id(household_id, UUID(new_item_id))  # type: ignore[return-value]
 
 
-def list_for_household(household_id: UUID, status: str | None = None) -> list[InventoryItem]:
+def list_for_household(
+    household_id: UUID, status: str | None = None, storage_location_id: UUID | None = None
+) -> list[InventoryItem]:
     client = get_service_client()
     query = client.table(_TABLE).select(_ENRICHED_SELECT).eq("household_id", str(household_id))
     if status:
         query = query.eq("status", status)
+    if storage_location_id:
+        query = query.eq("storage_location_id", str(storage_location_id))
     result = query.order("created_at", desc=True).execute()
     return [_flatten(row) for row in result.data]
 

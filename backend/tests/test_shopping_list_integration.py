@@ -122,15 +122,18 @@ async def test_manual_item_add_and_remove_lifecycle(api_client, household) -> No
     )
     section_id = section_resp.json()["data"]["id"]
 
+    butter_id = await _search_butter(api_client, household["headers"])
     create_resp = await api_client.post(
         f"/api/households/{household['household_id']}/shopping-list/items",
-        json={"name": "Paper towels", "section_id": section_id},
+        json={"global_food_definition_id": butter_id, "section_id": section_id},
         headers=household["headers"],
     )
     assert create_resp.status_code == 201, create_resp.text
     item = create_resp.json()["data"]
     assert item["source"] == "MANUAL"
     assert item["section_id"] == section_id
+    assert item["name"] == "Butter"
+    assert item["household_food_variant_id"] is not None
 
     active = await _active_items(api_client, household)
     assert any(i["id"] == item["id"] for i in active)

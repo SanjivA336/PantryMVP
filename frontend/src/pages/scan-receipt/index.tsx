@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Camera, Receipt, Upload } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { uploadReceiptImage } from '../../lib/receiptStorage'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
@@ -53,14 +54,14 @@ export function ScanReceiptPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="text-lg font-semibold">Scan Receipt</h2>
+    <div className="flex flex-col gap-5">
+      <h2 className="text-xl font-semibold">Scan Receipt</h2>
 
       <div className="flex flex-wrap items-center gap-3">
         <label
-          className="cursor-pointer rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          style={{ backgroundColor: 'var(--color-primary)' }}
+          className={`flex cursor-pointer items-center gap-1.5 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover ${uploading ? 'pointer-events-none opacity-50' : ''}`}
         >
+          <Upload size={16} strokeWidth={2.25} />
           Upload a picture
           <input
             type="file"
@@ -70,7 +71,10 @@ export function ScanReceiptPage() {
             onChange={handleFile}
           />
         </label>
-        <label className="cursor-pointer rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50">
+        <label
+          className={`flex cursor-pointer items-center gap-1.5 rounded-control border border-subtle px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text ${uploading ? 'pointer-events-none opacity-50' : ''}`}
+        >
+          <Camera size={16} strokeWidth={1.75} />
           Take a picture
           {/* `capture` triggers the camera on phones; desktop browsers
               typically just fall back to a plain file picker -- no device
@@ -84,33 +88,36 @@ export function ScanReceiptPage() {
             onChange={handleFile}
           />
         </label>
-        {uploading && <span className="text-sm text-gray-500">Uploading…</span>}
+        {uploading && <span className="text-sm text-muted">Uploading…</span>}
       </div>
 
       {(uploadError || loadError) && (
-        <p className="text-sm text-red-600">{uploadError ?? loadError}</p>
+        <p className="text-sm text-danger">{uploadError ?? loadError}</p>
       )}
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-gray-500">Past scans</h3>
+        <h3 className="mb-2 text-sm font-semibold text-muted">Past scans</h3>
         {loading ? (
-          <p className="text-sm">Loading…</p>
+          <p className="text-sm text-muted">Loading…</p>
         ) : !sessions || sessions.length === 0 ? (
-          <p className="text-sm text-gray-500">No receipts scanned yet.</p>
+          <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-subtle p-10 text-center">
+            <Receipt size={28} strokeWidth={1.5} className="text-faint" />
+            <p className="text-sm text-muted">No receipts scanned yet.</p>
+          </div>
         ) : (
           <ul className="flex flex-col gap-2">
             {sessions.map((session) => (
               <li key={session.id}>
                 <Link
                   to={`/households/${householdId}/scan-receipt/${session.id}`}
-                  className="flex items-center justify-between rounded-md border border-gray-200 bg-white px-4 py-3 hover:border-gray-300"
+                  className="flex items-center justify-between rounded-card border border-subtle bg-surface px-4 py-3 shadow-card transition-colors hover:bg-surface-hover"
                 >
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-muted">
                     {new Date(session.created_at).toLocaleString()}
                   </span>
                   <span
                     className={
-                      session.status === 'FAILED' ? 'text-sm text-red-600' : 'text-sm font-medium'
+                      session.status === 'FAILED' ? 'text-sm text-danger' : 'text-sm font-medium'
                     }
                   >
                     {STATUS_LABELS[session.status] ?? session.status}

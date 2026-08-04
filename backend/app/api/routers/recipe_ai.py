@@ -26,7 +26,7 @@ def import_recipe(
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[DraftRecipe]:
     try:
-        draft = recipe_ai_service.import_recipe(body)
+        draft = recipe_ai_service.import_recipe(household_id, body)
     except RecipeUrlFetchError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except AiProviderUnavailableError as exc:
@@ -45,7 +45,7 @@ def generate_recipe(
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[DraftRecipe]:
     try:
-        draft = recipe_ai_service.generate_recipe(body)
+        draft = recipe_ai_service.generate_recipe(household_id, body)
     except AiProviderUnavailableError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
     except AiProviderTimeoutError as exc:
@@ -63,7 +63,11 @@ def suggest_substitutions(
 ) -> Envelope[list[SubstitutionSuggestion]]:
     try:
         suggestions = recipe_ai_service.suggest_substitutions(
-            body.ingredient_name, body.recipe_name, body.other_ingredient_names
+            body.ingredient_name,
+            body.ingredient_quantity,
+            body.ingredient_unit,
+            body.recipe_name,
+            body.other_ingredient_names,
         )
     except AiProviderUnavailableError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc

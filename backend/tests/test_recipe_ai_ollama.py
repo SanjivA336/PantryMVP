@@ -46,7 +46,7 @@ def test_parse_recipe_from_text(provider: OllamaProvider) -> None:
 
 
 def test_generate_recipe_from_params(provider: OllamaProvider) -> None:
-    params = GenerateRecipeParams(cuisine="Italian", servings=2)
+    params = GenerateRecipeParams(cuisines=["Italian"], max_total_time_minutes=45)
 
     draft = provider.generate_recipe(params)
 
@@ -57,7 +57,7 @@ def test_generate_recipe_from_params(provider: OllamaProvider) -> None:
 
 def test_suggest_substitutions(provider: OllamaProvider) -> None:
     suggestions = provider.suggest_substitutions(
-        "buttermilk", "Pancakes", ["flour", "sugar", "eggs"]
+        "buttermilk", "1", "cup", "Pancakes", ["flour", "sugar", "eggs"]
     )
 
     assert len(suggestions) >= 1

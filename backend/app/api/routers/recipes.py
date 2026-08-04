@@ -59,5 +59,7 @@ def delete_recipe(
     recipe_id: UUID,
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[None]:
-    recipe_service.delete_recipe(household_id, recipe_id)
+    deleted = recipe_service.delete_recipe(household_id, recipe_id)
+    if not deleted:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Recipe not found")
     return ok(None)

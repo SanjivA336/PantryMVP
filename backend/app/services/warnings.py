@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
+from app.core.supabase import get_service_client
 from app.schemas.inventory_item import InventoryItem
 from app.schemas.warning import (
     ExpiryWarning,
@@ -11,6 +12,9 @@ from app.schemas.warning import (
     StockWarningType,
 )
 from app.services import inventory_items as inventory_service
+
+_STOCK_IGNORES_TABLE = "stock_warning_ignores"
+_EXPIRY_IGNORES_TABLE = "expiry_warning_ignores"
 
 # How many days out counts as "expiring soon" -- a plain constant rather than
 # a per-household setting, since nothing in this MVP needs it configurable
@@ -29,16 +33,53 @@ def _relevant_expiry_date(expiry_date: date | None, best_by_date: date | None) -
     return min(dates) if dates else None
 
 
+# Split out from compute_warnings() so unit tests can monkeypatch these two
+# lookups alone (same pattern as the existing list_for_household monkeypatch)
+# instead of needing a real Supabase client just to exercise the pure
+# expiry/stock computation logic.
+def _fetch_ignored_expiry_item_ids(household_id: UUID) -> set[UUID]:
+    client = get_service_client()
+    rows = (
+        client.table(_EXPIRY_IGNORES_TABLE)
+        .select("inventory_item_id")
+        .eq("household_id", str(household_id))
+        .execute()
+        .data
+    )
+    return {UUID(row["inventory_item_id"]) for row in rows}
+
+
+def _fetch_ignored_stock_references(household_id: UUID) -> dict[UUID, datetime]:
+    client = get_service_client()
+    rows = (
+        client.table(_STOCK_IGNORES_TABLE)
+        .select("household_food_variant_id, reference_purchased_at")
+        .eq("household_id", str(household_id))
+        .execute()
+        .data
+    )
+    return {
+        UUID(row["household_food_variant_id"]): datetime.fromisoformat(
+            row["reference_purchased_at"]
+        )
+        for row in rows
+    }
+
+
 def compute_warnings(household_id: UUID) -> HouseholdWarnings:
     # Unfiltered status: EMPTY/DISCARDED/etc. items still count as the most
     # recent purchase for a food's stock baseline, even though only ACTIVE
     # items count toward what's currently on hand.
     items = inventory_service.list_for_household(household_id)
+    ignored_expiry_item_ids = _fetch_ignored_expiry_item_ids(household_id)
+    ignored_stock_references = _fetch_ignored_stock_references(household_id)
 
     today = date.today()
     expiry_warnings: list[ExpiryWarning] = []
     for item in items:
         if item.status != "ACTIVE":
+            continue
+        if item.id in ignored_expiry_item_ids:
             continue
         relevant_date = _relevant_expiry_date(item.expiry_date, item.best_by_date)
         if relevant_date is None:
@@ -80,6 +121,10 @@ def compute_warnings(household_id: UUID) -> HouseholdWarnings:
         else:
             continue
 
+        ignored_reference = ignored_stock_references.get(variant_id)
+        if ignored_reference is not None and ignored_reference == most_recent.purchased_at:
+            continue
+
         stock_warnings.append(
             StockWarning(
                 type=warning_type,
@@ -93,3 +138,40 @@ def compute_warnings(household_id: UUID) -> HouseholdWarnings:
         )
 
     return HouseholdWarnings(expiry_warnings=expiry_warnings, stock_warnings=stock_warnings)
+
+
+def ignore_expiry_warning(household_id: UUID, inventory_item_id: UUID) -> None:
+    client = get_service_client()
+    client.table(_EXPIRY_IGNORES_TABLE).upsert(
+        {
+            "household_id": str(household_id),
+            "inventory_item_id": str(inventory_item_id),
+        }
+    ).execute()
+
+
+def ignore_stock_warning(household_id: UUID, household_food_variant_id: UUID) -> None:
+    """Ignores the warning as computed *right now* -- keyed to today's
+    reference purchase, not the variant alone, so a later restock (which
+    changes reference_purchased_at) naturally un-suppresses it again without
+    an explicit "unignore" action or a cleanup job.
+    """
+    current = compute_warnings(household_id)
+    match = next(
+        (
+            w
+            for w in current.stock_warnings
+            if w.household_food_variant_id == household_food_variant_id
+        ),
+        None,
+    )
+    if match is None:
+        return
+    client = get_service_client()
+    client.table(_STOCK_IGNORES_TABLE).upsert(
+        {
+            "household_id": str(household_id),
+            "household_food_variant_id": str(household_food_variant_id),
+            "reference_purchased_at": match.reference_purchased_at.isoformat(),
+        }
+    ).execute()

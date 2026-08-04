@@ -32,6 +32,20 @@ export const FOOD_CATEGORY_DOT_CLASSES: Record<FoodCategory, string> = {
   OTHER: 'bg-category-other',
 }
 
+export const FOOD_CATEGORY_BORDER_CLASSES: Record<FoodCategory, string> = {
+  PROTEINS: 'border-category-proteins',
+  VEGETABLES_HERBS: 'border-category-vegetables-herbs',
+  FRUITS: 'border-category-fruits',
+  GRAINS_BREADS: 'border-category-grains-breads',
+  DAIRY_ALTERNATIVES: 'border-category-dairy-alternatives',
+  SEASONINGS_SPICES: 'border-category-seasonings-spices',
+  OILS_FATS: 'border-category-oils-fats',
+  SAUCES_CONDIMENTS: 'border-category-sauces-condiments',
+  SNACKS_SWEETS: 'border-category-snacks-sweets',
+  BEVERAGES: 'border-category-beverages',
+  OTHER: 'border-category-other',
+}
+
 export const FOOD_CATEGORIES: FoodCategory[] = [
   'PROTEINS',
   'VEGETABLES_HERBS',
