@@ -3,7 +3,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.food_definition import AccountingType, FoodCategory
 
@@ -74,6 +74,33 @@ class CreateReceiptImportSessionResponse(BaseModel):
     id: UUID
     upload_bucket: str
     upload_path: str
+
+
+class ParsedReceiptItem(BaseModel):
+    """One AI-extracted candidate line item from raw OCR receipt text (see
+    OllamaProvider.parse_receipt_items). `name` and `price` are the two
+    fields the extraction is expected to always get right off a real
+    receipt; `quantity`/`unit` are best-effort and often legitimately
+    absent. Kept as plain strings (not Decimal) so one malformed value
+    can't fail Pydantic validation for the whole batch -- receipt_imports.py
+    coerces them itself and drops only the individual item that doesn't
+    parse, rather than losing every item in the response.
+    """
+
+    name: str = Field(min_length=1)
+    price: str
+    quantity: str | None = None
+    unit: str | None = None
+
+    @field_validator("price", "quantity", "unit", mode="before")
+    @classmethod
+    def _coerce_to_string(cls, value: object) -> object:
+        # A weak local model occasionally returns a bare JSON number (e.g.
+        # price: 4.99) instead of the requested string -- Pydantic's lax
+        # mode coerces str->number but not the reverse.
+        if value is None or isinstance(value, str):
+            return value
+        return str(value)
 
 
 class UpdateReceiptImportItemRequest(BaseModel):

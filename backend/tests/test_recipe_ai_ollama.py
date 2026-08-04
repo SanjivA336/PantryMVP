@@ -62,3 +62,25 @@ def test_suggest_substitutions(provider: OllamaProvider) -> None:
 
     assert len(suggestions) >= 1
     assert all(s.name for s in suggestions)
+
+
+def test_parse_receipt_items(provider: OllamaProvider) -> None:
+    raw_text = (
+        "WHOLE FOODS MARKET\n"
+        "123 MAIN ST\n"
+        "WHOLE MILK 1GAL          4.99\n"
+        "2 x BANANAS              1.20\n"
+        "GREEK YOGURT 32OZ        5.49 F\n"
+        "SUBTOTAL                11.68\n"
+        "TAX                      0.70\n"
+        "TOTAL                   12.38\n"
+        "VISA ****1234\n"
+        "THANK YOU\n"
+    )
+
+    items = provider.parse_receipt_items(raw_text)
+
+    # Structural only, same reasoning as the other tests in this file --
+    # llama2's exact phrasing/count varies run to run.
+    assert len(items) >= 1
+    assert all(item.name and item.price for item in items)

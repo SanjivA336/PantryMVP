@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from app.schemas.receipt_import import ParsedReceiptItem
 from app.schemas.recipe_ai import DraftRecipe, GenerateRecipeParams, SubstitutionSuggestion
 
 
@@ -43,3 +44,6 @@ class AiProvider(ABC):
         recipe_name: str | None,
         other_ingredient_names: list[str],
     ) -> list[SubstitutionSuggestion]: ...
+
+    @abstractmethod
+    def parse_receipt_items(self, raw_text: str) -> list[ParsedReceiptItem]: ...

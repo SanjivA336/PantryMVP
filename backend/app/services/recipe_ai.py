@@ -1,7 +1,5 @@
-from concurrent.futures import ThreadPoolExecutor
 from uuid import UUID
 
-from app.core.supabase import get_service_client
 from app.schemas.recipe_ai import (
     DraftRecipe,
     GenerateRecipeParams,
@@ -15,50 +13,17 @@ from app.services.recipe_url_import import fetch_recipe_text
 
 
 def _resolve_ingredient_food_ids(household_id: UUID, draft: DraftRecipe) -> None:
-    """Best-effort exact-name match against the household's current
-    inventory first, then the wider global catalog -- fills in
-    global_food_definition_id wherever confident, leaves it null (today's
-    manual-pick-via-FoodSearchInput behavior) otherwise. Deliberately only a
-    case-insensitive exact match counts as confident enough to auto-link --
-    fuzzy/semantic matching is out of scope for this pass.
+    """Thin wrapper around food_definitions.resolve_food_ids (the matching
+    strategy lives there, shared with receipt_imports.py) -- fills in each
+    ingredient's global_food_definition_id wherever confident, leaves it
+    null (today's manual-pick-via-FoodSearchInput behavior) otherwise.
     """
-    client = get_service_client()
-    inventory_result = (
-        client.table("household_food_variants")
-        .select("global_food_definitions(id, name)")
-        .eq("household_id", str(household_id))
-        .execute()
+    resolved = food_definitions_service.resolve_food_ids(
+        household_id, [ing.name for ing in draft.ingredients]
     )
-    inventory_by_name: dict[str, UUID] = {}
-    for row in inventory_result.data:
-        food = row.get("global_food_definitions")
-        if food and food.get("name"):
-            inventory_by_name[food["name"].strip().lower()] = UUID(food["id"])
-
-    unmatched = []
     for ingredient in draft.ingredients:
-        key = ingredient.name.strip().lower()
-        if key in inventory_by_name:
-            ingredient.global_food_definition_id = inventory_by_name[key]
-        else:
-            unmatched.append(ingredient)
-    if not unmatched:
-        return
-
-    # Each remaining ingredient needs its own distinct text search, so this
-    # can't collapse into one query -- but the searches are independent of
-    # each other, so running them concurrently turns N sequential round
-    # trips into roughly one round trip's worth of wall-clock time.
-    with ThreadPoolExecutor(max_workers=min(len(unmatched), 8)) as pool:
-        results = pool.map(
-            lambda ing: food_definitions_service.search(ing.name, limit=5), unmatched
-        )
-
-    for ingredient, candidates in zip(unmatched, results, strict=True):
-        key = ingredient.name.strip().lower()
-        exact = next((c for c in candidates if c.name.strip().lower() == key), None)
-        if exact:
-            ingredient.global_food_definition_id = exact.id
+        if ingredient.name in resolved:
+            ingredient.global_food_definition_id = resolved[ingredient.name]
 
 
 def import_recipe(household_id: UUID, body: ImportRecipeRequest) -> DraftRecipe:

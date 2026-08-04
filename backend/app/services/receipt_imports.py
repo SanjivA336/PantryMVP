@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from uuid import UUID, uuid4
 
 from app.core.config import get_settings
@@ -7,6 +7,7 @@ from app.core.supabase import get_service_client
 from app.schemas.inventory_item import CreateInventoryItemRequest
 from app.schemas.receipt_import import (
     CreateReceiptImportSessionResponse,
+    ParsedReceiptItem,
     ReceiptImportItem,
     ReceiptImportItemStatus,
     ReceiptImportSession,
@@ -14,8 +15,11 @@ from app.schemas.receipt_import import (
     ReceiptImportSessionWithItems,
     UpdateReceiptImportItemRequest,
 )
+from app.services import food_definitions as food_definitions_service
 from app.services import inventory_items as inventory_service
 from app.services import receipt_parsing
+from app.services.ai import get_ai_provider
+from app.services.ai.base import AiProviderError
 from app.services.receipt_ocr import run_ocr
 
 _SESSIONS_TABLE = "receipt_import_sessions"
@@ -108,6 +112,55 @@ def get_by_id(household_id: UUID, session_id: UUID) -> ReceiptImportSessionWithI
     return ReceiptImportSessionWithItems(**session_result.data, items=items)
 
 
+def _ai_items_to_parsed_lines(items: list[ParsedReceiptItem]) -> list[receipt_parsing.ParsedLine]:
+    lines: list[receipt_parsing.ParsedLine] = []
+    for item in items:
+        try:
+            price = Decimal(item.price)
+        except InvalidOperation:
+            # The one field the AI is expected to always get right for a
+            # real line item -- if it didn't, don't guess, just drop it
+            # the same way parse_receipt_text() drops lines it can't parse.
+            continue
+        quantity: Decimal | None = None
+        if item.quantity:
+            try:
+                quantity = Decimal(item.quantity)
+            except InvalidOperation:
+                quantity = None
+        lines.append(
+            receipt_parsing.ParsedLine(
+                # No single OCR source line maps cleanly to an AI-extracted
+                # item (it may have merged wrapped lines or reworded noise
+                # away) -- the cleaned name is the closest useful stand-in
+                # for the "what did we detect" context this column exists for.
+                raw_line_text=item.name,
+                parsed_name=item.name,
+                parsed_quantity=quantity,
+                parsed_unit=item.unit,
+                parsed_price=price,
+            )
+        )
+    return lines
+
+
+def _parse_receipt_lines(raw_text: str) -> list[receipt_parsing.ParsedLine]:
+    """AI-first: the configured AiProvider reads the raw OCR text into
+    structured line items (name/price guaranteed, quantity/unit
+    best-effort), which handles real-world receipt formatting far better
+    than the plain regex fallback below. Falls back to the regex parser --
+    worse, but still gives the user something to start from -- if the AI
+    provider is unreachable, times out, or produces output that still
+    doesn't parse after its own repair-retry, rather than failing the
+    whole session over it.
+    """
+    try:
+        ai_items = get_ai_provider().parse_receipt_items(raw_text)
+        return _ai_items_to_parsed_lines(ai_items)
+    except AiProviderError:
+        return receipt_parsing.parse_receipt_text(raw_text)
+
+
 def process_session(household_id: UUID, session_id: UUID) -> ReceiptImportSessionWithItems:
     client = get_service_client()
     session_result = (
@@ -137,11 +190,15 @@ def process_session(household_id: UUID, session_id: UUID) -> ReceiptImportSessio
         image_bytes = client.storage.from_(_BUCKET).download(image_path)
         settings = get_settings()
         ocr_result = run_ocr(image_bytes, mime_type="image/jpeg")
-        parsed_lines = receipt_parsing.parse_receipt_text(ocr_result.raw_text or "")
+        parsed_lines = _parse_receipt_lines(ocr_result.raw_text or "")
 
         # A retry re-parses from scratch -- clear whatever a prior failed
         # attempt may have left behind rather than appending to it.
         client.table(_ITEMS_TABLE).delete().eq("session_id", str(session_id)).execute()
+
+        resolved_food_ids = food_definitions_service.resolve_food_ids(
+            household_id, [line.parsed_name for line in parsed_lines if line.parsed_name]
+        )
 
         if parsed_lines:
             client.table(_ITEMS_TABLE).insert(
@@ -159,8 +216,14 @@ def process_session(household_id: UUID, session_id: UUID) -> ReceiptImportSessio
                             str(line.parsed_price) if line.parsed_price is not None else None
                         ),
                         # Pre-fill the editable fields from the parsed guess
-                        # so the review page starts with sensible defaults
+                        # (plus the resolved food type, when confident) so
+                        # the review page starts with sensible defaults
                         # instead of all-blank inputs.
+                        "global_food_definition_id": (
+                            str(resolved_food_ids[line.parsed_name])
+                            if line.parsed_name in resolved_food_ids
+                            else None
+                        ),
                         "quantity": (
                             str(line.parsed_quantity) if line.parsed_quantity is not None else None
                         ),

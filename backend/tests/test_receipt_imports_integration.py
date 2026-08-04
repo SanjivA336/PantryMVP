@@ -3,6 +3,12 @@ Supabase project. `run_ocr` is monkeypatched (a real OCR API call doesn't
 belong in a test run) -- everything downstream (Storage, DB writes, RLS,
 the regex parser, finalize reusing the settlement engine) is real. Excluded
 from the default run; run explicitly with `uv run pytest -m integration`.
+
+The AI-first parsing step (see receipt_imports._parse_receipt_lines) is
+forced to its regex fallback here via `force_regex_parsing` -- these tests
+assert exact parsed values against canned text, which a real (non-
+deterministic, slow) Ollama call would make flaky. The AI path itself is
+covered by the ollama-marked test below.
 """
 
 import uuid
@@ -13,6 +19,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.supabase import get_service_client
 from app.main import app
+from app.services.ai.base import AiProviderUnavailableError
 from app.services.receipt_ocr import OcrResult
 from tests.helpers.supabase_test_users import create_test_user, delete_test_user, sign_in
 
@@ -27,6 +34,14 @@ async def api_client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest.fixture(autouse=True)
+def force_regex_parsing(monkeypatch):
+    def _unavailable():
+        raise AiProviderUnavailableError("stubbed unavailable for integration tests")
+
+    monkeypatch.setattr("app.services.receipt_imports.get_ai_provider", _unavailable)
 
 
 @pytest.fixture

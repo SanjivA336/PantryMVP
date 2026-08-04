@@ -6,6 +6,7 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import get_settings
+from app.schemas.receipt_import import ParsedReceiptItem
 from app.schemas.recipe_ai import (
     DraftRecipe,
     DraftRecipeIngredient,
@@ -66,6 +67,25 @@ Example shape only, do not copy this content: [{"name": "...", "quantity": "..."
 "unit": "...", "note": "..."}, {"name": "...", "quantity": "...", "unit": "...",
 "note": "..."}]. Respond with ONLY the JSON array. No commentary, no markdown
 fences."""
+
+_PARSE_RECEIPT_SYSTEM = """You are a receipt-extraction assistant. Given raw OCR
+text from a grocery or retail receipt, extract every purchased line item into a
+JSON ARRAY (not a single object) of objects, each with exactly these keys:
+"name" (string -- the product name/description as printed, cleaned up from
+obvious OCR noise but never invented), "price" (a decimal number as a string --
+the item's own price as printed, e.g. "4.99"), "quantity" (a decimal number as a
+string, or null if the receipt doesn't clearly state how many/how much of this
+item were bought), "unit" (a short string like "lb", "oz", "ct", or null).
+Every returned item MUST have both a "name" and a "price" -- if either is
+missing or unreadable for a line, leave that line out of the array entirely
+rather than guessing. Do not include lines that aren't purchased items:
+subtotal, tax, total, payment/card info, loyalty/coupon lines, store name or
+address, cashier/register info, barcodes. Extract only from the ACTUAL receipt
+text provided. Respond with ONLY the JSON array. No commentary, no markdown
+fences.
+Example shape only, do not copy this content: [{"name": "...", "price": "...",
+"quantity": "...", "unit": "..."}, {"name": "...", "price": "...", "quantity":
+null, "unit": null}]."""
 
 
 def _extract_json_span(text: str) -> str | None:
@@ -231,6 +251,18 @@ class OllamaProvider(AiProvider):
             prompt="\n".join(lines),
             temperature=0.4,
             item_model=SubstitutionSuggestion,
+        )
+
+    def parse_receipt_items(self, raw_text: str) -> list[ParsedReceiptItem]:
+        # Same context-window reasoning as parse_recipe's truncation --
+        # receipts are usually much shorter than a recipe page, but this
+        # keeps the same safety margin rather than assuming that always.
+        truncated = raw_text[:6000]
+        return self._call_and_parse_list(
+            system=_PARSE_RECEIPT_SYSTEM,
+            prompt=truncated,
+            temperature=0.1,
+            item_model=ParsedReceiptItem,
         )
 
     # -- shared plumbing -----------------------------------------------
