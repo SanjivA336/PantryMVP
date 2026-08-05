@@ -1,9 +1,45 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Download } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import type { RecipeDetail, RecipeIngredient, SubstitutionSuggestion } from '../../types/entities'
+
+// A portable, human-readable export -- shared by hand (text/JSON file) with
+// another person rather than through household membership. Ingredient food
+// ids are deliberately left off: they're only meaningful within this app's
+// own catalog, and the importer re-resolves each ingredient by name against
+// their own catalog on the way back in (see ImportRecipePage's "From a
+// file" tab).
+function downloadRecipeAsJson(recipe: RecipeDetail) {
+  const payload = {
+    name: recipe.name,
+    description: recipe.description,
+    servings: recipe.servings,
+    prep_time_minutes: recipe.prep_time_minutes,
+    cook_time_minutes: recipe.cook_time_minutes,
+    instructions: recipe.instructions,
+    ingredients: recipe.ingredients
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((ingredient) => ({
+        name: ingredient.food_name,
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+        note: ingredient.note,
+      })),
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  const slug = recipe.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  link.download = `${slug || 'recipe'}.json`
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 // The backend allows up to ai_request_timeout_seconds (60s) for the
 // initial call plus one repair retry on bad output -- worst case ~120s
@@ -54,6 +90,7 @@ function AvailabilityBadge({ ingredient, scale }: { ingredient: RecipeIngredient
 export function RecipeDetailPage() {
   const { householdId, recipeId } = useParams<{ householdId: string; recipeId: string }>()
   const navigate = useNavigate()
+  const isDeveloper = useIsDeveloper()
   const {
     data: recipe,
     loading,
@@ -120,7 +157,16 @@ export function RecipeDetailPage() {
             {recipe.cook_time_minutes != null && <>Cook {recipe.cook_time_minutes}m</>}
           </p>
         </div>
-        <div className="flex gap-3 text-sm">
+        <div className="flex items-center gap-3 text-sm">
+          <button
+            type="button"
+            onClick={() => downloadRecipeAsJson(recipe)}
+            title="Download as a JSON file to share with someone"
+            className="flex items-center gap-1 text-muted hover:text-text hover:underline"
+          >
+            <Download size={14} strokeWidth={1.75} />
+            Export
+          </button>
           <Link
             to={`/households/${householdId}/recipes/${recipeId}/edit`}
             className="text-muted hover:text-text hover:underline"
@@ -174,14 +220,16 @@ export function RecipeDetailPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <AvailabilityBadge ingredient={ingredient} scale={scale} />
-                    <button
-                      type="button"
-                      onClick={() => suggestSubstitute(ingredient)}
-                      disabled={substitution?.status === 'loading'}
-                      className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
-                    >
-                      {substitution?.status === 'loading' ? 'Thinking…' : 'Suggest substitute'}
-                    </button>
+                    {isDeveloper && (
+                      <button
+                        type="button"
+                        onClick={() => suggestSubstitute(ingredient)}
+                        disabled={substitution?.status === 'loading'}
+                        className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                      >
+                        {substitution?.status === 'loading' ? 'Thinking…' : 'Suggest substitute'}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {substitution?.status === 'error' && (

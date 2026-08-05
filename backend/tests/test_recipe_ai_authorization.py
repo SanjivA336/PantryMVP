@@ -4,7 +4,7 @@ import pytest
 
 from app.services.ai import AiOutputParsingError, AiProviderTimeoutError, AiProviderUnavailableError
 from app.services.recipe_url_import import RecipeUrlFetchError
-from tests.conftest import auth_header, make_member
+from tests.conftest import auth_header, make_developer, make_member
 
 
 def _draft_dict(**overrides) -> dict:
@@ -63,10 +63,13 @@ async def test_non_member_cannot_import(client, fake_members, fake_recipe_ai) ->
     assert response.status_code == 403
 
 
-async def test_member_can_import_from_text(client, fake_members, fake_recipe_ai) -> None:
+async def test_member_can_import_from_text(
+    client, fake_members, fake_recipe_ai, monkeypatch
+) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
 
     response = await client.post(
         f"/api/households/{household_id}/recipes/ai/import",
@@ -94,10 +97,11 @@ async def test_import_missing_text_for_text_source_is_422(
     assert response.status_code == 422
 
 
-async def test_member_can_generate(client, fake_members, fake_recipe_ai) -> None:
+async def test_member_can_generate(client, fake_members, fake_recipe_ai, monkeypatch) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
 
     response = await client.post(
         f"/api/households/{household_id}/recipes/ai/generate",
@@ -109,10 +113,13 @@ async def test_member_can_generate(client, fake_members, fake_recipe_ai) -> None
     assert response.json()["data"]["name"] == "Pancakes"
 
 
-async def test_member_can_get_substitutions(client, fake_members, fake_recipe_ai) -> None:
+async def test_member_can_get_substitutions(
+    client, fake_members, fake_recipe_ai, monkeypatch
+) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
 
     response = await client.post(
         f"/api/households/{household_id}/recipes/ai/substitutions",
@@ -134,11 +141,12 @@ async def test_member_can_get_substitutions(client, fake_members, fake_recipe_ai
     ],
 )
 async def test_import_error_mapping(
-    client, fake_members, fake_recipe_ai, exception, expected_status
+    client, fake_members, fake_recipe_ai, exception, expected_status, monkeypatch
 ) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
     fake_recipe_ai["raise"] = exception
 
     response = await client.post(
@@ -159,11 +167,12 @@ async def test_import_error_mapping(
     ],
 )
 async def test_generate_error_mapping(
-    client, fake_members, fake_recipe_ai, exception, expected_status
+    client, fake_members, fake_recipe_ai, exception, expected_status, monkeypatch
 ) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
     fake_recipe_ai["raise"] = exception
 
     response = await client.post(
@@ -196,6 +205,57 @@ async def test_non_member_cannot_get_substitutions(client, fake_members, fake_re
         f"/api/households/{household_id}/recipes/ai/substitutions",
         json={"ingredient_name": "milk"},
         headers=auth_header(outsider_id),
+    )
+
+    assert response.status_code == 403
+
+
+# --- Developer allowlist gating: a real household member, just not on
+# DEVELOPER_USER_IDS -- distinct from the non-member tests above, which
+# fail on household membership rather than developer status. ---
+
+
+async def test_non_developer_member_cannot_import_from_text(
+    client, fake_members, fake_recipe_ai
+) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+
+    response = await client.post(
+        f"/api/households/{household_id}/recipes/ai/import",
+        json={"source": "text", "text": "some recipe"},
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 403
+
+
+async def test_non_developer_member_cannot_generate(client, fake_members, fake_recipe_ai) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+
+    response = await client.post(
+        f"/api/households/{household_id}/recipes/ai/generate",
+        json={},
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 403
+
+
+async def test_non_developer_member_cannot_get_substitutions(
+    client, fake_members, fake_recipe_ai
+) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+
+    response = await client.post(
+        f"/api/households/{household_id}/recipes/ai/substitutions",
+        json={"ingredient_name": "milk"},
+        headers=auth_header(user_id),
     )
 
     assert response.status_code == 403

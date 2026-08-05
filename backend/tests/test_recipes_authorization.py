@@ -9,12 +9,11 @@ from app.services import recipes as recipe_service
 from tests.conftest import auth_header, make_member
 
 
-def _recipe(household_id: uuid.UUID, **overrides) -> Recipe:
+def _recipe(user_id: uuid.UUID, **overrides) -> Recipe:
     now = datetime.now(UTC)
     defaults = dict(
         id=uuid.uuid4(),
-        household_id=household_id,
-        created_by_member_id=uuid.uuid4(),
+        created_by_user_id=user_id,
         name="Pancakes",
         description=None,
         servings=4,
@@ -46,8 +45,8 @@ def _ingredient(**overrides) -> RecipeIngredient:
     return RecipeIngredient(**defaults)
 
 
-def _detail(household_id: uuid.UUID, **overrides) -> RecipeDetail:
-    recipe = _recipe(household_id, **{k: v for k, v in overrides.items() if k != "ingredients"})
+def _detail(user_id: uuid.UUID, **overrides) -> RecipeDetail:
+    recipe = _recipe(user_id, **{k: v for k, v in overrides.items() if k != "ingredients"})
     ingredients = overrides.get("ingredients", [_ingredient(recipe_id=recipe.id)])
     return RecipeDetail(**recipe.model_dump(), ingredients=ingredients)
 
@@ -56,21 +55,20 @@ def _detail(household_id: uuid.UUID, **overrides) -> RecipeDetail:
 def fake_recipes(monkeypatch):
     store: dict[uuid.UUID, RecipeDetail] = {}
 
-    def list_recipes(household_id):
+    def list_recipes(user_id):
         return [
             Recipe(**{k: v for k, v in r.model_dump().items() if k != "ingredients"})
             for r in store.values()
-            if r.household_id == household_id
+            if r.created_by_user_id == user_id
         ]
 
-    def get_recipe(household_id, recipe_id):
+    def get_recipe(household_id, user_id, recipe_id):
         recipe = store.get(recipe_id)
-        return recipe if recipe and recipe.household_id == household_id else None
+        return recipe if recipe and recipe.created_by_user_id == user_id else None
 
-    def create_recipe(household_id, member_id, body):
+    def create_recipe(household_id, user_id, body):
         detail = _detail(
-            household_id,
-            created_by_member_id=member_id,
+            user_id,
             name=body.name,
             description=body.description,
             servings=body.servings,
@@ -81,17 +79,17 @@ def fake_recipes(monkeypatch):
         store[detail.id] = detail
         return detail
 
-    def update_recipe(household_id, recipe_id, body):
+    def update_recipe(household_id, user_id, recipe_id, body):
         existing = store.get(recipe_id)
-        if existing is None or existing.household_id != household_id:
+        if existing is None or existing.created_by_user_id != user_id:
             raise recipe_service.RecipeNotFoundError
         updated = existing.model_copy(update={"name": body.name, "servings": body.servings})
         store[recipe_id] = updated
         return updated
 
-    def delete_recipe(household_id, recipe_id):
+    def delete_recipe(user_id, recipe_id):
         existing = store.get(recipe_id)
-        if existing and existing.household_id == household_id:
+        if existing and existing.created_by_user_id == user_id:
             store.pop(recipe_id, None)
             return True
         return False
@@ -171,7 +169,7 @@ async def test_member_can_update_recipe(client, fake_members, fake_recipes) -> N
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
-    detail = _detail(household_id)
+    detail = _detail(user_id)
     fake_recipes[detail.id] = detail
 
     response = await client.patch(
@@ -202,7 +200,7 @@ async def test_member_can_delete_recipe(client, fake_members, fake_recipes) -> N
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
-    detail = _detail(household_id)
+    detail = _detail(user_id)
     fake_recipes[detail.id] = detail
 
     response = await client.delete(
@@ -212,3 +210,36 @@ async def test_member_can_delete_recipe(client, fake_members, fake_recipes) -> N
 
     assert response.status_code == 200
     assert detail.id not in fake_recipes
+
+
+async def test_other_household_member_cannot_see_or_edit_recipe(
+    client, fake_members, fake_recipes
+) -> None:
+    """The core behavior change of the per-user recipe model: being in the
+    same household is no longer enough to see someone else's recipe."""
+    household_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    roommate_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, owner_id))
+    fake_members.seed(make_member(household_id, roommate_id))
+    detail = _detail(owner_id)
+    fake_recipes[detail.id] = detail
+
+    get_resp = await client.get(
+        f"/api/households/{household_id}/recipes/{detail.id}",
+        headers=auth_header(roommate_id),
+    )
+    assert get_resp.status_code == 404
+
+    list_resp = await client.get(
+        f"/api/households/{household_id}/recipes",
+        headers=auth_header(roommate_id),
+    )
+    assert list_resp.json()["data"] == []
+
+    delete_resp = await client.delete(
+        f"/api/households/{household_id}/recipes/{detail.id}",
+        headers=auth_header(roommate_id),
+    )
+    assert delete_resp.status_code == 404
+    assert detail.id in fake_recipes

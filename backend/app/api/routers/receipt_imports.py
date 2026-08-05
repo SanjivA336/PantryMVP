@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.auth import require_household_membership
+from app.core.auth import require_developer, require_household_membership
 from app.core.responses import Envelope, ok
 from app.schemas.member import Member
 from app.schemas.receipt_import import (
@@ -15,8 +15,14 @@ from app.schemas.receipt_import import (
 )
 from app.services import receipt_imports as receipt_import_service
 
+# Receipt scanning is entirely OCR/AI-backed (Google Vision + the same LLM
+# provider as recipe AI) -- gated to developer accounts as a whole router
+# via `dependencies` rather than per-route, since there's no non-AI mode for
+# any of it (unlike recipe import, which still has the plain JSON path).
 router = APIRouter(
-    prefix="/households/{household_id}/receipt-import-sessions", tags=["receipt-imports"]
+    prefix="/households/{household_id}/receipt-import-sessions",
+    tags=["receipt-imports"],
+    dependencies=[Depends(require_developer)],
 )
 
 

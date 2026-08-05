@@ -43,8 +43,7 @@ class UpdateRecipeRequest(BaseModel):
 
 class Recipe(BaseModel):
     id: UUID
-    household_id: UUID
-    created_by_member_id: UUID
+    created_by_user_id: UUID
     name: str
     description: str | None
     servings: int

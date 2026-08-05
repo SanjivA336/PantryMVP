@@ -1,15 +1,27 @@
+import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChefHat, Clock, Plus, Sparkles, Wand2 } from 'lucide-react'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import type { Recipe } from '../../types/entities'
 
 export function RecipesPage() {
   const { householdId } = useParams<{ householdId: string }>()
+  const isDeveloper = useIsDeveloper()
   const {
     data: recipes,
     loading,
     error,
   } = useHouseholdResource<Recipe[]>(householdId ? `/api/households/${householdId}/recipes` : null)
+
+  // A failed load (most commonly a transient network hiccup -- see
+  // apiClient's NETWORK error code) looks identical to "you have no
+  // recipes yet" here rather than showing an alarming error banner for
+  // something that's usually gone by the next visit; still logged so it's
+  // not silently invisible during development.
+  useEffect(() => {
+    if (error) console.error('Failed to load recipes', error)
+  }, [error])
 
   return (
     <div className="flex flex-col gap-5">
@@ -23,13 +35,15 @@ export function RecipesPage() {
             <Wand2 size={16} strokeWidth={1.75} />
             <span className="hidden sm:inline">Import</span>
           </Link>
-          <Link
-            to={`/households/${householdId}/recipes/generate`}
-            className="flex items-center gap-1.5 rounded-control border border-subtle bg-surface px-2 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-hover"
-          >
-            <Sparkles size={16} strokeWidth={1.75} />
-            <span className="hidden sm:inline">Generate with AI</span>
-          </Link>
+          {isDeveloper && (
+            <Link
+              to={`/households/${householdId}/recipes/generate`}
+              className="flex items-center gap-1.5 rounded-control border border-subtle bg-surface px-2 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-hover"
+            >
+              <Sparkles size={16} strokeWidth={1.75} />
+              <span className="hidden sm:inline">Generate with AI</span>
+            </Link>
+          )}
           <Link
             to={`/households/${householdId}/recipes/new`}
             className="flex items-center gap-1.5 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
@@ -39,8 +53,6 @@ export function RecipesPage() {
           </Link>
         </div>
       </div>
-
-      {error && <p className="text-sm text-danger">{error}</p>}
 
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>

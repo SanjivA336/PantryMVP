@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { AuthGuard } from './components/AuthGuard'
+import { DeveloperGuard } from './components/DeveloperGuard'
 import { SignupPage } from './pages/auth/SignupPage'
 import { LoginPage } from './pages/auth/LoginPage'
 import { HouseholdPickerPage } from './pages/households/HouseholdPickerPage'
@@ -43,11 +44,13 @@ function App() {
               <Route path="recipes" element={<RecipesPage />} />
               <Route path="recipes/new" element={<AddRecipePage />} />
               <Route path="recipes/import" element={<ImportRecipePage />} />
-              <Route path="recipes/generate" element={<GenerateRecipePage />} />
               <Route path="recipes/:recipeId" element={<RecipeDetailPage />} />
               <Route path="recipes/:recipeId/edit" element={<EditRecipePage />} />
-              <Route path="scan-receipt" element={<ScanReceiptPage />} />
-              <Route path="scan-receipt/:sessionId" element={<ReviewReceiptSessionPage />} />
+              <Route element={<DeveloperGuard />}>
+                <Route path="recipes/generate" element={<GenerateRecipePage />} />
+                <Route path="scan-receipt" element={<ScanReceiptPage />} />
+                <Route path="scan-receipt/:sessionId" element={<ReviewReceiptSessionPage />} />
+              </Route>
             </Route>
           </Route>
         </Routes>

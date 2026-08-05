@@ -26,6 +26,21 @@ def auth_header(user_id: uuid.UUID) -> dict[str, str]:
     return {"Authorization": f"Bearer {make_token(user_id)}"}
 
 
+def make_developer(monkeypatch, user_id: uuid.UUID) -> None:
+    """Makes `user_id` pass is_developer/require_developer -- for tests
+    exercising AI/OCR-gated endpoints without needing a real DEVELOPER_USER_IDS
+    value. require_developer reads app.core.auth's own get_settings() fresh
+    on every call, so patching that name (not app.core.config's) is what
+    actually takes effect, including for routes that captured
+    Depends(require_developer) at import time.
+    """
+    from app.core.config import Settings
+
+    monkeypatch.setattr(
+        "app.core.auth.get_settings", lambda: Settings(developer_user_ids=str(user_id))
+    )
+
+
 @pytest.fixture
 def mock_jwks(monkeypatch):
     """Swap the real JWKS fetch for our local test keypair.

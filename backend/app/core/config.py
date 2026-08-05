@@ -47,6 +47,13 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
+    # Comma-separated Supabase auth user ids allowed to use AI/OCR-backed
+    # features (recipe generate/import-by-text-or-url/substitutions, receipt
+    # scanning) -- real inference/OCR cost, still experimental. A .env value
+    # rather than a DB-editable role since there's exactly one such account
+    # today; see app/core/auth.py's is_developer/require_developer.
+    developer_user_ids: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

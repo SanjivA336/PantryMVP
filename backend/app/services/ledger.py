@@ -102,6 +102,25 @@ def list_entries_detailed(household_id: UUID) -> list[LedgerEntryDetail]:
     return detailed
 
 
+def _ghost_member_ids(household_id: UUID) -> set[UUID]:
+    """Members whose underlying account has been deleted (user_id null,
+    left behind by the ON DELETE SET NULL on members.user_id -- see the
+    account-deletion writeup) -- distinct from a merely-kicked/left member,
+    whose account still exists and might still settle up outside the app.
+    Excluded from balances/settlements below since there's no one left to
+    pay or be paid; the raw ledger history (list_entries*) is untouched.
+    """
+    client = get_service_client()
+    result = (
+        client.table("members")
+        .select("id")
+        .eq("household_id", str(household_id))
+        .is_("user_id", "null")
+        .execute()
+    )
+    return {UUID(row["id"]) for row in result.data}
+
+
 def compute_balances(household_id: UUID) -> list[LedgerBalance]:
     """Net, pairwise balances across all currently-unsettled entries.
 
@@ -118,6 +137,7 @@ def compute_balances(household_id: UUID) -> list[LedgerBalance]:
         .is_("settled_at", "null")
         .execute()
     )
+    ghost_ids = _ghost_member_ids(household_id)
 
     # net[(debtor, creditor)] = total debtor owes creditor, before netting
     # the reverse direction away.
@@ -125,6 +145,8 @@ def compute_balances(household_id: UUID) -> list[LedgerBalance]:
     for row in result.data:
         debtor = UUID(row["debtor_member_id"])
         creditor = UUID(row["creditor_member_id"])
+        if debtor in ghost_ids or creditor in ghost_ids:
+            continue
         net[(debtor, creditor)] += Decimal(str(row["amount"]))
 
     seen_pairs: set[frozenset[UUID]] = set()

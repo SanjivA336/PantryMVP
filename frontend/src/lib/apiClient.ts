@@ -89,7 +89,13 @@ async function request<T>(
     if ((err as Error)?.name === 'AbortError') {
       throw new ApiError('TIMEOUT', 'That took too long to respond. Please try again.')
     }
-    throw err
+    // A raw browser-level network failure (e.g. the dev server was mid
+    // -reload, or the connection dropped) -- wrapped into the same ApiError
+    // shape as every other failure mode so callers never see a bare
+    // TypeError, and can filter this transient class of error out when it's
+    // not worth surfacing (see RecipesPage, which treats it the same as
+    // "nothing loaded yet" rather than an alarming error banner).
+    throw new ApiError('NETWORK', 'Could not reach the server. Check your connection and try again.')
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId)
   }

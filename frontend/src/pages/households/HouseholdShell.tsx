@@ -15,22 +15,31 @@ import {
 } from 'lucide-react'
 import { apiClient } from '../../lib/apiClient'
 import { useAuth } from '../../hooks/useAuth'
+import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import type { Household } from '../../types/entities'
 
 const PRIMARY_NAV_ITEMS = [
   { to: '', label: 'Inventory', end: true, icon: Home },
   { to: 'shopping-list', label: 'Shopping List', icon: ShoppingCart },
-  { to: 'recipes', label: 'Recipes', icon: ChefHat },
   { to: 'balances', label: 'Balances', icon: Scale },
 ]
 
+// Experimental (AI/OCR-backed, real inference cost) -- hidden from the nav
+// entirely unless useIsDeveloper() says otherwise. The backend enforces
+// this independently (require_developer); hiding it here is just so it
+// doesn't dangle in front of everyone else.
 const SECONDARY_NAV_ITEMS = [{ to: 'scan-receipt', label: 'Scan Receipt', icon: Receipt }]
 
-const ALL_NAV_ITEMS = [...PRIMARY_NAV_ITEMS, ...SECONDARY_NAV_ITEMS]
+// Recipes lives in its own section, set off by a divider from the rest of
+// the household's nav -- it's a personal recipe box now (see the per-user
+// recipes migration), not household data, so it reads as a separate
+// destination rather than one more of the household's daily tabs.
+const RECIPES_NAV_ITEMS = [{ to: 'recipes', label: 'Recipes', icon: ChefHat }]
 
 export function HouseholdShell() {
   const { householdId } = useParams<{ householdId: string }>()
   const { signOut } = useAuth()
+  const isDeveloper = useIsDeveloper()
   const [household, setHousehold] = useState<Household | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
 
@@ -53,10 +62,12 @@ export function HouseholdShell() {
   }, [householdId])
 
   return (
-    <div className="min-h-screen bg-bg text-text md:flex">
-      {/* Desktop sidebar */}
+    <div className="min-h-screen bg-bg text-text md:flex md:h-screen md:overflow-hidden">
+      {/* Desktop sidebar -- fixed height, never scrolls as a whole; only the
+          nav links scroll internally if they ever overflow (the household
+          name/code header and the settings/sign-out footer stay pinned). */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-subtle bg-surface md:flex">
-        <div className="p-5">
+        <div className="shrink-0 p-5">
           <p className="truncate text-base font-semibold">{household?.name ?? 'Burrow'}</p>
           {household && (
             <div className="mt-0.5 flex items-center gap-1">
@@ -66,13 +77,19 @@ export function HouseholdShell() {
           )}
         </div>
 
-        <nav className="flex flex-1 flex-col gap-0.5 px-3">
-          {ALL_NAV_ITEMS.map((item) => (
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
+          {PRIMARY_NAV_ITEMS.map((item) => (
+            <SidebarLink key={item.label} {...item} />
+          ))}
+          {isDeveloper &&
+            SECONDARY_NAV_ITEMS.map((item) => <SidebarLink key={item.label} {...item} />)}
+          <hr className="my-2 border-t border-subtle" />
+          {RECIPES_NAV_ITEMS.map((item) => (
             <SidebarLink key={item.label} {...item} />
           ))}
         </nav>
 
-        <div className="border-t border-subtle p-3">
+        <div className="shrink-0 border-t border-subtle p-3">
           <div className="flex items-center gap-2">
             <NavLink
               to="settings"
@@ -136,7 +153,7 @@ export function HouseholdShell() {
         </div>
       </header>
 
-      <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-8 md:pt-8">
+      <main className="flex-1 px-4 pb-24 pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
         <div className="mx-auto w-full max-w-5xl">
           <Outlet />
         </div>
@@ -179,7 +196,12 @@ export function HouseholdShell() {
               </button>
             </div>
             <div className="flex flex-col gap-0.5">
-              {SECONDARY_NAV_ITEMS.map((item) => (
+              {isDeveloper &&
+                SECONDARY_NAV_ITEMS.map((item) => (
+                  <SidebarLink key={item.label} {...item} onClick={() => setMoreOpen(false)} />
+                ))}
+              <hr className="my-2 border-t border-subtle" />
+              {RECIPES_NAV_ITEMS.map((item) => (
                 <SidebarLink key={item.label} {...item} onClick={() => setMoreOpen(false)} />
               ))}
             </div>

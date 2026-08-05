@@ -2,7 +2,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.auth import require_household_membership
+from app.core.auth import (
+    get_current_user_id,
+    is_developer,
+    require_developer,
+    require_household_membership,
+)
 from app.core.responses import Envelope, ok
 from app.schemas.member import Member
 from app.schemas.recipe_ai import (
@@ -24,9 +29,17 @@ def import_recipe(
     household_id: UUID,
     body: ImportRecipeRequest,
     _member: Member = Depends(require_household_membership),
+    user_id: UUID = Depends(get_current_user_id),
 ) -> Envelope[DraftRecipe]:
+    # Only the AI-backed sources (an LLM call) are developer-gated -- "json"
+    # is the plain parse-and-reresolve sharing path (see recipe_ai.py's
+    # _draft_from_json) and stays open to everyone.
+    if body.source in ("text", "url") and not is_developer(user_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Developer access required")
     try:
         draft = recipe_ai_service.import_recipe(household_id, body)
+    except recipe_ai_service.RecipeShareParsingError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except RecipeUrlFetchError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except AiProviderUnavailableError as exc:
@@ -43,6 +56,7 @@ def generate_recipe(
     household_id: UUID,
     body: GenerateRecipeParams,
     _member: Member = Depends(require_household_membership),
+    _dev: UUID = Depends(require_developer),
 ) -> Envelope[DraftRecipe]:
     try:
         draft = recipe_ai_service.generate_recipe(household_id, body)
@@ -60,6 +74,7 @@ def suggest_substitutions(
     household_id: UUID,
     body: SubstitutionRequest,
     _member: Member = Depends(require_household_membership),
+    _dev: UUID = Depends(require_developer),
 ) -> Envelope[list[SubstitutionSuggestion]]:
     try:
         suggestions = recipe_ai_service.suggest_substitutions(

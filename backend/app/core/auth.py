@@ -4,6 +4,7 @@ from fastapi import Depends, Header, HTTPException, status
 from jose import JWTError, jwt
 
 from app.core import jwks as jwks_module
+from app.core.config import get_settings
 from app.schemas.member import Member
 from app.services import members as members_service
 
@@ -75,3 +76,21 @@ def require_household_admin(member: Member = Depends(require_household_membershi
     if not member.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
     return member
+
+
+def is_developer(user_id: UUID) -> bool:
+    """True for accounts in DEVELOPER_USER_IDS -- the fixed allowlist gating
+    AI/OCR-backed features. Reads settings fresh on every call (not cached
+    into a module-level set at import time) so it stays test-monkeypatchable
+    via get_settings and so a changed .env value takes effect on restart
+    without needing a code change.
+    """
+    raw = get_settings().developer_user_ids
+    developer_ids = {UUID(part.strip()) for part in raw.split(",") if part.strip()}
+    return user_id in developer_ids
+
+
+def require_developer(user_id: UUID = Depends(get_current_user_id)) -> UUID:
+    if not is_developer(user_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Developer access required")
+    return user_id

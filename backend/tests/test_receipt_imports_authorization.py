@@ -12,7 +12,7 @@ from app.schemas.receipt_import import (
     ReceiptImportSessionWithItems,
 )
 from app.services import receipt_imports as receipt_import_service
-from tests.conftest import auth_header, make_member
+from tests.conftest import auth_header, make_developer, make_member
 
 
 def _session(household_id: uuid.UUID, **overrides) -> ReceiptImportSession:
@@ -148,11 +148,12 @@ async def test_non_member_cannot_create_session(client, fake_members, fake_recei
 
 
 async def test_member_can_create_and_list_sessions(
-    client, fake_members, fake_receipt_imports
+    client, fake_members, fake_receipt_imports, monkeypatch
 ) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
 
     create_resp = await client.post(
         f"/api/households/{household_id}/receipt-import-sessions",
@@ -171,11 +172,12 @@ async def test_member_can_create_and_list_sessions(
 
 
 async def test_get_nonexistent_session_returns_404(
-    client, fake_members, fake_receipt_imports
+    client, fake_members, fake_receipt_imports, monkeypatch
 ) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
 
     response = await client.get(
         f"/api/households/{household_id}/receipt-import-sessions/{uuid.uuid4()}",
@@ -186,11 +188,12 @@ async def test_get_nonexistent_session_returns_404(
 
 
 async def test_process_already_completed_session_returns_409(
-    client, fake_members, fake_receipt_imports
+    client, fake_members, fake_receipt_imports, monkeypatch
 ) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
     session = _session(household_id, status="COMPLETED")
     fake_receipt_imports[session.id] = _with_items(session, [])
 
@@ -203,11 +206,12 @@ async def test_process_already_completed_session_returns_409(
 
 
 async def test_update_nonexistent_item_returns_404(
-    client, fake_members, fake_receipt_imports
+    client, fake_members, fake_receipt_imports, monkeypatch
 ) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
     session = _session(household_id, status="COMPLETED")
     fake_receipt_imports[session.id] = _with_items(session, [])
 
@@ -221,11 +225,12 @@ async def test_update_nonexistent_item_returns_404(
 
 
 async def test_finalize_with_unreviewed_item_returns_400(
-    client, fake_members, fake_receipt_imports
+    client, fake_members, fake_receipt_imports, monkeypatch
 ) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
     session = _session(household_id, status="COMPLETED")
     item = _item(session.id, status="NEEDS_REVIEW")
     fake_receipt_imports[session.id] = _with_items(session, [item])
@@ -239,11 +244,12 @@ async def test_finalize_with_unreviewed_item_returns_400(
 
 
 async def test_finalize_succeeds_when_all_items_reviewed(
-    client, fake_members, fake_receipt_imports
+    client, fake_members, fake_receipt_imports, monkeypatch
 ) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
+    make_developer(monkeypatch, user_id)
     session = _session(household_id, status="COMPLETED")
     item = _item(session.id, status="SKIPPED")
     fake_receipt_imports[session.id] = _with_items(session, [item])
@@ -255,3 +261,21 @@ async def test_finalize_succeeds_when_all_items_reviewed(
 
     assert response.status_code == 200
     assert response.json()["data"]["status"] == "FINALIZED"
+
+
+async def test_non_developer_member_cannot_create_session(
+    client, fake_members, fake_receipt_imports
+) -> None:
+    """Receipt scanning is entirely OCR/AI-backed -- a regular household
+    member (not on the developer allowlist) must not be able to use it."""
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+
+    response = await client.post(
+        f"/api/households/{household_id}/receipt-import-sessions",
+        json={"filename": "receipt.jpg"},
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 403

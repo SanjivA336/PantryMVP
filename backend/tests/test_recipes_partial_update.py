@@ -57,7 +57,7 @@ def rpc_calls(monkeypatch):
     # update_recipe's own final re-fetch (its return value, not asserted on
     # by these tests) -- distinct from the pre-update defaulting fetch each
     # test monkeypatches individually via _fetch_recipe_and_ingredients.
-    monkeypatch.setattr(recipe_service, "get_recipe", lambda hh, rid: None)
+    monkeypatch.setattr(recipe_service, "get_recipe", lambda hh, uid, rid: None)
     return calls
 
 
@@ -68,10 +68,12 @@ def test_partial_update_of_name_only_preserves_everything_else(monkeypatch, rpc_
     monkeypatch.setattr(
         recipe_service,
         "_fetch_recipe_and_ingredients",
-        lambda hh, rid: (existing_row, existing_ingredients),
+        lambda uid, rid: (existing_row, existing_ingredients),
     )
 
-    recipe_service.update_recipe(uuid.uuid4(), uuid.uuid4(), UpdateRecipeRequest(name="Waffles"))
+    recipe_service.update_recipe(
+        uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), UpdateRecipeRequest(name="Waffles")
+    )
 
     assert len(rpc_calls) == 1
     _, params = rpc_calls[0]
@@ -92,7 +94,7 @@ def test_description_explicitly_cleared_is_respected(monkeypatch, rpc_calls) -> 
     monkeypatch.setattr(
         recipe_service,
         "_fetch_recipe_and_ingredients",
-        lambda hh, rid: (existing_row, existing_ingredients),
+        lambda uid, rid: (existing_row, existing_ingredients),
     )
     # Passing description=None to the constructor -- even though None is
     # also the field's default -- still marks it in model_fields_set. That's
@@ -101,7 +103,7 @@ def test_description_explicitly_cleared_is_respected(monkeypatch, rpc_calls) -> 
     body = UpdateRecipeRequest(description=None)
     assert "description" in body.model_fields_set
 
-    recipe_service.update_recipe(uuid.uuid4(), uuid.uuid4(), body)
+    recipe_service.update_recipe(uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), body)
 
     _, params = rpc_calls[0]
     assert params["p_description"] is None
@@ -112,11 +114,12 @@ def test_updating_ingredients_replaces_the_full_list(monkeypatch, rpc_calls) -> 
     monkeypatch.setattr(
         recipe_service,
         "_fetch_recipe_and_ingredients",
-        lambda hh, rid: (existing_row, existing_ingredients),
+        lambda uid, rid: (existing_row, existing_ingredients),
     )
     new_food_id = uuid.uuid4()
 
     recipe_service.update_recipe(
+        uuid.uuid4(),
         uuid.uuid4(),
         uuid.uuid4(),
         UpdateRecipeRequest(
@@ -132,9 +135,11 @@ def test_updating_ingredients_replaces_the_full_list(monkeypatch, rpc_calls) -> 
 
 
 def test_updating_nonexistent_recipe_raises_before_any_rpc_call(monkeypatch, rpc_calls) -> None:
-    monkeypatch.setattr(recipe_service, "_fetch_recipe_and_ingredients", lambda hh, rid: None)
+    monkeypatch.setattr(recipe_service, "_fetch_recipe_and_ingredients", lambda uid, rid: None)
 
     with pytest.raises(recipe_service.RecipeNotFoundError):
-        recipe_service.update_recipe(uuid.uuid4(), uuid.uuid4(), UpdateRecipeRequest(name="X"))
+        recipe_service.update_recipe(
+            uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), UpdateRecipeRequest(name="X")
+        )
 
     assert rpc_calls == []

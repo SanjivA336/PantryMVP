@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -68,9 +68,15 @@ class DraftRecipe(BaseModel):
 
 
 class ImportRecipeRequest(BaseModel):
-    source: Literal["text", "url"]
+    # "json" is the non-AI path: re-parsing a file someone else exported
+    # from their own recipe box (see RecipeDetailPage's Export button and
+    # recipe_ai.py's _draft_from_json) -- no LLM call involved, just
+    # validation plus the same ingredient re-resolution every other import
+    # path already does.
+    source: Literal["text", "url", "json"]
     text: str | None = None
     url: str | None = None
+    json_data: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def _require_matching_field(self) -> "ImportRecipeRequest":
@@ -78,6 +84,8 @@ class ImportRecipeRequest(BaseModel):
             raise ValueError("text is required when source is 'text'")
         if self.source == "url" and not (self.url and self.url.strip()):
             raise ValueError("url is required when source is 'url'")
+        if self.source == "json" and self.json_data is None:
+            raise ValueError("json_data is required when source is 'json'")
         return self
 
 

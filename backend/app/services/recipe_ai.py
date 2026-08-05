@@ -1,4 +1,7 @@
+from typing import Any
 from uuid import UUID
+
+from pydantic import ValidationError
 
 from app.schemas.recipe_ai import (
     DraftRecipe,
@@ -10,6 +13,36 @@ from app.services import food_definitions as food_definitions_service
 from app.services import inventory_items as inventory_service
 from app.services.ai import get_ai_provider
 from app.services.recipe_url_import import fetch_recipe_text
+
+
+class RecipeShareParsingError(Exception):
+    pass
+
+
+def _draft_from_json(data: dict[str, Any]) -> DraftRecipe:
+    """Parses a previously-exported recipe JSON file back into a DraftRecipe
+    for review -- the human-to-human sharing counterpart to the AI import
+    paths below, with no LLM call involved.
+
+    Deliberately never trusts an incoming ingredient's
+    global_food_definition_id: it may be from a different Burrow instance's
+    catalog, stale, or just hand-edited, and inserting an id that doesn't
+    exist in this catalog would fail with a raw FK violation. Every
+    ingredient's food is always re-resolved fresh by name against this
+    catalog via _resolve_ingredient_food_ids below, exactly like an
+    AI-parsed draft.
+    """
+    ingredients = data.get("ingredients")
+    if isinstance(ingredients, list):
+        for ingredient in ingredients:
+            if isinstance(ingredient, dict):
+                ingredient.pop("global_food_definition_id", None)
+    try:
+        return DraftRecipe.model_validate({**data, "source_url": None})
+    except ValidationError as exc:
+        raise RecipeShareParsingError(
+            "That file doesn't look like a valid recipe export."
+        ) from exc
 
 
 def _resolve_ingredient_food_ids(household_id: UUID, draft: DraftRecipe) -> None:
@@ -27,12 +60,15 @@ def _resolve_ingredient_food_ids(household_id: UUID, draft: DraftRecipe) -> None
 
 
 def import_recipe(household_id: UUID, body: ImportRecipeRequest) -> DraftRecipe:
-    provider = get_ai_provider()
-    if body.source == "url":
-        text = fetch_recipe_text(body.url)  # type: ignore[arg-type]
-        draft = provider.parse_recipe(text, source_url=body.url)
+    if body.source == "json":
+        draft = _draft_from_json(body.json_data)  # type: ignore[arg-type]
     else:
-        draft = provider.parse_recipe(body.text)  # type: ignore[arg-type]
+        provider = get_ai_provider()
+        if body.source == "url":
+            text = fetch_recipe_text(body.url)  # type: ignore[arg-type]
+            draft = provider.parse_recipe(text, source_url=body.url)
+        else:
+            draft = provider.parse_recipe(body.text)  # type: ignore[arg-type]
     _resolve_ingredient_food_ids(household_id, draft)
     return draft
 
