@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.core.auth import require_household_membership
 from app.core.responses import Envelope, ok
@@ -23,9 +23,10 @@ def get_household_warnings(
 def ignore_stock_warning(
     household_id: UUID,
     household_food_variant_id: UUID,
+    reference_unit: str = Query(),
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[None]:
-    warnings_service.ignore_stock_warning(household_id, household_food_variant_id)
+    warnings_service.ignore_stock_warning(household_id, household_food_variant_id, reference_unit)
     return ok(None)
 
 

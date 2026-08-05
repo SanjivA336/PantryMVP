@@ -1,9 +1,12 @@
+export type UnitSystem = 'METRIC' | 'CUSTOMARY'
+
 export interface Household {
   id: string
   name: string
   address: string | null
   join_code: string
   created_by_user_id: string
+  preferred_unit_system: UnitSystem
   created_at: string
   updated_at: string
 }
@@ -61,6 +64,15 @@ export interface FoodDefinition {
   duplicate_of_id: string | null
   created_at: string
   updated_at: string
+}
+
+export type Dimension = 'WEIGHT' | 'VOLUME' | 'COUNT'
+
+export interface MeasurementPreference {
+  dimension: Dimension
+  // null only for COUNT, which has no metric/customary distinction.
+  unit_system: UnitSystem | null
+  unit: string
 }
 
 export type InventoryItemStatus = 'ACTIVE' | 'EMPTY' | 'DISCARDED' | 'EXPIRED' | 'LOST'
@@ -182,8 +194,7 @@ export interface ShoppingListItem {
 
 export interface Recipe {
   id: string
-  household_id: string
-  created_by_member_id: string
+  created_by_user_id: string
   name: string
   description: string | null
   servings: number

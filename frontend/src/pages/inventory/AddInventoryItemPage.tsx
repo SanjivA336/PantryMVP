@@ -5,10 +5,19 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, X } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { FieldTooltip } from '../../components/FieldTooltip'
-import { TypeSearchField } from '../../components/TypeSearchField'
+import { TypeSearchField, type TypeSearchFieldHandle } from '../../components/TypeSearchField'
 import { useAuth } from '../../hooks/useAuth'
 import { FOOD_CATEGORY_LABELS } from '../../lib/foodCategories'
-import type { FoodDefinition, InventoryItem, Member, StorageLocation } from '../../types/entities'
+import { DIMENSION_LABELS, UNIT_SYSTEM_LABELS, resolveUnit } from '../../lib/units'
+import type {
+  Dimension,
+  FoodDefinition,
+  InventoryItem,
+  MeasurementPreference,
+  Member,
+  StorageLocation,
+  UnitSystem,
+} from '../../types/entities'
 import {
   addInventoryItemSchema,
   type AddInventoryItemForm,
@@ -43,6 +52,15 @@ export function AddInventoryItemPage() {
   const [serverError, setServerError] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
   const [buyerMemberId, setBuyerMemberId] = useState('')
+  const [dimension, setDimension] = useState<Dimension | null>(null)
+  const [unitSystem, setUnitSystem] = useState<UnitSystem | null>(null)
+  const [lastAdded, setLastAdded] = useState<string | null>(null)
+  // Set synchronously by whichever submit button was clicked, and read
+  // inside onSubmit right after -- a ref rather than state because the
+  // form's submit handler fires in the same tick as the click, before a
+  // state update would have re-rendered.
+  const stayOnPageRef = useRef(false)
+  const searchFieldRef = useRef<TypeSearchFieldHandle>(null)
   // Tracks, per field, whether its current value was set by the system and
   // hasn't been touched since -- true means "show the autofilled border and
   // keep overwriting this on the next food change." Any user edit flips a
@@ -62,6 +80,7 @@ export function AddInventoryItemPage() {
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<AddInventoryItemFormInput, unknown, AddInventoryItemForm>({
     resolver: zodResolver(addInventoryItemSchema),
@@ -88,12 +107,11 @@ export function AddInventoryItemPage() {
 
   useEffect(() => {
     if (!food) return
-    setValue('preferred_unit', food.preferred_unit)
-    // Each of these three fields tracks the food type until the user
-    // deliberately edits it (see the field's own onChange/toggle handler for
-    // the other half of this rule) -- picking a *different* food type then
-    // only refreshes the fields still showing an untouched autofill,
-    // treating them as if they were never filled in at all.
+    // Each of these fields tracks the food type until the user deliberately
+    // edits it (see the field's own onChange/toggle handler for the other
+    // half of this rule) -- picking a *different* food type then only
+    // refreshes the fields still showing an untouched autofill, treating
+    // them as if they were never filled in at all.
     if (!customized.nickname) setNickname(food.name)
     // There's no separate "best by" duration on a food definition, so that
     // field stays manual-entry-only regardless.
@@ -102,6 +120,39 @@ export function AddInventoryItemPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [food])
+
+  // preferred_unit (and the dimension/system it resolves from) comes from
+  // this household's own remembered choice for the food if it's tracked one
+  // before, else the food's usual kind of measurement combined with the
+  // household's metric/customary default -- see
+  // resolve_measurement_preference in the backend. Not folded into the
+  // effect above since this is an async lookup, not a synchronous default
+  // pulled straight off the food object.
+  useEffect(() => {
+    if (!food || !householdId) return
+    apiClient
+      .get<MeasurementPreference>(
+        `/api/households/${householdId}/inventory-items/measurement-preference?global_food_definition_id=${food.id}`,
+      )
+      .then((preference) => {
+        setDimension(preference.dimension)
+        setUnitSystem(preference.unit_system)
+        setValue('preferred_unit', preference.unit)
+      })
+      .catch(() => {
+        // Best-effort -- worst case the unit picker stays on its defaults
+        // and the user picks manually.
+      })
+  }, [food, householdId, setValue])
+
+  const chooseDimension = (nextDimension: Dimension) => {
+    setDimension(nextDimension)
+    setValue('preferred_unit', resolveUnit(nextDimension, unitSystem))
+  }
+  const chooseUnitSystem = (nextSystem: UnitSystem) => {
+    setUnitSystem(nextSystem)
+    if (dimension) setValue('preferred_unit', resolveUnit(dimension, nextSystem))
+  }
 
   // Split from the effect above and keyed on `members` too, not just
   // `food` -- if a food gets picked before the members fetch resolves, this
@@ -206,6 +257,29 @@ export function AddInventoryItemPage() {
     markCustomized('allowed_member_ids')
   }
 
+  // Add & add another: keeps whatever's still true of the *next* item in a
+  // shelf-by-shelf pass (storage location, buyer) and clears everything
+  // specific to the food just added, so the food search box is the only
+  // thing standing between this submit and the next one.
+  const resetForNextItem = (storageLocationId: string) => {
+    setFood(null)
+    setNickname('')
+    setDimension(null)
+    setUnitSystem(null)
+    setCustomized({ nickname: false, expiry_date: false, allowed_member_ids: false, cost: false })
+    reset({
+      storage_location_id: storageLocationId,
+      quantity: '',
+      preferred_unit: '',
+      cost: '',
+      expiry_date: '',
+      best_by_date: '',
+      allowed_member_ids: [],
+      accounting_type: 'PERSONAL',
+    })
+    searchFieldRef.current?.focus()
+  }
+
   const onSubmit = async (values: AddInventoryItemForm) => {
     if (!food) {
       setServerError('Pick a food type first')
@@ -226,7 +300,12 @@ export function AddInventoryItemPage() {
         name_override: nickname.trim() && nickname !== food.name ? nickname.trim() : null,
         buyer_member_id: buyerMemberId || null,
       })
-      navigate(`/households/${householdId}`)
+      if (stayOnPageRef.current) {
+        setLastAdded(nickname.trim() || food.name)
+        resetForNextItem(values.storage_location_id)
+      } else {
+        navigate(`/households/${householdId}`)
+      }
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Something went wrong')
     }
@@ -238,11 +317,16 @@ export function AddInventoryItemPage() {
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-muted">Food type</label>
-          <TypeSearchField value={food} onChange={setFood} />
+          <TypeSearchField
+            ref={searchFieldRef}
+            value={food}
+            onChange={(next) => {
+              setFood(next)
+              setLastAdded(null)
+            }}
+          />
           {food && (
-            <p className="mt-1.5 text-xs text-faint">
-              {FOOD_CATEGORY_LABELS[food.category]} · {food.preferred_unit}
-            </p>
+            <p className="mt-1.5 text-xs text-faint">{FOOD_CATEGORY_LABELS[food.category]}</p>
           )}
         </div>
 
@@ -281,6 +365,42 @@ export function AddInventoryItemPage() {
           </div>
           {errors.quantity && (
             <p className="mt-1.5 text-sm text-danger">{errors.quantity.message}</p>
+          )}
+          {food && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(['WEIGHT', 'VOLUME', 'COUNT'] as Dimension[]).map((dim) => (
+                <button
+                  key={dim}
+                  type="button"
+                  onClick={() => chooseDimension(dim)}
+                  className={`rounded-control border px-2 py-1 text-xs font-medium transition-colors ${
+                    dimension === dim
+                      ? 'border-primary bg-primary-soft text-primary'
+                      : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
+                  }`}
+                >
+                  {DIMENSION_LABELS[dim]}
+                </button>
+              ))}
+            </div>
+          )}
+          {food && dimension && dimension !== 'COUNT' && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(['METRIC', 'CUSTOMARY'] as UnitSystem[]).map((sys) => (
+                <button
+                  key={sys}
+                  type="button"
+                  onClick={() => chooseUnitSystem(sys)}
+                  className={`rounded-control border px-2 py-1 text-xs font-medium transition-colors ${
+                    unitSystem === sys
+                      ? 'border-primary bg-primary-soft text-primary'
+                      : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
+                  }`}
+                >
+                  {UNIT_SYSTEM_LABELS[sys]}
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
@@ -463,14 +583,33 @@ export function AddInventoryItemPage() {
         </div>
 
         {serverError && <p className="text-sm text-danger">{serverError}</p>}
+        {lastAdded && !serverError && (
+          <p className="text-sm text-primary">Added {lastAdded} — ready for the next item.</p>
+        )}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
-        >
-          {isSubmitting ? 'Adding…' : 'Add item'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            onClick={() => {
+              stayOnPageRef.current = false
+            }}
+            disabled={isSubmitting}
+            className="flex-1 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+          >
+            {isSubmitting ? 'Adding…' : 'Add item'}
+          </button>
+          <button
+            type="submit"
+            onClick={() => {
+              stayOnPageRef.current = true
+            }}
+            disabled={isSubmitting}
+            title="Add this item and clear the form for the next one, keeping the same storage location"
+            className="flex-1 rounded-control border border-primary px-2 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary-soft disabled:opacity-50"
+          >
+            {isSubmitting ? 'Adding…' : 'Add & add another'}
+          </button>
+        </div>
       </form>
     </div>
   )

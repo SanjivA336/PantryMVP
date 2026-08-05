@@ -168,7 +168,9 @@ def test_ignored_stock_warning_is_suppressed_only_for_same_reference_purchase(
     variant_id = uuid.uuid4()
     item = _item(variant_id=variant_id, quantity=Decimal("0"), status="EMPTY")
 
-    suppressed = _compute(monkeypatch, [item], ignored_stock={variant_id: item.purchased_at})
+    suppressed = _compute(
+        monkeypatch, [item], ignored_stock={(variant_id, "count"): item.purchased_at}
+    )
     assert suppressed.stock_warnings == []
 
     # A different reference_purchased_at (e.g. a newer purchase happened
@@ -176,6 +178,59 @@ def test_ignored_stock_warning_is_suppressed_only_for_same_reference_purchase(
     still_shown = _compute(
         monkeypatch,
         [item],
-        ignored_stock={variant_id: item.purchased_at - timedelta(days=1)},
+        ignored_stock={(variant_id, "count"): item.purchased_at - timedelta(days=1)},
     )
     assert len(still_shown.stock_warnings) == 1
+
+
+def test_stock_split_across_dimensions_produces_separate_stock_lines(monkeypatch) -> None:
+    variant_id = uuid.uuid4()
+    weight_item = _item(
+        variant_id=variant_id,
+        quantity=Decimal("0"),
+        total_quantity=Decimal("500"),
+        preferred_unit="g",
+        status="EMPTY",
+    )
+    volume_item = _item(
+        variant_id=variant_id,
+        quantity=Decimal("1"),
+        total_quantity=Decimal("10"),
+        preferred_unit="cup",
+        status="ACTIVE",
+    )
+    result = _compute(monkeypatch, [weight_item, volume_item])
+
+    # Same variant, but weight and volume can't be merged without a density
+    # this app never asks for -- each dimension gets its own warning line
+    # instead of one incorrectly-combined total.
+    assert len(result.stock_warnings) == 2
+    types_by_unit = {w.preferred_unit: w.type for w in result.stock_warnings}
+    assert types_by_unit["g"] == "OUT_OF_STOCK"
+    assert types_by_unit["cup"] == "LOW_STOCK"
+
+
+def test_multiple_active_items_in_convertible_units_are_summed_correctly(monkeypatch) -> None:
+    variant_id = uuid.uuid4()
+    older_in_kg = _item(
+        variant_id=variant_id,
+        quantity=Decimal("1"),
+        total_quantity=Decimal("1"),
+        preferred_unit="kg",
+        purchased_at=datetime.now(UTC) - timedelta(days=5),
+    )
+    newest_in_g = _item(
+        variant_id=variant_id,
+        quantity=Decimal("0"),
+        total_quantity=Decimal("1000"),
+        preferred_unit="g",
+        status="EMPTY",
+        purchased_at=datetime.now(UTC),
+    )
+    result = _compute(monkeypatch, [older_in_kg, newest_in_g])
+
+    # 1kg on hand converts to 1000g against a 1000g reference -- healthy,
+    # not low stock. Summing the raw "1" against the "1000" reference
+    # without converting units first would wrongly flag this as critically
+    # low.
+    assert result.stock_warnings == []

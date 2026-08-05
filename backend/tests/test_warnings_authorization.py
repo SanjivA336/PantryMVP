@@ -63,17 +63,18 @@ async def test_member_can_ignore_stock_warning(client, fake_members, monkeypatch
     calls = []
     monkeypatch.setattr(
         "app.services.warnings.ignore_stock_warning",
-        lambda hh, variant_id: calls.append((hh, variant_id)),
+        lambda hh, variant_id, reference_unit: calls.append((hh, variant_id, reference_unit)),
     )
     variant_id = uuid.uuid4()
 
     response = await client.post(
         f"/api/households/{household_id}/warnings/stock/{variant_id}/ignore",
+        params={"reference_unit": "g"},
         headers=auth_header(user_id),
     )
 
     assert response.status_code == 200
-    assert calls == [(household_id, variant_id)]
+    assert calls == [(household_id, variant_id, "g")]
 
 
 async def test_non_member_cannot_ignore_expiry_warning(client, fake_members) -> None:

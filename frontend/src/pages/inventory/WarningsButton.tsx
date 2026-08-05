@@ -67,10 +67,16 @@ export function WarningsButton({ householdId, stockWarnings, expiryWarnings, onI
     })
 
   const ignoreStock = useCallback(
-    async (variantId: string) => {
+    // referenceUnit picks out which dimension's warning is being dismissed
+    // -- a food with stock split across e.g. both weight and volume (see
+    // "separate stock lines") can have two independent warnings at once,
+    // and ignoring one must not silently suppress the other.
+    async (variantId: string, referenceUnit: string) => {
       setActionError(null)
       try {
-        await apiClient.post(`/api/households/${householdId}/warnings/stock/${variantId}/ignore`)
+        await apiClient.post(
+          `/api/households/${householdId}/warnings/stock/${variantId}/ignore?reference_unit=${encodeURIComponent(referenceUnit)}`,
+        )
         onIgnored()
       } catch (err) {
         setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
@@ -101,18 +107,21 @@ export function WarningsButton({ householdId, stockWarnings, expiryWarnings, onI
       OUT_OF_STOCK: stockWarnings
         .filter((w) => w.type === 'OUT_OF_STOCK')
         .map((w) => ({
-          key: w.household_food_variant_id,
+          // Includes the unit -- a variant can have two separate stock
+          // warnings at once (e.g. weight and volume), so the variant id
+          // alone isn't a unique key here.
+          key: `${w.household_food_variant_id}-${w.preferred_unit}`,
           name: w.food_name,
           description: `You had ${w.reference_quantity} ${w.preferred_unit} last time -- none left now.`,
-          onIgnore: () => ignoreStock(w.household_food_variant_id),
+          onIgnore: () => ignoreStock(w.household_food_variant_id, w.preferred_unit),
         })),
       LOW_STOCK: stockWarnings
         .filter((w) => w.type === 'LOW_STOCK')
         .map((w) => ({
-          key: w.household_food_variant_id,
+          key: `${w.household_food_variant_id}-${w.preferred_unit}`,
           name: w.food_name,
           description: `${w.remaining_quantity} ${w.preferred_unit} left, out of ${w.reference_quantity} last purchased.`,
-          onIgnore: () => ignoreStock(w.household_food_variant_id),
+          onIgnore: () => ignoreStock(w.household_food_variant_id, w.preferred_unit),
         })),
       EXPIRED: expiryWarnings
         .filter((w) => w.type === 'EXPIRED')

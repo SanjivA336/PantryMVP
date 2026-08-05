@@ -12,6 +12,7 @@ from app.schemas.inventory_item import (
     RemovalReason,
 )
 from app.schemas.member import Member
+from app.schemas.units import MeasurementPreference
 from app.services import inventory_items as inventory_service
 
 router = APIRouter(prefix="/households/{household_id}/inventory-items", tags=["inventory"])
@@ -38,6 +39,17 @@ def get_last_cost(
 ) -> Envelope[Decimal | None]:
     return ok(
         inventory_service.find_last_cost(household_id, global_food_definition_id, quantity)
+    )
+
+
+@router.get("/measurement-preference", response_model=Envelope[MeasurementPreference])
+def get_measurement_preference(
+    household_id: UUID,
+    global_food_definition_id: UUID,
+    _member: Member = Depends(require_household_membership),
+) -> Envelope[MeasurementPreference]:
+    return ok(
+        inventory_service.resolve_measurement_preference(household_id, global_food_definition_id)
     )
 
 

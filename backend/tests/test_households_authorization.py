@@ -15,6 +15,7 @@ def _household(household_id: uuid.UUID, **overrides) -> Household:
         address=None,
         join_code="ABCD1234",
         created_by_user_id=uuid.uuid4(),
+        preferred_unit_system="CUSTOMARY",
         created_at=now,
         updated_at=now,
     )

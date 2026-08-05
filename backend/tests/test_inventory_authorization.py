@@ -5,6 +5,7 @@ from decimal import Decimal
 import pytest
 
 from app.schemas.inventory_item import InventoryItem, InventoryItemStatus
+from app.schemas.units import MeasurementPreference
 from app.services import inventory_items as inventory_service
 from tests.conftest import auth_header, make_member
 
@@ -371,6 +372,46 @@ async def test_last_cost_returns_match_when_found(
 
     assert response.status_code == 200
     assert response.json()["data"] == "4.99"
+
+
+async def test_non_member_cannot_get_measurement_preference(
+    client, fake_members, fake_inventory
+) -> None:
+    household_id = uuid.uuid4()
+    outsider_id = uuid.uuid4()
+
+    response = await client.get(
+        f"/api/households/{household_id}/inventory-items/measurement-preference",
+        params={"global_food_definition_id": str(uuid.uuid4())},
+        headers=auth_header(outsider_id),
+    )
+
+    assert response.status_code == 403
+
+
+async def test_member_can_get_measurement_preference(client, fake_members, monkeypatch) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+    monkeypatch.setattr(
+        "app.services.inventory_items.resolve_measurement_preference",
+        lambda hh, food_id: MeasurementPreference(
+            dimension="WEIGHT", unit_system="METRIC", unit="g"
+        ),
+    )
+
+    response = await client.get(
+        f"/api/households/{household_id}/inventory-items/measurement-preference",
+        params={"global_food_definition_id": str(uuid.uuid4())},
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "dimension": "WEIGHT",
+        "unit_system": "METRIC",
+        "unit": "g",
+    }
 
 
 async def test_discard_active_item_succeeds(client, fake_members, fake_inventory) -> None:

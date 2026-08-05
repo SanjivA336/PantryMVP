@@ -7,11 +7,12 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { Modal } from '../../components/Modal'
 import { useAuth } from '../../hooks/useAuth'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { UNIT_SYSTEM_EXAMPLES, UNIT_SYSTEM_LABELS } from '../../lib/units'
 import {
   updateHouseholdSchema,
   type UpdateHouseholdForm,
 } from '../households/schema'
-import type { Household, Member } from '../../types/entities'
+import type { Household, Member, UnitSystem } from '../../types/entities'
 
 const inputClass =
   'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
@@ -37,6 +38,7 @@ export function BurrowTab({ members }: Props) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [savingUnitSystem, setSavingUnitSystem] = useState(false)
 
   const {
     register,
@@ -59,6 +61,20 @@ export function BurrowTab({ members }: Props) {
       reload()
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
+    }
+  }
+
+  const chooseUnitSystem = async (system: UnitSystem) => {
+    if (system === household?.preferred_unit_system) return
+    setActionError(null)
+    setSavingUnitSystem(true)
+    try {
+      await apiClient.patch(`/api/households/${householdId}`, { preferred_unit_system: system })
+      reload()
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
+    } finally {
+      setSavingUnitSystem(false)
     }
   }
 
@@ -89,6 +105,13 @@ export function BurrowTab({ members }: Props) {
           <p className="text-sm font-medium text-muted">Address</p>
           <p className="text-text">{household.address || 'Not set'}</p>
         </div>
+        <div>
+          <p className="text-sm font-medium text-muted">Default measurement system</p>
+          <p className="text-text">
+            {UNIT_SYSTEM_LABELS[household.preferred_unit_system]} (
+            {UNIT_SYSTEM_EXAMPLES[household.preferred_unit_system]})
+          </p>
+        </div>
         <p className="text-xs text-faint">Only admins can edit or delete this kitchen.</p>
       </div>
     )
@@ -117,6 +140,35 @@ export function BurrowTab({ members }: Props) {
           {isSubmitting ? 'Saving…' : 'Save changes'}
         </button>
       </form>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-muted">
+          Default measurement system
+        </label>
+        <p className="mb-2 text-xs text-faint">
+          Used when adding a food this kitchen hasn't tracked before. Switching it for an
+          individual food when you add or restock it overrides this default, and is remembered
+          for next time.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {(['METRIC', 'CUSTOMARY'] as UnitSystem[]).map((system) => (
+            <button
+              key={system}
+              type="button"
+              disabled={savingUnitSystem}
+              onClick={() => chooseUnitSystem(system)}
+              className={`rounded-control border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                household.preferred_unit_system === system
+                  ? 'border-primary bg-primary-soft text-primary'
+                  : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
+              }`}
+            >
+              {UNIT_SYSTEM_LABELS[system]}
+              <span className="ml-1.5 text-xs text-faint">({UNIT_SYSTEM_EXAMPLES[system]})</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="rounded-card border border-danger/30 bg-danger-soft p-4">
         <p className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-danger">

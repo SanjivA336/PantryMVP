@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { apiClient, ApiError } from '../lib/apiClient'
 import { CategoryDot } from './CategoryDot'
@@ -11,12 +11,19 @@ interface Props {
   onChange: (food: FoodDefinition | null) => void
 }
 
+export interface TypeSearchFieldHandle {
+  focus: () => void
+}
+
 // Unlike FoodSearchInput (used in recipe/receipt rows, where a compact
 // floating dropdown is the right call), this renders results directly in
 // the page's own flow -- no absolute-positioned overlay -- since the Add
 // Item form wants this to read as one continuous list of fields, not a
 // popover sitting on top of the rest of the form.
-export function TypeSearchField({ value, onChange }: Props) {
+export const TypeSearchField = forwardRef<TypeSearchFieldHandle, Props>(function TypeSearchField(
+  { value, onChange },
+  ref,
+) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FoodDefinition[]>([])
   const [creatingOpen, setCreatingOpen] = useState(false)
@@ -24,6 +31,14 @@ export function TypeSearchField({ value, onChange }: Props) {
   const [newCategory, setNewCategory] = useState<FoodCategory>('OTHER')
   const [createError, setCreateError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Lets a parent (the "Add & add another" flow) refocus the search box
+  // right after it clears the picked food, without needing to lift the
+  // input itself out of this component.
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+  }))
 
   useEffect(() => {
     if (value || query.trim().length === 0) {
@@ -100,6 +115,7 @@ export function TypeSearchField({ value, onChange }: Props) {
     <div>
       <div className="flex gap-2">
         <input
+          ref={inputRef}
           type="text"
           placeholder="Search for a food (e.g. milk)"
           className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
@@ -176,4 +192,4 @@ export function TypeSearchField({ value, onChange }: Props) {
       )}
     </div>
   )
-}
+})

@@ -6,6 +6,10 @@ from postgrest.exceptions import APIError
 from app.core.supabase import get_service_client
 from app.schemas.food_definition import AccountingType
 from app.schemas.inventory_item import CreateInventoryItemRequest, InventoryItem, RemovalReason
+from app.schemas.units import Dimension, MeasurementPreference, UnitSystem
+from app.services import food_definitions as food_definitions_service
+from app.services import households as households_service
+from app.services import units as units_service
 
 _TABLE = "inventory_items"
 
@@ -95,7 +99,64 @@ def create_manual(
     )
     # The RPC returns a bare inventory_items row (no embedding support for
     # composite-returning functions) — re-fetch enriched for a uniform shape.
-    return get_by_id(household_id, UUID(new_item_id))  # type: ignore[return-value]
+    item = get_by_id(household_id, UUID(new_item_id))
+    assert item is not None
+    _remember_measurement_choice(item.household_food_variant_id, body.preferred_unit)
+    return item
+
+
+def resolve_measurement_preference(
+    household_id: UUID, global_food_definition_id: UUID
+) -> MeasurementPreference:
+    """What unit the Add Item form should default to for this food, in this
+    household. A dimension/system this household already chose for this food
+    (see _remember_measurement_choice) always wins; otherwise falls back to
+    the food's usual kind of measurement (weight/volume/count, guessed from
+    the catalog's own preferred_unit) combined with the household's
+    metric/customary default -- not the catalog's own unit system, since the
+    household default exists specifically for foods it hasn't tracked yet.
+    """
+    client = get_service_client()
+    variant_result = (
+        client.table("household_food_variants")
+        .select("dimension, unit_system")
+        .eq("household_id", str(household_id))
+        .eq("global_food_definition_id", str(global_food_definition_id))
+        .maybe_single()
+        .execute()
+    )
+    variant = variant_result.data if variant_result and variant_result.data else None
+    if variant and variant.get("dimension"):
+        dimension = Dimension(variant["dimension"])
+        system = UnitSystem(variant["unit_system"]) if variant.get("unit_system") else None
+        unit = units_service.resolve_unit(dimension, system)
+        return MeasurementPreference(dimension=dimension, unit_system=system, unit=unit)
+
+    food = food_definitions_service.get_by_id(global_food_definition_id)
+    dimension = units_service.guess_dimension(food.preferred_unit) if food else Dimension.COUNT
+    system: UnitSystem | None = None
+    if dimension != Dimension.COUNT:
+        household = households_service.get_household(household_id)
+        system = household.preferred_unit_system if household else UnitSystem.CUSTOMARY
+    return MeasurementPreference(
+        dimension=dimension, unit_system=system, unit=units_service.resolve_unit(dimension, system)
+    )
+
+
+def _remember_measurement_choice(household_food_variant_id: UUID, preferred_unit: str) -> None:
+    """Records the dimension/system implied by a just-created item's chosen
+    unit onto its household_food_variant, so the next Add Item for this food
+    in this household defaults to the same choice. Best-effort: an
+    unrecognized unit guesses COUNT (see units.guess_dimension), which is
+    harmless here since it just means the next add falls back to the usual
+    default resolution instead of a remembered one.
+    """
+    dimension = units_service.guess_dimension(preferred_unit)
+    system = units_service.guess_system(preferred_unit)
+    client = get_service_client()
+    client.table("household_food_variants").update(
+        {"dimension": dimension.value, "unit_system": system.value if system else None}
+    ).eq("id", str(household_food_variant_id)).execute()
 
 
 def list_for_household(
