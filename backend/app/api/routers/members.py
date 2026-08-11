@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.auth import require_household_admin, require_household_membership
 from app.core.responses import Envelope, ok
 from app.schemas.member import Member, UpdateMemberRequest
+from app.services import households as households_service
 from app.services import members as members_service
 
 router = APIRouter(prefix="/households/{household_id}/members", tags=["members"])
@@ -15,6 +16,21 @@ def _ensure_not_last_admin(household_id: UUID, target: Member) -> None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "This is the last remaining admin — promote another member before removing them.",
+        )
+
+
+def _ensure_not_owner(household_id: UUID, target: Member) -> None:
+    # The owner is the top rung of the member -> admin -> owner ladder --
+    # they can't be demoted, kicked, or leave out from under a household
+    # they own. Transferring ownership (POST .../transfer-ownership) is the
+    # only way off this rung, and that's a deliberate, owner-initiated act,
+    # not something that falls out of an admin's normal remove/demote power.
+    household = households_service.get_household(household_id)
+    if household is not None and target.user_id == household.owner_id:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This member owns the kitchen — transfer ownership before removing their "
+            "admin status or removing them.",
         )
 
 
@@ -50,6 +66,7 @@ def update_member(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
         if body.is_admin is False:
             _ensure_not_last_admin(household_id, target)
+            _ensure_not_owner(household_id, target)
         updates["is_admin"] = body.is_admin
 
     if not updates:
@@ -68,6 +85,7 @@ def leave_household(
     if caller.id != member_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Can only remove yourself via this endpoint")
     _ensure_not_last_admin(household_id, caller)
+    _ensure_not_owner(household_id, caller)
     updated = members_service.deactivate_member(household_id, member_id)
     return ok(updated)
 
@@ -82,5 +100,6 @@ def remove_member(
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
     _ensure_not_last_admin(household_id, target)
+    _ensure_not_owner(household_id, target)
     updated = members_service.deactivate_member(household_id, member_id)
     return ok(updated)

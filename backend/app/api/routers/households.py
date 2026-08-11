@@ -8,10 +8,12 @@ from app.schemas.household import (
     CreateHouseholdRequest,
     Household,
     JoinHouseholdRequest,
+    TransferOwnershipRequest,
     UpdateHouseholdRequest,
 )
 from app.schemas.member import Member
 from app.services import households as households_service
+from app.services import members as members_service
 
 router = APIRouter(prefix="/households", tags=["households"])
 
@@ -73,3 +75,31 @@ def delete_household(
 ) -> Envelope[None]:
     households_service.delete_household(household_id)
     return ok(None)
+
+
+@router.post("/{household_id}/transfer-ownership", response_model=Envelope[Household])
+def transfer_ownership(
+    household_id: UUID,
+    body: TransferOwnershipRequest,
+    caller: Member = Depends(require_household_membership),
+) -> Envelope[Household]:
+    household = households_service.get_household(household_id)
+    if household is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Household not found")
+    if caller.user_id != household.owner_id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the current owner can transfer ownership"
+        )
+
+    target = members_service.get_member_by_id(household_id, body.new_owner_member_id)
+    if target is None or not target.is_active or target.user_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+    if not target.is_admin:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Promote this member to admin first -- ownership can only transfer to an "
+            "existing admin, one rung at a time.",
+        )
+
+    updated = households_service.transfer_ownership(household_id, target.user_id)
+    return ok(updated)

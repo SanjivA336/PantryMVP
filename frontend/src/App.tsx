@@ -4,6 +4,8 @@ import { AuthGuard } from './components/AuthGuard'
 import { DeveloperGuard } from './components/DeveloperGuard'
 import { SignupPage } from './pages/auth/SignupPage'
 import { LoginPage } from './pages/auth/LoginPage'
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage'
+import { ResetPasswordPage } from './pages/auth/ResetPasswordPage'
 import { HouseholdPickerPage } from './pages/households/HouseholdPickerPage'
 import { CreateHouseholdPage } from './pages/households/CreateHouseholdPage'
 import { JoinHouseholdPage } from './pages/households/JoinHouseholdPage'
@@ -31,6 +33,8 @@ function App() {
         <Routes>
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           <Route element={<AuthGuard />}>
             <Route path="/" element={<HouseholdPickerPage />} />

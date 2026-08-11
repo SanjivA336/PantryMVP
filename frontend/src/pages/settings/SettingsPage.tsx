@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import type { Member } from '../../types/entities'
+import { AccountTab } from './AccountTab'
 import { BurrowTab } from './BurrowTab'
 import { MembersTab } from './MembersTab'
 
-type Tab = 'burrow' | 'members'
+type Tab = 'burrow' | 'members' | 'account'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'burrow', label: 'Burrow' },
   { key: 'members', label: 'Members' },
+  { key: 'account', label: 'Account' },
 ]
 
 export function SettingsPage() {
@@ -51,13 +53,15 @@ export function SettingsPage() {
 
       {tab === 'burrow' ? (
         <BurrowTab members={members} />
-      ) : (
+      ) : tab === 'members' ? (
         <MembersTab
           members={members}
           loading={membersLoading}
           error={membersError}
           reload={reloadMembers}
         />
+      ) : (
+        <AccountTab />
       )}
     </div>
   )

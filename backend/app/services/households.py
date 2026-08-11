@@ -85,3 +85,11 @@ def update_household(household_id: UUID, updates: dict) -> Household | None:
 def delete_household(household_id: UUID) -> None:
     client = get_service_client()
     client.table(_TABLE).delete().eq("id", str(household_id)).execute()
+
+
+def transfer_ownership(household_id: UUID, new_owner_user_id: UUID) -> Household:
+    # Caller-is-owner and target-is-admin are authorization/business-rule
+    # checks, not persistence -- those live in the router (see
+    # api/routers/households.py), same split members.py already uses for
+    # _ensure_not_last_admin vs. update_member's plain write.
+    return update_household(household_id, {"owner_id": str(new_owner_user_id)})  # type: ignore[return-value]

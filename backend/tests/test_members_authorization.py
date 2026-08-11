@@ -1,6 +1,7 @@
 import uuid
 
 from tests.conftest import auth_header
+from tests.conftest import make_household as _household
 from tests.conftest import make_member as _member
 
 
@@ -57,7 +58,9 @@ async def test_admin_cannot_demote_the_last_active_admin(client, fake_members) -
     assert response.status_code == 409
 
 
-async def test_admin_can_demote_when_another_admin_remains(client, fake_members) -> None:
+async def test_admin_can_demote_when_another_admin_remains(
+    client, fake_members, fake_households
+) -> None:
     household_id = uuid.uuid4()
     admin_a_id = uuid.uuid4()
     admin_a = fake_members.seed(_member(household_id, admin_a_id, is_admin=True))
@@ -86,7 +89,7 @@ async def test_sole_admin_cannot_leave(client, fake_members) -> None:
     assert response.status_code == 409
 
 
-async def test_non_admin_member_can_leave(client, fake_members) -> None:
+async def test_non_admin_member_can_leave(client, fake_members, fake_households) -> None:
     household_id = uuid.uuid4()
     admin_id = uuid.uuid4()
     fake_members.seed(_member(household_id, admin_id, is_admin=True))
@@ -116,7 +119,7 @@ async def test_cannot_leave_on_behalf_of_someone_else(client, fake_members) -> N
     assert response.status_code == 403
 
 
-async def test_admin_can_remove_another_member(client, fake_members) -> None:
+async def test_admin_can_remove_another_member(client, fake_members, fake_households) -> None:
     household_id = uuid.uuid4()
     admin_id = uuid.uuid4()
     fake_members.seed(_member(household_id, admin_id, is_admin=True))
@@ -143,3 +146,86 @@ async def test_non_admin_cannot_remove_another_member(client, fake_members) -> N
     )
 
     assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Ownership ladder: the owner can't be demoted, kicked, or leave without
+# transferring ownership away first, even when another admin exists (so this
+# is a distinct guard from the last-admin check above, not a duplicate).
+# ---------------------------------------------------------------------------
+
+
+async def test_owner_cannot_be_demoted_even_with_another_admin(
+    client, fake_members, fake_households
+) -> None:
+    household_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    owner = fake_members.seed(_member(household_id, owner_id, is_admin=True))
+    fake_members.seed(_member(household_id, uuid.uuid4(), is_admin=True))
+    fake_households["store"][household_id] = _household(household_id, owner_id=owner_id)
+
+    response = await client.patch(
+        f"/api/households/{household_id}/members/{owner.id}",
+        json={"is_admin": False},
+        headers=auth_header(owner_id),
+    )
+
+    assert response.status_code == 409
+
+
+async def test_owner_cannot_leave_even_with_another_admin(
+    client, fake_members, fake_households
+) -> None:
+    household_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    owner = fake_members.seed(_member(household_id, owner_id, is_admin=True))
+    fake_members.seed(_member(household_id, uuid.uuid4(), is_admin=True))
+    fake_households["store"][household_id] = _household(household_id, owner_id=owner_id)
+
+    response = await client.post(
+        f"/api/households/{household_id}/members/{owner.id}/leave",
+        headers=auth_header(owner_id),
+    )
+
+    assert response.status_code == 409
+
+
+async def test_owner_cannot_be_removed_by_another_admin(
+    client, fake_members, fake_households
+) -> None:
+    household_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    owner = fake_members.seed(_member(household_id, owner_id, is_admin=True))
+    other_admin_id = uuid.uuid4()
+    fake_members.seed(_member(household_id, other_admin_id, is_admin=True))
+    fake_households["store"][household_id] = _household(household_id, owner_id=owner_id)
+
+    response = await client.delete(
+        f"/api/households/{household_id}/members/{owner.id}",
+        headers=auth_header(other_admin_id),
+    )
+
+    assert response.status_code == 409
+
+
+async def test_non_owner_admin_can_still_be_demoted_left_and_removed(
+    client, fake_members, fake_households
+) -> None:
+    """A household having an owner shouldn't tighten anything for members
+    who aren't that owner -- the guard is specific to owner_id, not a
+    blanket freeze on admin changes."""
+    household_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    fake_members.seed(_member(household_id, owner_id, is_admin=True))
+    co_admin_id = uuid.uuid4()
+    co_admin = fake_members.seed(_member(household_id, co_admin_id, is_admin=True))
+    fake_households["store"][household_id] = _household(household_id, owner_id=owner_id)
+
+    response = await client.patch(
+        f"/api/households/{household_id}/members/{co_admin.id}",
+        json={"is_admin": False},
+        headers=auth_header(co_admin_id),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["is_admin"] is False

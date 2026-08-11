@@ -57,7 +57,7 @@ def _household(**overrides) -> Household:
         name="3BR Apartment",
         address=None,
         join_code="ABCD1234",
-        created_by_user_id=uuid.uuid4(),
+        owner_id=uuid.uuid4(),
         preferred_unit_system="CUSTOMARY",
         created_at=now,
         updated_at=now,

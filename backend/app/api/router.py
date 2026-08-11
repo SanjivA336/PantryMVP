@@ -11,11 +11,13 @@ from app.api.routers import (
     recipes,
     shopping_list,
     storage_locations,
+    users,
     warnings,
 )
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(households.router)
+api_router.include_router(users.router)
 api_router.include_router(members.router)
 api_router.include_router(storage_locations.router)
 api_router.include_router(food_definitions.router)

@@ -11,7 +11,12 @@ class Household(BaseModel):
     name: str
     address: str | None
     join_code: str
-    created_by_user_id: UUID
+    # The current owner -- distinct from who originally created the
+    # household, since ownership is transferable (see
+    # services/households.py's transfer_ownership). Owning a household is
+    # what blocks a user from deleting their own account, so this can never
+    # go null: the column is ON DELETE RESTRICT against public.users.
+    owner_id: UUID
     # The default unit system offered when adding a food this household
     # hasn't tracked before -- a per-food choice (see household_food_variants)
     # always wins once one's been made.
@@ -35,3 +40,7 @@ class UpdateHouseholdRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     address: str | None = None
     preferred_unit_system: UnitSystem | None = None
+
+
+class TransferOwnershipRequest(BaseModel):
+    new_owner_member_id: UUID

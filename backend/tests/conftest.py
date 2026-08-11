@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from jose import jwt
 
 from app.main import app
+from app.schemas.household import Household
 from app.schemas.member import Member
 from tests.helpers.jwt_keys import TEST_SIGNING_KEY, FakeJWKSClient
 
@@ -130,3 +131,54 @@ def fake_members(monkeypatch):
     monkeypatch.setattr("app.services.members.deactivate_member", deactivate_member)
 
     return store
+
+
+def make_household(household_id: uuid.UUID, **overrides) -> Household:
+    now = datetime.now(UTC)
+    defaults = dict(
+        id=household_id,
+        name="3BR Apartment",
+        address=None,
+        join_code="ABCD1234",
+        owner_id=uuid.uuid4(),
+        preferred_unit_system="CUSTOMARY",
+        created_at=now,
+        updated_at=now,
+    )
+    defaults.update(overrides)
+    return Household(**defaults)
+
+
+@pytest.fixture
+def fake_households(monkeypatch):
+    """In-memory fake for app.services.households -- reused by any test
+    exercising a household-scoped endpoint that also needs owner_id/name
+    lookups (e.g. the members-router owner guard, or account deletion).
+    """
+    store: dict[uuid.UUID, Household] = {}
+    deleted: set[uuid.UUID] = set()
+
+    def get_household(household_id):
+        return store.get(household_id)
+
+    def update_household(household_id, updates):
+        household = store.get(household_id)
+        if household is None:
+            return None
+        updated = household.model_copy(update=updates)
+        store[household_id] = updated
+        return updated
+
+    def delete_household(household_id):
+        store.pop(household_id, None)
+        deleted.add(household_id)
+
+    def transfer_ownership(household_id, new_owner_user_id):
+        return update_household(household_id, {"owner_id": new_owner_user_id})
+
+    monkeypatch.setattr("app.services.households.get_household", get_household)
+    monkeypatch.setattr("app.services.households.update_household", update_household)
+    monkeypatch.setattr("app.services.households.delete_household", delete_household)
+    monkeypatch.setattr("app.services.households.transfer_ownership", transfer_ownership)
+
+    return {"store": store, "deleted": deleted}

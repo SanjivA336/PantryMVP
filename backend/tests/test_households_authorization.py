@@ -1,53 +1,7 @@
 import uuid
-from datetime import UTC, datetime
 
-import pytest
-
-from app.schemas.household import Household
 from tests.conftest import auth_header, make_member
-
-
-def _household(household_id: uuid.UUID, **overrides) -> Household:
-    now = datetime.now(UTC)
-    defaults = dict(
-        id=household_id,
-        name="3BR Apartment",
-        address=None,
-        join_code="ABCD1234",
-        created_by_user_id=uuid.uuid4(),
-        preferred_unit_system="CUSTOMARY",
-        created_at=now,
-        updated_at=now,
-    )
-    defaults.update(overrides)
-    return Household(**defaults)
-
-
-@pytest.fixture
-def fake_households(monkeypatch):
-    store: dict[uuid.UUID, Household] = {}
-    deleted: set[uuid.UUID] = set()
-
-    def get_household(household_id):
-        return store.get(household_id)
-
-    def update_household(household_id, updates):
-        household = store.get(household_id)
-        if household is None:
-            return None
-        updated = household.model_copy(update=updates)
-        store[household_id] = updated
-        return updated
-
-    def delete_household(household_id):
-        store.pop(household_id, None)
-        deleted.add(household_id)
-
-    monkeypatch.setattr("app.services.households.get_household", get_household)
-    monkeypatch.setattr("app.services.households.update_household", update_household)
-    monkeypatch.setattr("app.services.households.delete_household", delete_household)
-
-    return {"store": store, "deleted": deleted}
+from tests.conftest import make_household as _household
 
 
 async def test_non_member_cannot_get_household(client, fake_members, fake_households) -> None:
@@ -155,3 +109,63 @@ async def test_admin_can_delete_household(client, fake_members, fake_households)
 
     assert response.status_code == 200
     assert household_id in fake_households["deleted"]
+
+
+# ---------------------------------------------------------------------------
+# Ownership transfer: owner-only, and only onto an existing active admin --
+# the "member -> admin -> owner, one rung at a time" rule.
+# ---------------------------------------------------------------------------
+
+
+async def test_owner_can_transfer_to_an_admin(client, fake_members, fake_households) -> None:
+    household_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, owner_id, is_admin=True))
+    new_owner_id = uuid.uuid4()
+    new_owner = fake_members.seed(make_member(household_id, new_owner_id, is_admin=True))
+    fake_households["store"][household_id] = _household(household_id, owner_id=owner_id)
+
+    response = await client.post(
+        f"/api/households/{household_id}/transfer-ownership",
+        json={"new_owner_member_id": str(new_owner.id)},
+        headers=auth_header(owner_id),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["owner_id"] == str(new_owner_id)
+
+
+async def test_non_owner_cannot_transfer_ownership(client, fake_members, fake_households) -> None:
+    household_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, owner_id, is_admin=True))
+    other_admin_id = uuid.uuid4()
+    other_admin = fake_members.seed(make_member(household_id, other_admin_id, is_admin=True))
+    fake_households["store"][household_id] = _household(household_id, owner_id=owner_id)
+
+    response = await client.post(
+        f"/api/households/{household_id}/transfer-ownership",
+        json={"new_owner_member_id": str(other_admin.id)},
+        headers=auth_header(other_admin_id),
+    )
+
+    assert response.status_code == 403
+
+
+async def test_cannot_transfer_ownership_to_a_non_admin(
+    client, fake_members, fake_households
+) -> None:
+    household_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, owner_id, is_admin=True))
+    target_id = uuid.uuid4()
+    target = fake_members.seed(make_member(household_id, target_id, is_admin=False))
+    fake_households["store"][household_id] = _household(household_id, owner_id=owner_id)
+
+    response = await client.post(
+        f"/api/households/{household_id}/transfer-ownership",
+        json={"new_owner_member_id": str(target.id)},
+        headers=auth_header(owner_id),
+    )
+
+    assert response.status_code == 400

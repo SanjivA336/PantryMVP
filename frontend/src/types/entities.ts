@@ -5,7 +5,7 @@ export interface Household {
   name: string
   address: string | null
   join_code: string
-  created_by_user_id: string
+  owner_id: string
   preferred_unit_system: UnitSystem
   created_at: string
   updated_at: string
