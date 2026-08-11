@@ -34,7 +34,10 @@ export interface StorageLocation {
   updated_at: string
 }
 
-export type AccountingType = 'UNIT_BASED' | 'SHARED_CONSUMABLE' | 'PERSONAL'
+// SHARED is the one split rule for anyone but a solo owner -- an equal
+// allotment per person that degrades to usage-based billing for whoever
+// exceeds theirs. Replaces the old SHARED_CONSUMABLE/UNIT_BASED distinction.
+export type AccountingType = 'SHARED' | 'PERSONAL'
 
 export type FoodCategory =
   | 'PROTEINS'
@@ -97,6 +100,11 @@ export interface InventoryItem {
   status: InventoryItemStatus
   accounting_type: AccountingType
   split_member_count: number | null
+  // Null while cost/total_quantity/allowed-members are still live and
+  // directly editable; set once the item leaves ACTIVE, at which point its
+  // final share is posted as real ledger entries and further changes need
+  // a correction (see PurchaseCorrection) instead of a plain edit.
+  debt_frozen_at: string | null
   created_at: string
   updated_at: string
   name_override: string | null
@@ -104,6 +112,20 @@ export interface InventoryItem {
   food_type_name: string
   category: FoodCategory | null
   storage_location_name: string
+  allowed_member_ids: string[]
+}
+
+export interface PurchaseCorrection {
+  id: string
+  household_id: string
+  inventory_item_id: string
+  corrected_by_member_id: string
+  previous_cost: string | null
+  new_cost: string | null
+  previous_total_quantity: string | null
+  new_total_quantity: string | null
+  note: string | null
+  created_at: string
 }
 
 export type LedgerEntryReason = 'PURCHASE' | 'OVERAGE' | 'ADJUSTMENT'

@@ -7,9 +7,12 @@ from app.core.auth import require_household_membership
 from app.core.responses import Envelope, ok
 from app.schemas.inventory_item import (
     ConsumeInventoryItemRequest,
+    CorrectInventoryItemRequest,
     CreateInventoryItemRequest,
     InventoryItem,
+    PurchaseCorrection,
     RemovalReason,
+    UpdateInventoryItemRequest,
 )
 from app.schemas.member import Member
 from app.schemas.units import MeasurementPreference
@@ -88,6 +91,71 @@ def get_inventory_item(
     item = inventory_service.get_by_id(household_id, item_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    return ok(item)
+
+
+@router.patch("/{item_id}", response_model=Envelope[InventoryItem])
+def update_inventory_item(
+    household_id: UUID,
+    item_id: UUID,
+    body: UpdateInventoryItemRequest,
+    _member: Member = Depends(require_household_membership),
+) -> Envelope[InventoryItem]:
+    if body.allowed_member_ids is not None and not inventory_service.allowed_member_ids_are_valid(
+        household_id, body.allowed_member_ids
+    ):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "allowed_member_ids must all be active members of this household",
+        )
+    try:
+        item = inventory_service.update_item(household_id, item_id, body)
+    except inventory_service.ItemNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found") from exc
+    except inventory_service.ItemFrozenError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "cost, total_quantity, and allowed_member_ids can no longer be edited directly "
+            "once this item's debt has been finalized -- use the correction endpoint instead",
+        ) from exc
+    except inventory_service.UnitDimensionMismatchError as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "preferred_unit can only switch between metric and customary within the same "
+            "kind of measurement, not change what kind of measurement this food uses",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return ok(item)
+
+
+@router.get("/{item_id}/corrections", response_model=Envelope[list[PurchaseCorrection]])
+def list_item_corrections(
+    household_id: UUID,
+    item_id: UUID,
+    _member: Member = Depends(require_household_membership),
+) -> Envelope[list[PurchaseCorrection]]:
+    return ok(inventory_service.list_corrections(household_id, item_id))
+
+
+@router.post("/{item_id}/corrections", response_model=Envelope[InventoryItem])
+def correct_inventory_item(
+    household_id: UUID,
+    item_id: UUID,
+    body: CorrectInventoryItemRequest,
+    caller: Member = Depends(require_household_membership),
+) -> Envelope[InventoryItem]:
+    try:
+        item = inventory_service.correct_item(household_id, caller.id, item_id, body)
+    except inventory_service.ItemNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found") from exc
+    except inventory_service.ItemNotFrozenError as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "This item's debt hasn't been finalized yet -- edit it directly instead",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     return ok(item)
 
 

@@ -217,16 +217,14 @@ export function AddInventoryItemPage() {
   const selectedMemberIds = watch('allowed_member_ids') ?? []
   const accountingType = watch('accounting_type')
 
-  // Splitting only makes sense once more than one person is involved --
-  // picking a single person (or just yourself) to use an item and
-  // separately deciding "don't split the cost" would be the same choice
-  // twice, so the split-type field only appears (and only matters) once a
-  // second person is added, and collapses back to PERSONAL otherwise.
+  // accounting_type is just PERSONAL vs SHARED, fully derived from the
+  // roster size -- there's no split-method choice to make (see
+  // services/accounting.py's compute_item_shares for the one rule).
   useEffect(() => {
     if (selectedMemberIds.length <= 1 && accountingType !== 'PERSONAL') {
       setValue('accounting_type', 'PERSONAL')
     } else if (selectedMemberIds.length > 1 && accountingType === 'PERSONAL') {
-      setValue('accounting_type', 'SHARED_CONSUMABLE')
+      setValue('accounting_type', 'SHARED')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMemberIds.length])
@@ -539,15 +537,11 @@ export function AddInventoryItemPage() {
             <p className="mt-1.5 text-sm text-danger">{errors.allowed_member_ids.message}</p>
           )}
           {selectedMemberIds.length > 1 && (
-            <div className="mt-3">
-              <label className="mb-1.5 block text-sm font-medium text-muted">Split type</label>
-              <select className={inputClass} {...register('accounting_type')}>
-                <option value="SHARED_CONSUMABLE">Shared — split evenly, no usage tracking</option>
-                <option value="UNIT_BASED">
-                  Unit-based — split evenly, but charge extra to whoever goes over their share
-                </option>
-              </select>
-            </div>
+            <p className="mt-2 text-xs text-faint">
+              Split evenly by default. Anyone who ends up using more than their share pays for
+              the extra themselves, and everyone else's share shrinks to match -- no need to pick
+              anything up front.
+            </p>
           )}
         </div>
 

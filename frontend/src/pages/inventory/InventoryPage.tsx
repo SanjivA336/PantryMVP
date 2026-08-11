@@ -50,8 +50,7 @@ import { WarningsButton } from './WarningsButton'
 
 const ACCOUNTING_TYPE_LABELS: Record<AccountingType, string> = {
   PERSONAL: 'Personal',
-  SHARED_CONSUMABLE: 'Shared',
-  UNIT_BASED: 'Unit-based',
+  SHARED: 'Shared',
 }
 
 const inputClass =
@@ -344,7 +343,12 @@ export function InventoryPage() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <CategoryDot category={item.category} />
-            <span className="font-medium">{item.food_name}</span>
+            <Link
+              to={`/households/${householdId}/inventory-items/${item.id}`}
+              className="font-medium hover:underline"
+            >
+              {item.food_name}
+            </Link>
             {item.accounting_type !== 'PERSONAL' && (
               <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-xs text-muted">
                 {ACCOUNTING_TYPE_LABELS[item.accounting_type]}

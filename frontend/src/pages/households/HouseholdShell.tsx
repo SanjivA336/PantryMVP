@@ -3,6 +3,7 @@ import { NavLink, Outlet, useParams } from 'react-router-dom'
 import {
   Check,
   ChefHat,
+  Clock,
   Copy,
   Home,
   LogOut,
@@ -22,6 +23,7 @@ const PRIMARY_NAV_ITEMS = [
   { to: '', label: 'Inventory', end: true, icon: Home },
   { to: 'shopping-list', label: 'Shopping List', icon: ShoppingCart },
   { to: 'balances', label: 'Balances', icon: Scale },
+  { to: 'history', label: 'History', icon: Clock },
 ]
 
 // Experimental (AI/OCR-backed, real inference cost) -- hidden from the nav

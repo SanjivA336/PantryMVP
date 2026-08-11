@@ -4,6 +4,7 @@ from uuid import UUID
 
 from app.core.supabase import get_service_client
 from app.schemas.ledger_entry import LedgerBalance, LedgerEntry, LedgerEntryDetail, Settlement
+from app.services import accounting as accounting_service
 
 _TABLE = "ledger_entries"
 
@@ -121,8 +122,91 @@ def _ghost_member_ids(household_id: UUID) -> set[UUID]:
     return {UUID(row["id"]) for row in result.data}
 
 
+def _live_shares(household_id: UUID) -> list[tuple[UUID, UUID, Decimal]]:
+    """(debtor, creditor, amount) triples for every item whose debt hasn't
+    frozen yet (debt_frozen_at is null) -- computed live from whatever
+    consumption_events exist right now, via the same compute_item_shares
+    rule freeze_item_debt uses once, for real, at freeze time. Never
+    posted anywhere; recomputed fresh on every call, so it always reflects
+    the current state of the world and never drifts from it.
+
+    Batched across the whole household (one query per related table, not
+    one per item) since a household can easily have a dozen+ live items at
+    once.
+    """
+    client = get_service_client()
+    items = (
+        client.table("inventory_items")
+        .select("id, purchase_event_id, total_quantity, cost")
+        .eq("household_id", str(household_id))
+        .eq("accounting_type", "SHARED")
+        .is_("debt_frozen_at", "null")
+        .execute()
+    ).data
+    if not items:
+        return []
+
+    item_ids = [row["id"] for row in items]
+    purchase_event_ids = list({row["purchase_event_id"] for row in items})
+
+    purchase_events = (
+        client.table("purchase_events")
+        .select("id, member_id")
+        .in_("id", purchase_event_ids)
+        .execute()
+    ).data
+    buyer_by_purchase_event = {row["id"]: UUID(row["member_id"]) for row in purchase_events}
+
+    allowed = (
+        client.table("inventory_item_allowed_members")
+        .select("inventory_item_id, member_id")
+        .in_("inventory_item_id", item_ids)
+        .execute()
+    ).data
+    members_by_item: dict[str, list[UUID]] = defaultdict(list)
+    for row in allowed:
+        members_by_item[row["inventory_item_id"]].append(UUID(row["member_id"]))
+
+    consumption = (
+        client.table("consumption_events")
+        .select("inventory_item_id, member_id, quantity_used")
+        .in_("inventory_item_id", item_ids)
+        .execute()
+    ).data
+    usage_by_item: dict[str, dict[UUID, Decimal]] = defaultdict(dict)
+    for row in consumption:
+        item_id = row["inventory_item_id"]
+        member_id = UUID(row["member_id"])
+        used = Decimal(str(row["quantity_used"]))
+        usage_by_item[item_id][member_id] = usage_by_item[item_id].get(member_id, Decimal(0)) + used
+
+    triples: list[tuple[UUID, UUID, Decimal]] = []
+    for row in items:
+        buyer_id = buyer_by_purchase_event.get(row["purchase_event_id"])
+        member_ids = members_by_item.get(row["id"], [])
+        if buyer_id is None or not member_ids:
+            continue
+        usage_by_member: dict[UUID, Decimal | None] = dict(usage_by_item.get(row["id"], {}))
+        shares = accounting_service.compute_item_shares(
+            total_quantity=Decimal(str(row["total_quantity"])),
+            total_cost=Decimal(str(row["cost"])),
+            member_ids=member_ids,
+            buyer_id=buyer_id,
+            usage_by_member=usage_by_member,
+        )
+        triples.extend(
+            (debtor_id, buyer_id, amount) for debtor_id, amount in shares.items() if amount > 0
+        )
+
+    return triples
+
+
 def compute_balances(household_id: UUID) -> list[LedgerBalance]:
-    """Net, pairwise balances across all currently-unsettled entries.
+    """Net, pairwise balances across all currently-unsettled entries, plus
+    every not-yet-frozen item's live computed share (see _live_shares) --
+    blended into the exact same net dict, indistinguishable to the caller,
+    which is the point: an active item's debt should look exactly as real
+    as an already-frozen one until it isn't.
 
     Computed here in Python over the raw rows rather than as a SQL view:
     the netting (collapsing "A owes B $5" and "B owes A $3" into one "A
@@ -148,6 +232,11 @@ def compute_balances(household_id: UUID) -> list[LedgerBalance]:
         if debtor in ghost_ids or creditor in ghost_ids:
             continue
         net[(debtor, creditor)] += Decimal(str(row["amount"]))
+
+    for debtor, creditor, amount in _live_shares(household_id):
+        if debtor in ghost_ids or creditor in ghost_ids:
+            continue
+        net[(debtor, creditor)] += amount
 
     seen_pairs: set[frozenset[UUID]] = set()
     balances: list[LedgerBalance] = []

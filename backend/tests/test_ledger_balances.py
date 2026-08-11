@@ -22,6 +22,9 @@ class _FakeQuery:
     def is_(self, *_a, **_k):
         return self
 
+    def in_(self, *_a, **_k):
+        return self
+
     def execute(self):
         return _FakeResult(self._rows)
 
@@ -34,7 +37,13 @@ class _FakeClient:
     def table(self, name):
         if name == "members":
             return _FakeQuery(self._member_rows)
-        return _FakeQuery(self._ledger_rows)
+        if name == "ledger_entries":
+            return _FakeQuery(self._ledger_rows)
+        # inventory_items/purchase_events/inventory_item_allowed_members/
+        # consumption_events -- these tests only exercise the real-ledger
+        # netting path, not the live-share blend (see test_live_balances.py
+        # for that), so nothing live to contribute here.
+        return _FakeQuery([])
 
 
 def _rows_to_client(rows: list[dict], member_rows: list[dict] | None = None) -> _FakeClient:

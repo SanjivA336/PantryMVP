@@ -6,8 +6,12 @@ from pydantic import BaseModel, Field
 
 
 class AccountingType(StrEnum):
-    UNIT_BASED = "UNIT_BASED"
-    SHARED_CONSUMABLE = "SHARED_CONSUMABLE"
+    # The one split rule for anyone but a solo owner -- an equal allotment
+    # per person that degrades to usage-based billing for whoever exceeds
+    # theirs (see services/accounting.py's compute_item_shares). Replaces
+    # the old SHARED_CONSUMABLE/UNIT_BASED distinction; there's no longer a
+    # mode to choose between at purchase time.
+    SHARED = "SHARED"
     PERSONAL = "PERSONAL"
 
 
@@ -46,7 +50,7 @@ class CreateFoodDefinitionRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     preferred_unit: str = Field(min_length=1, max_length=20)
     category: FoodCategory = FoodCategory.OTHER
-    accounting_type_default: AccountingType = AccountingType.SHARED_CONSUMABLE
+    accounting_type_default: AccountingType = AccountingType.SHARED
     shelf_life_days: int | None = Field(default=None, gt=0)
     freezer_shelf_life_days: int | None = Field(default=None, gt=0)
     common_substitutions: list[str] = Field(default_factory=list)

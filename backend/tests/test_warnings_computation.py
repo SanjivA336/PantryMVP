@@ -27,6 +27,7 @@ def _item(*, variant_id=None, purchased_at=None, **overrides) -> InventoryItem:
         status="ACTIVE",
         accounting_type="PERSONAL",
         split_member_count=None,
+        debt_frozen_at=None,
         created_at=now,
         updated_at=now,
         food_name="Whole Milk",
@@ -34,6 +35,7 @@ def _item(*, variant_id=None, purchased_at=None, **overrides) -> InventoryItem:
         category="DAIRY_ALTERNATIVES",
         name_override=None,
         storage_location_name="Test Fridge",
+        allowed_member_ids=[],
     )
     defaults.update(overrides)
     return InventoryItem(**defaults)

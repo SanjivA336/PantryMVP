@@ -36,6 +36,7 @@ def _item(food_name: str) -> InventoryItem:
         status="ACTIVE",
         accounting_type="PERSONAL",
         split_member_count=None,
+        debt_frozen_at=None,
         created_at=now,
         updated_at=now,
         food_name=food_name,
@@ -43,6 +44,7 @@ def _item(food_name: str) -> InventoryItem:
         category=None,
         name_override=None,
         storage_location_name="Fridge",
+        allowed_member_ids=[],
     )
 
 

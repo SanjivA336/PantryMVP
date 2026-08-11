@@ -3,7 +3,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.food_definition import AccountingType, FoodCategory
 
@@ -45,6 +45,11 @@ class InventoryItem(BaseModel):
     status: InventoryItemStatus
     accounting_type: AccountingType
     split_member_count: int | None
+    # Null while the item's cost/quantity/roster are still live and directly
+    # editable; set once (see services/accounting.py's freeze_item_debt)
+    # the moment the item leaves ACTIVE, at which point its final share gets
+    # posted as real ledger_entries and further changes need a correction.
+    debt_frozen_at: datetime | None
     created_at: datetime
     updated_at: datetime
     # A label on this specific physical item (e.g. "HEB milk" vs "Costco
@@ -65,6 +70,11 @@ class InventoryItem(BaseModel):
     # in which case the enrichment join comes back empty.
     category: FoodCategory | None
     storage_location_name: str
+    # Resolved via the same enrichment join as food_name/storage_location_name
+    # -- who's currently allowed to consume this item (see
+    # inventory_item_allowed_members). Editable directly while the item's
+    # debt is still live; see UpdateInventoryItemRequest.
+    allowed_member_ids: list[UUID]
 
 
 class CreateInventoryItemRequest(BaseModel):
@@ -92,3 +102,58 @@ class CreateInventoryItemRequest(BaseModel):
 
 class ConsumeInventoryItemRequest(BaseModel):
     quantity_used: Decimal = Field(gt=0)
+
+
+class UpdateInventoryItemRequest(BaseModel):
+    """A genuine partial update -- only fields the caller actually sent are
+    applied (model_fields_set, not None-checks: expiry_date/best_by_date/
+    name_override/storage_location_id are all legitimately clearable-or-
+    settable to a real value, same reasoning as UpdateRecipeRequest).
+
+    cost, total_quantity, and allowed_member_ids are always accepted here
+    but rejected by the service layer once the item's debt has frozen
+    (debt_frozen_at is not null) -- see POST .../corrections instead, which
+    is the only path for those three once real ledger_entries exist.
+    """
+
+    expiry_date: date | None = None
+    best_by_date: date | None = None
+    storage_location_id: UUID | None = None
+    name_override: str | None = Field(default=None, max_length=200)
+    # Same-dimension system swap only (e.g. oz -> g) -- resolved server-side
+    # against the food's dimension; never a dimension change, since that's
+    # tied to the food type itself, which isn't editable here.
+    preferred_unit: str | None = Field(default=None, min_length=1, max_length=20)
+    cost: Decimal | None = Field(default=None, ge=0)
+    total_quantity: Decimal | None = Field(default=None, gt=0)
+    allowed_member_ids: list[UUID] | None = Field(default=None, min_length=1)
+
+
+class CorrectInventoryItemRequest(BaseModel):
+    """Only valid once an item's debt has already frozen -- the direct-edit
+    path (UpdateInventoryItemRequest) is what handles cost/quantity changes
+    before that. Posts a purchase_corrections row and, for a cost change,
+    a new ADJUSTMENT ledger entry per affected member for the delta."""
+
+    new_cost: Decimal | None = Field(default=None, ge=0)
+    new_total_quantity: Decimal | None = Field(default=None, gt=0)
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> "CorrectInventoryItemRequest":
+        if self.new_cost is None and self.new_total_quantity is None:
+            raise ValueError("At least one of new_cost or new_total_quantity is required")
+        return self
+
+
+class PurchaseCorrection(BaseModel):
+    id: UUID
+    household_id: UUID
+    inventory_item_id: UUID
+    corrected_by_member_id: UUID
+    previous_cost: Decimal | None
+    new_cost: Decimal | None
+    previous_total_quantity: Decimal | None
+    new_total_quantity: Decimal | None
+    note: str | None
+    created_at: datetime

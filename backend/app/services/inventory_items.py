@@ -5,21 +5,29 @@ from postgrest.exceptions import APIError
 
 from app.core.supabase import get_service_client
 from app.schemas.food_definition import AccountingType
-from app.schemas.inventory_item import CreateInventoryItemRequest, InventoryItem, RemovalReason
+from app.schemas.inventory_item import (
+    CorrectInventoryItemRequest,
+    CreateInventoryItemRequest,
+    InventoryItem,
+    PurchaseCorrection,
+    RemovalReason,
+    UpdateInventoryItemRequest,
+)
 from app.schemas.units import Dimension, MeasurementPreference, UnitSystem
+from app.services import accounting as accounting_service
 from app.services import food_definitions as food_definitions_service
 from app.services import households as households_service
 from app.services import units as units_service
 
 _TABLE = "inventory_items"
 
-# Embeds the food name (via the household's variant -> global definition)
-# and storage location name in one query, so the frontend never has to
-# stitch together multiple lookups just to show "Whole Milk" instead of a
-# food_definition UUID.
+# Embeds the food name (via the household's variant -> global definition),
+# storage location name, and the current allowed-members roster in one
+# query, so the frontend never has to stitch together multiple lookups just
+# to show "Whole Milk" / "Garage Fridge" / who can use this.
 _ENRICHED_SELECT = (
     "*, household_food_variants(global_food_definitions(name, category)), "
-    "storage_locations(name)"
+    "storage_locations(name), inventory_item_allowed_members(member_id)"
 )
 
 
@@ -35,9 +43,39 @@ class FoodDefinitionNotFoundError(Exception):
     pass
 
 
+class ItemNotFoundError(Exception):
+    pass
+
+
+class ItemFrozenError(Exception):
+    """Raised when a caller tries to directly edit cost, total_quantity, or
+    allowed_member_ids on an item whose debt has already frozen -- real
+    ledger_entries exist by then, so those three need a correction
+    (correct_item) instead of a plain edit."""
+
+    pass
+
+
+class ItemNotFrozenError(Exception):
+    """The inverse of ItemFrozenError -- corrections only make sense once
+    there's something real to correct. While an item is still live, use
+    update_item directly instead."""
+
+    pass
+
+
+class UnitDimensionMismatchError(Exception):
+    """Raised when a preferred_unit edit would change the item's dimension
+    (weight/volume/count) -- only a same-dimension system swap (e.g. oz -> g)
+    is allowed; that's tied to the food type, which isn't editable here."""
+
+    pass
+
+
 def _flatten(row: dict) -> InventoryItem:
     variant = row.pop("household_food_variants", None) or {}
     storage = row.pop("storage_locations", None) or {}
+    allowed = row.pop("inventory_item_allowed_members", None) or []
     global_definition = variant.get("global_food_definitions") or {}
 
     # This item's own label wins over the food's name -- two jugs of the
@@ -47,6 +85,7 @@ def _flatten(row: dict) -> InventoryItem:
     row["food_type_name"] = global_definition.get("name") or "Unknown food"
     row["category"] = global_definition.get("category")
     row["storage_location_name"] = storage.get("name") or "Unknown location"
+    row["allowed_member_ids"] = [a["member_id"] for a in allowed]
 
     return InventoryItem(**row)
 
@@ -210,7 +249,16 @@ def consume(
         if "MEMBER_NOT_ALLOWED" in str(exc):
             raise MemberNotAllowedError from exc
         raise
-    return get_by_id(household_id, item_id)  # type: ignore[return-value]
+    item = get_by_id(household_id, item_id)
+    assert item is not None
+    # Quantity hitting zero auto-transitions status to EMPTY (a DB trigger,
+    # not this code) -- that's the item's story ending, so its final debt
+    # gets computed and posted for real right here, once.
+    if item.status != "ACTIVE":
+        accounting_service.freeze_item_debt(item_id)
+        item = get_by_id(household_id, item_id)
+        assert item is not None
+    return item
 
 
 def discard(household_id: UUID, item_id: UUID, reason: RemovalReason) -> InventoryItem:
@@ -225,7 +273,221 @@ def discard(household_id: UUID, item_id: UUID, reason: RemovalReason) -> Invento
     )
     if not result.data:
         raise ValueError("Item not found or not currently active")
+    # Discarding always leaves ACTIVE -- same "the item's story is over"
+    # freeze point as consuming it to zero.
+    accounting_service.freeze_item_debt(item_id)
     return get_by_id(household_id, item_id)  # type: ignore[return-value]
+
+
+def update_item(
+    household_id: UUID, item_id: UUID, body: UpdateInventoryItemRequest
+) -> InventoryItem:
+    """A genuine partial update (model_fields_set, not None-checks --
+    expiry_date/best_by_date/name_override/storage_location_id are all
+    legitimately clearable-or-settable). Dates, storage, nickname, and a
+    same-dimension unit-system swap are always editable; cost,
+    total_quantity, and allowed_member_ids are rejected once the item's
+    debt has frozen (see correct_item instead).
+    """
+    current = get_by_id(household_id, item_id)
+    if current is None:
+        raise ItemNotFoundError
+
+    fields = body.model_fields_set
+    updates: dict = {}
+
+    if "expiry_date" in fields:
+        updates["expiry_date"] = body.expiry_date.isoformat() if body.expiry_date else None
+    if "best_by_date" in fields:
+        updates["best_by_date"] = body.best_by_date.isoformat() if body.best_by_date else None
+    if "storage_location_id" in fields and body.storage_location_id is not None:
+        updates["storage_location_id"] = str(body.storage_location_id)
+    if "name_override" in fields:
+        updates["name_override"] = body.name_override
+
+    if "preferred_unit" in fields and body.preferred_unit is not None:
+        new_unit = body.preferred_unit
+        if units_service.guess_dimension(new_unit) != units_service.guess_dimension(
+            current.preferred_unit
+        ):
+            raise UnitDimensionMismatchError
+        converted_quantity = units_service.convert(
+            current.quantity, current.preferred_unit, new_unit
+        )
+        converted_total = units_service.convert(
+            current.total_quantity, current.preferred_unit, new_unit
+        )
+        if converted_quantity is None or converted_total is None:
+            raise UnitDimensionMismatchError
+        updates["preferred_unit"] = new_unit
+        updates["quantity"] = str(converted_quantity)
+        updates["total_quantity"] = str(converted_total)
+        _remember_measurement_choice(current.household_food_variant_id, new_unit)
+
+    frozen_gated_fields = {"cost", "total_quantity", "allowed_member_ids"}
+    if frozen_gated_fields & fields and current.debt_frozen_at is not None:
+        raise ItemFrozenError
+
+    if "cost" in fields and body.cost is not None:
+        updates["cost"] = str(body.cost)
+    if "total_quantity" in fields and body.total_quantity is not None:
+        # Applies the delta additively to both total_quantity and the
+        # current remaining quantity -- "we actually had 10 the whole time"
+        # should add to what's left, not overwrite it and silently erase
+        # whatever's already been consumed.
+        delta = body.total_quantity - current.total_quantity
+        new_quantity = current.quantity + delta
+        if new_quantity < 0:
+            raise ValueError("That would take the remaining quantity below zero")
+        updates["total_quantity"] = str(body.total_quantity)
+        updates["quantity"] = str(new_quantity)
+
+    client = get_service_client()
+    if updates:
+        client.table(_TABLE).update(updates).eq("household_id", str(household_id)).eq(
+            "id", str(item_id)
+        ).execute()
+
+    if "allowed_member_ids" in fields and body.allowed_member_ids is not None:
+        client.table("inventory_item_allowed_members").delete().eq(
+            "inventory_item_id", str(item_id)
+        ).execute()
+        client.table("inventory_item_allowed_members").insert(
+            [
+                {"inventory_item_id": str(item_id), "member_id": str(member_id)}
+                for member_id in body.allowed_member_ids
+            ]
+        ).execute()
+        # split_member_count mirrors the roster size for non-PERSONAL items
+        # -- it's what compute_item_shares' allotment sizing is ultimately
+        # derived from at freeze time, so it needs to stay in sync while
+        # the roster is still live-editable.
+        if current.accounting_type != "PERSONAL":
+            client.table(_TABLE).update(
+                {"split_member_count": len(body.allowed_member_ids)}
+            ).eq("id", str(item_id)).execute()
+
+    return get_by_id(household_id, item_id)  # type: ignore[return-value]
+
+
+def correct_item(
+    household_id: UUID, member_id: UUID, item_id: UUID, body: CorrectInventoryItemRequest
+) -> InventoryItem:
+    """Only valid once an item's debt has already frozen -- update_item is
+    what handles cost/quantity changes before that. Records a
+    purchase_corrections row and, for a cost change on a non-PERSONAL item,
+    posts a new ADJUSTMENT ledger entry per affected member for the delta
+    (same split rule as everywhere else, applied to just the difference).
+    A quantity-only correction touches inventory_items directly with no
+    ledger impact, same additive-delta reasoning as update_item.
+    """
+    current = get_by_id(household_id, item_id)
+    if current is None:
+        raise ItemNotFoundError
+    if current.debt_frozen_at is None:
+        raise ItemNotFrozenError
+
+    client = get_service_client()
+    correction_row: dict = {
+        "household_id": str(household_id),
+        "inventory_item_id": str(item_id),
+        "corrected_by_member_id": str(member_id),
+        "note": body.note,
+    }
+
+    item_updates: dict = {}
+    if body.new_cost is not None:
+        correction_row["previous_cost"] = str(current.cost)
+        correction_row["new_cost"] = str(body.new_cost)
+        item_updates["cost"] = str(body.new_cost)
+    if body.new_total_quantity is not None:
+        delta = body.new_total_quantity - current.total_quantity
+        new_quantity = current.quantity + delta
+        if new_quantity < 0:
+            raise ValueError("That would take the remaining quantity below zero")
+        correction_row["previous_total_quantity"] = str(current.total_quantity)
+        correction_row["new_total_quantity"] = str(body.new_total_quantity)
+        item_updates["total_quantity"] = str(body.new_total_quantity)
+        item_updates["quantity"] = str(new_quantity)
+
+    client.table("purchase_corrections").insert(correction_row).execute()
+    if item_updates:
+        client.table(_TABLE).update(item_updates).eq("id", str(item_id)).execute()
+
+    if body.new_cost is not None and current.accounting_type != "PERSONAL":
+        delta_cost = body.new_cost - current.cost
+        if delta_cost != 0:
+            purchase_event = (
+                client.table("purchase_events")
+                .select("member_id")
+                .eq("id", str(current.purchase_event_id))
+                .single()
+                .execute()
+            )
+            buyer_id = UUID(purchase_event.data["member_id"])
+            allowed = (
+                client.table("inventory_item_allowed_members")
+                .select("member_id")
+                .eq("inventory_item_id", str(item_id))
+                .execute()
+            )
+            member_ids = [UUID(row["member_id"]) for row in allowed.data]
+            consumption = (
+                client.table("consumption_events")
+                .select("member_id, quantity_used")
+                .eq("inventory_item_id", str(item_id))
+                .execute()
+            )
+            usage_by_member: dict[UUID, Decimal | None] = {}
+            for row_ in consumption.data:
+                consumer_id = UUID(row_["member_id"])
+                used = Decimal(str(row_["quantity_used"]))
+                usage_by_member[consumer_id] = (
+                    usage_by_member.get(consumer_id) or Decimal(0)
+                ) + used
+            # The delta is split by the same rule as everything else,
+            # applied to just the difference -- reusing the item's actual
+            # recorded usage so a member who was over their allotment stays
+            # the one whose share moves, instead of smearing the delta
+            # equally across everyone regardless of who actually drove it.
+            shares = accounting_service.compute_item_shares(
+                total_quantity=current.total_quantity,
+                total_cost=abs(delta_cost),
+                member_ids=member_ids,
+                buyer_id=buyer_id,
+                usage_by_member=usage_by_member,
+            )
+            # Cost went up: each member now owes the buyer more. Cost went
+            # down: the buyer now owes each member a refund -- same shares,
+            # opposite direction.
+            entries = [
+                {
+                    "household_id": str(household_id),
+                    "creditor_member_id": str(buyer_id if delta_cost > 0 else member_id),
+                    "debtor_member_id": str(member_id if delta_cost > 0 else buyer_id),
+                    "amount": str(amount),
+                    "reason": "ADJUSTMENT",
+                }
+                for member_id, amount in shares.items()
+                if amount > 0
+            ]
+            if entries:
+                client.table("ledger_entries").insert(entries).execute()
+
+    return get_by_id(household_id, item_id)  # type: ignore[return-value]
+
+
+def list_corrections(household_id: UUID, item_id: UUID) -> list[PurchaseCorrection]:
+    client = get_service_client()
+    result = (
+        client.table("purchase_corrections")
+        .select("*")
+        .eq("household_id", str(household_id))
+        .eq("inventory_item_id", str(item_id))
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return [PurchaseCorrection(**row) for row in result.data]
 
 
 def find_last_cost(

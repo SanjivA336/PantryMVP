@@ -16,6 +16,23 @@ export function resolveUnit(dimension: Dimension, system: UnitSystem | null): st
   return CANONICAL_UNIT[dimension]![system ?? 'CUSTOMARY']
 }
 
+// The reverse of resolveUnit -- only needs to recognize the five canonical
+// units the picker itself ever writes (unlike the backend's units.py, which
+// also has to make sense of older/foreign free-text units).
+export function guessDimension(unit: string): Dimension {
+  const key = unit.trim().toLowerCase()
+  if (key === 'g' || key === 'oz') return 'WEIGHT'
+  if (key === 'ml' || key === 'cup') return 'VOLUME'
+  return 'COUNT'
+}
+
+export function guessSystem(unit: string): UnitSystem | null {
+  const key = unit.trim().toLowerCase()
+  if (key === 'g' || key === 'ml') return 'METRIC'
+  if (key === 'oz' || key === 'cup') return 'CUSTOMARY'
+  return null
+}
+
 export const DIMENSION_LABELS: Record<Dimension, string> = {
   WEIGHT: 'Weight',
   VOLUME: 'Volume',

@@ -305,8 +305,7 @@ export function ReviewReceiptSessionPage() {
                       }
                     >
                       <option value="PERSONAL">Personal</option>
-                      <option value="SHARED_CONSUMABLE">Shared</option>
-                      <option value="UNIT_BASED">Unit-based</option>
+                      <option value="SHARED">Shared</option>
                     </select>
                   </div>
                   <div className="flex flex-wrap gap-2">

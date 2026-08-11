@@ -73,7 +73,7 @@ def _food(**overrides) -> FoodDefinition:
         name="Whole Milk",
         preferred_unit="ml",
         category="DAIRY_ALTERNATIVES",
-        accounting_type_default="SHARED_CONSUMABLE",
+        accounting_type_default="SHARED",
         shelf_life_days=None,
         freezer_shelf_life_days=None,
         common_substitutions=[],
