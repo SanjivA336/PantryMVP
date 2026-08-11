@@ -143,6 +143,24 @@ def freeze_item_debt(item_id: UUID) -> None:
         usage_by_member=usage_by_member,
     )
 
+    # Claim the freeze with a compare-and-swap (only-if-still-null) update
+    # *before* posting anything -- consume() can end up calling this twice
+    # for the same item under real concurrency (two racing requests can each
+    # independently observe the post-RPC row as no-longer-ACTIVE, since that
+    # read happens outside the RPC's own row lock). Whoever's update actually
+    # matches a row won the race and is the only one who gets to post
+    # entries; the loser's update matches nothing and it backs off, the same
+    # pattern discard() already uses via its `.eq("status", "ACTIVE")` guard.
+    claim = (
+        client.table("inventory_items")
+        .update({"debt_frozen_at": datetime.now(UTC).isoformat()})
+        .eq("id", str(item_id))
+        .is_("debt_frozen_at", "null")
+        .execute()
+    )
+    if not claim.data:
+        return
+
     entries = [
         {
             "household_id": row["household_id"],
@@ -157,7 +175,3 @@ def freeze_item_debt(item_id: UUID) -> None:
     ]
     if entries:
         client.table("ledger_entries").insert(entries).execute()
-
-    client.table("inventory_items").update(
-        {"debt_frozen_at": datetime.now(UTC).isoformat()}
-    ).eq("id", str(item_id)).execute()

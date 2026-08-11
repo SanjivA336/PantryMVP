@@ -1,4 +1,4 @@
-"""Integration tests for the ledger settlement engine (migration 0009),
+"""Integration tests for the live-until-frozen debt model (migration 0024),
 against the real linked Supabase project.
 
 Every dollar amount here is hand-computed, not just "assert it changed" —
@@ -130,7 +130,7 @@ async def _create_item(
     quantity: str,
     cost: str,
     allowed_member_indices: list[int],
-    accounting_type: str,
+    accounting_type: str = "SHARED",
 ) -> dict:
     milk_id = await _search_milk(api_client, household["headers"][0])
     response = await api_client.post(
@@ -156,6 +156,45 @@ async def _consume(
     return await api_client.post(
         f"/api/households/{household['household_id']}/inventory-items/{item_id}/consume",
         json={"quantity_used": quantity},
+        headers=household["headers"][member_index],
+    )
+
+
+async def _discard(
+    api_client: AsyncClient, household: dict, item_id: str, member_index: int = 0
+) -> httpx.Response:
+    return await api_client.delete(
+        f"/api/households/{household['household_id']}/inventory-items/{item_id}",
+        params={"reason": "DISCARDED"},
+        headers=household["headers"][member_index],
+    )
+
+
+async def _correct(
+    api_client: AsyncClient,
+    household: dict,
+    item_id: str,
+    *,
+    new_cost: str,
+    member_index: int = 0,
+) -> httpx.Response:
+    return await api_client.post(
+        f"/api/households/{household['household_id']}/inventory-items/{item_id}/corrections",
+        json={"new_cost": new_cost, "note": "integration test correction"},
+        headers=household["headers"][member_index],
+    )
+
+
+async def _patch(
+    api_client: AsyncClient,
+    household: dict,
+    item_id: str,
+    body: dict,
+    member_index: int = 0,
+) -> httpx.Response:
+    return await api_client.patch(
+        f"/api/households/{household['household_id']}/inventory-items/{item_id}",
+        json=body,
         headers=household["headers"][member_index],
     )
 
@@ -191,151 +230,111 @@ def _sum_between(entries: list[dict], reason: str, creditor: str, debtor: str) -
     )
 
 
+def _net(balances: list[dict], debtor: str, creditor: str) -> Decimal:
+    for bal in balances:
+        if bal["debtor_member_id"] == debtor and bal["creditor_member_id"] == creditor:
+            return Decimal(bal["amount"])
+    return Decimal(0)
+
+
 # ---------------------------------------------------------------------------
-# Core arithmetic scenarios
+# Live-until-frozen lifecycle
 # ---------------------------------------------------------------------------
 
 
-async def test_worked_example_exact_numbers(api_client, provision) -> None:
-    """3 members (A buyer, B, C), UNIT_BASED, cost=12/qty=12 -> $1/unit,
-    allotment=4 each. B consumes exactly its allotment (no overage). C
-    consumes 6 (2 over its allotment); A and B are the slack pool, but B
-    has already used its allotment (slack=0), so A absorbs 100% of C's
-    $2.00 overage. Hand-computed expected entries below."""
-    household = await provision(3)
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="12",
-        cost="12.00",
-        allowed_member_indices=[0, 1, 2],
-        accounting_type="UNIT_BASED",
-    )
-    a, b, c = household["member_ids"]
-
-    consume_b = await _consume(api_client, household, item["id"], 1, "4")
-    assert consume_b.status_code == 200, consume_b.text
-
-    consume_c = await _consume(api_client, household, item["id"], 2, "6")
-    assert consume_c.status_code == 200, consume_c.text
-
-    entries = await _entries(api_client, household)
-
-    assert _sum_between(entries, "PURCHASE", a, b) == Decimal("4.00")
-    assert _sum_between(entries, "PURCHASE", a, c) == Decimal("4.00")
-    assert _sum_between(entries, "OVERAGE", a, c) == Decimal("2.00")
-    # B stayed within its allotment -> no OVERAGE entries at all involving B.
-    assert not any(
-        e["reason"] == "OVERAGE" and b in (e["creditor_member_id"], e["debtor_member_id"])
-        for e in entries
-    )
-    assert len(entries) == 3
-
-    balances = await _balances(api_client, household)
-    by_pair = {
-        (bal["debtor_member_id"], bal["creditor_member_id"]): Decimal(bal["amount"])
-        for bal in balances
-    }
-    assert by_pair[(b, a)] == Decimal("4.00")
-    assert by_pair[(c, a)] == Decimal("6.00")
-
-
-async def test_exact_allotment_produces_no_overage(api_client, provision) -> None:
+async def test_item_creation_posts_nothing(api_client, provision) -> None:
+    """Unlike the old immediate-billing model, creating a SHARED item must
+    not touch the ledger at all -- nothing is owed until the item's story
+    ends."""
     household = await provision(2)
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="10",
-        cost="10.00",
-        allowed_member_indices=[0, 1],
-        accounting_type="UNIT_BASED",
-    )
-
-    consume = await _consume(api_client, household, item["id"], 1, "5")
-    assert consume.status_code == 200, consume.text
-
-    entries = await _entries(api_client, household)
-    assert [e["reason"] for e in entries] == ["PURCHASE"]
-    assert Decimal(entries[0]["amount"]) == Decimal("5.00")
-
-
-async def test_overage_fully_absorbed_by_single_slack_holder(api_client, provision) -> None:
-    household = await provision(2)
-    a, b = household["member_ids"]
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="10",
-        cost="10.00",
-        allowed_member_indices=[0, 1],
-        accounting_type="UNIT_BASED",
-    )
-
-    consume = await _consume(api_client, household, item["id"], 1, "8")
-    assert consume.status_code == 200, consume.text
-
-    entries = await _entries(api_client, household)
-    assert _sum_between(entries, "PURCHASE", a, b) == Decimal("5.00")
-    # B's allotment is 5; consuming 8 is 3 over -> A (the only other allowed
-    # member, with full 5 of unused slack) absorbs the entire $3.00.
-    assert _sum_between(entries, "OVERAGE", a, b) == Decimal("3.00")
-    assert len(entries) == 2
-
-
-async def test_personal_item_produces_zero_ledger_entries(api_client, provision) -> None:
-    household = await provision(2)
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="5",
-        cost="9.99",
-        allowed_member_indices=[0],
-        accounting_type="PERSONAL",
-    )
-
-    consume = await _consume(api_client, household, item["id"], 0, "5")
-    assert consume.status_code == 200, consume.text
+    item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                               allowed_member_indices=[0, 1])
+    assert item["debt_frozen_at"] is None
 
     entries = await _entries(api_client, household)
     assert entries == []
 
 
-async def test_shared_consumable_equal_split_only_no_overage_ever(api_client, provision) -> None:
+async def test_live_preview_matches_frozen_result_exactly(api_client, provision) -> None:
+    """4 members (buyer A + B, C, D), qty=12/cost=12 -> $1/unit, allotment=3
+    each. A (the buyer) uses 4, B uses 8 -- both exceed the *initial* 3-each
+    allotment simultaneously, so both lock in the same cascade round at
+    their real usage; the remaining 0 units leave C and D undocumented at a
+    $0 share. The live preview (before the item empties) and the real,
+    frozen ledger entries (after) must agree exactly -- nothing should
+    change from the user's point of view when the item's story ends."""
+    household = await provision(4)
+    a, b, c, d = household["member_ids"]
+    item = await _create_item(api_client, household, quantity="12", cost="12.00",
+                               allowed_member_indices=[0, 1, 2, 3])
+
+    assert (await _consume(api_client, household, item["id"], 0, "4")).status_code == 200
+
+    # Only A has documented usage so far -- B, C, D are all still
+    # undocumented at this point and split the remaining 8 evenly.
+    live_balances = await _balances(api_client, household)
+    assert _net(live_balances, b, a) == Decimal("2.666666666666666666666666667")
+    assert _net(live_balances, c, a) == Decimal("2.666666666666666666666666667")
+    assert _net(live_balances, d, a) == Decimal("2.666666666666666666666666667")
+    assert (await _entries(api_client, household)) == []  # still nothing real
+
+    drain = await _consume(api_client, household, item["id"], 1, "8")
+    assert drain.status_code == 200
+    assert drain.json()["data"]["status"] == "EMPTY"
+    assert drain.json()["data"]["debt_frozen_at"] is not None
+
+    frozen_balances = await _balances(api_client, household)
+    assert _net(frozen_balances, b, a) == Decimal("8.0")
+    assert _net(frozen_balances, c, a) == Decimal("0")
+    assert _net(frozen_balances, d, a) == Decimal("0")
+
+    entries = await _entries(api_client, household)
+    assert len(entries) == 1
+    assert entries[0]["reason"] == "PURCHASE"
+    assert entries[0]["creditor_member_id"] == a
+    assert entries[0]["debtor_member_id"] == b
+    assert Decimal(entries[0]["amount"]) == Decimal("8.0")
+
+
+async def test_undocumented_usage_splits_the_remaining_allotment_evenly(
+    api_client, provision
+) -> None:
+    """2 members, nobody documents usage at all -- discarding (not
+    consuming) still has to freeze a real, equal-split debt."""
     household = await provision(2)
     a, b = household["member_ids"]
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="100",
-        cost="10.00",
-        allowed_member_indices=[0, 1],
-        accounting_type="SHARED_CONSUMABLE",
-    )
+    item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                               allowed_member_indices=[0, 1])
 
-    # One member consumes far beyond any notion of "their share" — should
-    # never generate an OVERAGE entry, since that math only runs for
-    # UNIT_BASED items.
-    consume = await _consume(api_client, household, item["id"], 1, "90")
-    assert consume.status_code == 200, consume.text
+    discard = await _discard(api_client, household, item["id"])
+    assert discard.status_code == 200, discard.text
 
     entries = await _entries(api_client, household)
     assert [e["reason"] for e in entries] == ["PURCHASE"]
     assert _sum_between(entries, "PURCHASE", a, b) == Decimal("5.00")
 
 
+async def test_personal_item_never_freezes_or_posts(api_client, provision) -> None:
+    household = await provision(2)
+    item = await _create_item(api_client, household, quantity="5", cost="9.99",
+                               allowed_member_indices=[0], accounting_type="PERSONAL")
+
+    consume = await _consume(api_client, household, item["id"], 0, "5")
+    assert consume.status_code == 200, consume.text
+    assert consume.json()["data"]["status"] == "EMPTY"
+    assert consume.json()["data"]["debt_frozen_at"] is None
+
+    entries = await _entries(api_client, household)
+    assert entries == []
+
+
 async def test_zero_cost_item_produces_no_entries(api_client, provision) -> None:
     household = await provision(2)
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="10",
-        cost="0",
-        allowed_member_indices=[0, 1],
-        accounting_type="UNIT_BASED",
-    )
+    item = await _create_item(api_client, household, quantity="10", cost="0",
+                               allowed_member_indices=[0, 1])
 
-    consume = await _consume(api_client, household, item["id"], 1, "10")
-    assert consume.status_code == 200, consume.text
+    discard = await _discard(api_client, household, item["id"])
+    assert discard.status_code == 200, discard.text
 
     entries = await _entries(api_client, household)
     assert entries == []
@@ -343,14 +342,8 @@ async def test_zero_cost_item_produces_no_entries(api_client, provision) -> None
 
 async def test_single_allowed_member_produces_no_entries(api_client, provision) -> None:
     household = await provision(2)
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="10",
-        cost="10.00",
-        allowed_member_indices=[0],
-        accounting_type="UNIT_BASED",
-    )
+    item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                               allowed_member_indices=[0])
 
     consume = await _consume(api_client, household, item["id"], 0, "10")
     assert consume.status_code == 200, consume.text
@@ -360,149 +353,121 @@ async def test_single_allowed_member_produces_no_entries(api_client, provision) 
 
 
 # ---------------------------------------------------------------------------
-# Concurrency and path-dependence
+# Live editing vs. post-freeze corrections
 # ---------------------------------------------------------------------------
 
 
-async def test_concurrent_consumption_total_overage_conserved(api_client, provision) -> None:
-    """3 members, UNIT_BASED, cost=12/qty=12 -> $1/unit, allotment=4 each.
-    B and C each consume 6 concurrently (2 over their own allotment) -- who
-    ends up as creditor for which slice is order-dependent (see the pinned
-    regression test below), but the *total* money moved via OVERAGE is not:
-    each member's own overage_qty only depends on their own prior usage
-    (which starts at 0 for both, regardless of interleaving), so the total
-    is always 2 events * $2.00 = $4.00."""
-    household = await provision(3)
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="12",
-        cost="12.00",
-        allowed_member_indices=[0, 1, 2],
-        accounting_type="UNIT_BASED",
-    )
-
-    results = await asyncio.gather(
-        _consume(api_client, household, item["id"], 1, "6"),
-        _consume(api_client, household, item["id"], 2, "6"),
-    )
-    assert [r.status_code for r in results] == [200, 200], [r.text for r in results]
-
-    entries = await _entries(api_client, household)
-    total_overage = sum(
-        (Decimal(e["amount"]) for e in entries if e["reason"] == "OVERAGE"), Decimal(0)
-    )
-    assert total_overage == Decimal("4.00")
-
-    final_item = await api_client.get(
-        f"/api/households/{household['household_id']}/inventory-items/{item['id']}",
-        headers=household["headers"][0],
-    )
-    assert Decimal(final_item.json()["data"]["quantity"]) == Decimal("0")
-
-
-async def test_path_dependence_pinned_regression(api_client, provision) -> None:
-    """Documented, intentional quirk: slack is recomputed fresh at each
-    event from *current* cumulative usage, not reduced by previously
-    donated credit. Two households, same final consumption (B=5, C=4) in
-    different orders, produce different total credit to A -- $2.00 vs
-    $2.50 -- even though total money moved is always fully accounted for
-    and never exceeds any member's true slack. This is accepted, not a bug
-    (see migration 0009's comments); pinned here so a future change to the
-    settlement formula can't silently alter it without this test noticing.
-    """
-    # Order 1: B (5) then C (4).
-    household1 = await provision(3)
-    a1, b1, c1 = household1["member_ids"]
-    item1 = await _create_item(
-        api_client,
-        household1,
-        quantity="9",
-        cost="9.00",
-        allowed_member_indices=[0, 1, 2],
-        accounting_type="UNIT_BASED",
-    )
-    assert (await _consume(api_client, household1, item1["id"], 1, "5")).status_code == 200
-    assert (await _consume(api_client, household1, item1["id"], 2, "4")).status_code == 200
-    entries1 = await _entries(api_client, household1)
-    credit_to_a1 = sum(
-        (
-            Decimal(e["amount"])
-            for e in entries1
-            if e["reason"] == "OVERAGE" and e["creditor_member_id"] == a1
-        ),
-        Decimal(0),
-    )
-
-    # Order 2: C (4) then B (5) -- same final consumption, opposite order.
-    household2 = await provision(3)
-    a2, b2, c2 = household2["member_ids"]
-    item2 = await _create_item(
-        api_client,
-        household2,
-        quantity="9",
-        cost="9.00",
-        allowed_member_indices=[0, 1, 2],
-        accounting_type="UNIT_BASED",
-    )
-    assert (await _consume(api_client, household2, item2["id"], 2, "4")).status_code == 200
-    assert (await _consume(api_client, household2, item2["id"], 1, "5")).status_code == 200
-    entries2 = await _entries(api_client, household2)
-    credit_to_a2 = sum(
-        (
-            Decimal(e["amount"])
-            for e in entries2
-            if e["reason"] == "OVERAGE" and e["creditor_member_id"] == a2
-        ),
-        Decimal(0),
-    )
-
-    assert credit_to_a1 == Decimal("2.00")
-    assert credit_to_a2 == Decimal("2.50")
-    assert credit_to_a1 != credit_to_a2
-
-
-# ---------------------------------------------------------------------------
-# Finalization, immutability, single-writer, roster freeze
-# ---------------------------------------------------------------------------
-
-
-async def test_finalization_is_noop(api_client, provision) -> None:
+async def test_direct_edit_allowed_live_blocked_once_frozen(api_client, provision) -> None:
     household = await provision(2)
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="10",
-        cost="10.00",
-        allowed_member_indices=[0, 1],
-        accounting_type="UNIT_BASED",
-    )
-    assert (await _consume(api_client, household, item["id"], 1, "8")).status_code == 200
+    item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                               allowed_member_indices=[0, 1])
 
-    before = await _entries(api_client, household)
+    live_edit = await _patch(api_client, household, item["id"], {"cost": "12.00"})
+    assert live_edit.status_code == 200, live_edit.text
+    assert live_edit.json()["data"]["cost"] == "12.0"
 
-    discard = await api_client.delete(
-        f"/api/households/{household['household_id']}/inventory-items/{item['id']}",
-        params={"reason": "DISCARDED"},
-        headers=household["headers"][0],
-    )
+    discard = await _discard(api_client, household, item["id"])
     assert discard.status_code == 200, discard.text
 
+    frozen_edit = await _patch(api_client, household, item["id"], {"cost": "20.00"})
+    assert frozen_edit.status_code == 409, frozen_edit.text
+
+
+async def test_correction_rejected_before_freeze(api_client, provision) -> None:
+    household = await provision(2)
+    item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                               allowed_member_indices=[0, 1])
+
+    correction = await _correct(api_client, household, item["id"], new_cost="5.00")
+    assert correction.status_code == 400, correction.text
+
+
+async def test_correction_adjusts_only_the_member_whose_usage_drove_the_original_split(
+    api_client, provision
+) -> None:
+    """Regression test for a real bug caught in manual testing: the
+    correction endpoint used to split a cost delta evenly across the whole
+    roster, ignoring who actually drove the original bill. It must instead
+    re-run the split against the item's real recorded usage, so a price
+    correction only moves the share of whoever was actually over their
+    allotment.
+
+    3 members (buyer A, B, C), qty=12/cost=12.00 -> $1/unit, allotment=4
+    each. B uses 8 (over allotment, locks at real usage); C never
+    documents anything and settles at whatever's left ($0, since B's 8 plus
+    A's assumed 4 already accounts for the full 12). A -3.00 cost
+    correction should move only B's PURCHASE-derived debt -- C, who was
+    never billed anything, must not receive any ADJUSTMENT entry at all.
+    """
+    household = await provision(3)
+    a, b, c = household["member_ids"]
+    item = await _create_item(api_client, household, quantity="12", cost="12.00",
+                               allowed_member_indices=[0, 1, 2])
+
+    assert (await _consume(api_client, household, item["id"], 0, "4")).status_code == 200
+    drain = await _consume(api_client, household, item["id"], 1, "8")
+    assert drain.status_code == 200
+    assert drain.json()["data"]["status"] == "EMPTY"
+
+    before = await _entries(api_client, household)
+    assert _sum_between(before, "PURCHASE", a, b) == Decimal("8.0")
+    assert _sum_between(before, "PURCHASE", a, c) == Decimal("0")
+
+    correction = await _correct(api_client, household, item["id"], new_cost="9.00")
+    assert correction.status_code == 200, correction.text
+
     after = await _entries(api_client, household)
-    assert before == after
+    adjustments = [e for e in after if e["reason"] == "ADJUSTMENT"]
+    assert len(adjustments) == 1
+    assert adjustments[0]["creditor_member_id"] == b
+    assert adjustments[0]["debtor_member_id"] == a
+    assert Decimal(adjustments[0]["amount"]) == Decimal("2.0")
+
+    balances = await _balances(api_client, household)
+    assert _net(balances, b, a) == Decimal("6.0")
+    assert _net(balances, c, a) == Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# Concurrency and immutability
+# ---------------------------------------------------------------------------
+
+
+async def test_concurrent_discard_freezes_exactly_once(api_client, provision) -> None:
+    """Two requests racing to discard the same still-ACTIVE item must not
+    both win: freeze_item_debt() claims the freeze with a compare-and-swap
+    on debt_frozen_at (only-if-still-null) before posting anything, mirroring
+    the atomic `.eq("status", "ACTIVE")` guard discard() itself already
+    uses. Without that guard, both requests could independently observe the
+    item as no-longer-ACTIVE and each post their own copy of the same
+    PURCHASE entries -- silently doubling everyone's debt."""
+    household = await provision(2)
+    a, b = household["member_ids"]
+    item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                               allowed_member_indices=[0, 1])
+    assert (await _consume(api_client, household, item["id"], 1, "8")).status_code == 200
+
+    results = await asyncio.gather(
+        _discard(api_client, household, item["id"]),
+        _discard(api_client, household, item["id"]),
+    )
+    statuses = sorted(r.status_code for r in results)
+    # Exactly one wins the atomic ACTIVE->DISCARDED transition; the other
+    # finds nothing left to discard.
+    assert statuses == [200, 404], [r.text for r in results]
+
+    entries = await _entries(api_client, household)
+    purchase_entries = [e for e in entries if e["reason"] == "PURCHASE"]
+    assert len(purchase_entries) == 1
+    assert _sum_between(entries, "PURCHASE", a, b) == Decimal("8.00")
 
 
 async def test_ledger_entries_are_immutable(api_client, provision) -> None:
     settings = get_settings()
     household = await provision(2)
-    await _create_item(
-        api_client,
-        household,
-        quantity="10",
-        cost="10.00",
-        allowed_member_indices=[0, 1],
-        accounting_type="UNIT_BASED",
-    )
+    item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                               allowed_member_indices=[0, 1])
+    assert (await _discard(api_client, household, item["id"])).status_code == 200
     entries = await _entries(api_client, household)
     entry_id = entries[0]["id"]
 
@@ -544,68 +509,60 @@ async def test_ledger_single_writer_direct_insert_rejected(api_client, provision
     assert response.status_code in (401, 403)
 
 
-async def test_roster_frozen_for_non_personal_but_free_for_personal(api_client, provision) -> None:
+async def test_roster_editable_while_live_frozen_once_debt_finalized(
+    api_client, provision
+) -> None:
+    """SHARED roster edits are free while the item's debt is still live
+    (nothing posted yet, so nothing to protect), but blocked once frozen,
+    same as cost/quantity. PERSONAL items stay free forever regardless.
+
+    Checked via INSERT (a WITH CHECK failure is a real 401/403), not
+    DELETE -- an RLS-blocked DELETE just matches zero rows and still
+    returns 204, so it can't distinguish "blocked" from "nothing to
+    delete" the way a blocked INSERT can.
+    """
     settings = get_settings()
     household = await provision(3)
 
-    unit_based_item = await _create_item(
-        api_client,
-        household,
-        quantity="10",
-        cost="10.00",
-        allowed_member_indices=[0, 1],
-        accounting_type="UNIT_BASED",
-    )
-    personal_item = await _create_item(
-        api_client,
-        household,
-        quantity="10",
-        cost="10.00",
-        allowed_member_indices=[0],
-        accounting_type="PERSONAL",
-    )
+    live_item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                                    allowed_member_indices=[0, 1])
+    frozen_item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                                      allowed_member_indices=[0, 1])
+    personal_item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                                        allowed_member_indices=[0], accounting_type="PERSONAL")
+    assert (await _discard(api_client, household, frozen_item["id"])).status_code == 200
 
-    async with httpx.AsyncClient(base_url=settings.supabase_url) as rest:
-        frozen_attempt = await rest.post(
-            "/rest/v1/inventory_item_allowed_members",
-            json={
-                "inventory_item_id": unit_based_item["id"],
-                "member_id": household["member_ids"][2],
-            },
-            headers={
-                "apikey": settings.supabase_anon_key,
-                "Authorization": household["headers"][0]["Authorization"],
-            },
-        )
-        free_attempt = await rest.post(
-            "/rest/v1/inventory_item_allowed_members",
-            json={
-                "inventory_item_id": personal_item["id"],
-                "member_id": household["member_ids"][1],
-            },
-            headers={
-                "apikey": settings.supabase_anon_key,
-                "Authorization": household["headers"][0]["Authorization"],
-                "Prefer": "return=representation",
-            },
-        )
+    async def _try_add(item_id: str, member_index: int) -> httpx.Response:
+        async with httpx.AsyncClient(base_url=settings.supabase_url) as rest:
+            return await rest.post(
+                "/rest/v1/inventory_item_allowed_members",
+                json={
+                    "inventory_item_id": item_id,
+                    "member_id": household["member_ids"][member_index],
+                },
+                headers={
+                    "apikey": settings.supabase_anon_key,
+                    "Authorization": household["headers"][0]["Authorization"],
+                    "Prefer": "return=representation",
+                },
+            )
 
-    assert frozen_attempt.status_code in (401, 403)
-    assert free_attempt.status_code == 201
+    live_attempt = await _try_add(live_item["id"], 2)
+    frozen_attempt = await _try_add(frozen_item["id"], 2)
+    personal_attempt = await _try_add(personal_item["id"], 1)
+
+    assert live_attempt.status_code == 201, live_attempt.text
+    assert frozen_attempt.status_code in (401, 403), frozen_attempt.text
+    assert personal_attempt.status_code == 201, personal_attempt.text
 
 
 async def test_balances_endpoint_reflects_net_amounts(api_client, provision) -> None:
     household = await provision(2)
     a, b = household["member_ids"]
-    item = await _create_item(
-        api_client,
-        household,
-        quantity="10",
-        cost="10.00",
-        allowed_member_indices=[0, 1],
-        accounting_type="UNIT_BASED",
-    )
+    item = await _create_item(api_client, household, quantity="10", cost="10.00",
+                               allowed_member_indices=[0, 1])
     assert (await _consume(api_client, household, item["id"], 1, "8")).status_code == 200
+    assert (await _discard(api_client, household, item["id"])).status_code == 200
 
     balances = await _balances(api_client, household)
     assert len(balances) == 1
