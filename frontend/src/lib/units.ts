@@ -1,36 +1,99 @@
-import type { Dimension, UnitSystem } from '../types/entities'
+import type { Dimension, Unit, UnitSystem } from '../types/entities'
+
+// Every unit in the closed vocabulary (mirrors backend/app/schemas/units.py's
+// Unit enum), grouped by dimension -- the source for every unit <select> in
+// the app (recipe ingredients, receipt review, new-food-type creation).
+export const UNITS_BY_DIMENSION: Record<Dimension, Unit[]> = {
+  WEIGHT: ['g', 'kg', 'oz', 'lb'],
+  VOLUME: ['ml', 'l', 'tsp', 'tbsp', 'fl_oz', 'cup', 'pt', 'qt', 'gal'],
+  COUNT: ['count'],
+}
+
+export const ALL_UNITS: Unit[] = [
+  ...UNITS_BY_DIMENSION.WEIGHT,
+  ...UNITS_BY_DIMENSION.VOLUME,
+  ...UNITS_BY_DIMENSION.COUNT,
+]
+
+// Display label for each unit -- short, since these show up inline next to
+// a quantity ("2 fl oz"), not spelled out in full ("2 fluid ounces").
+export const UNIT_LABELS: Record<Unit, string> = {
+  g: 'g',
+  kg: 'kg',
+  oz: 'oz',
+  lb: 'lb',
+  ml: 'ml',
+  l: 'l',
+  tsp: 'tsp',
+  tbsp: 'tbsp',
+  fl_oz: 'fl oz',
+  cup: 'cup',
+  pt: 'pt',
+  qt: 'qt',
+  gal: 'gal',
+  count: 'count',
+}
+
+const UNIT_DIMENSION: Record<Unit, Dimension> = {
+  g: 'WEIGHT',
+  kg: 'WEIGHT',
+  oz: 'WEIGHT',
+  lb: 'WEIGHT',
+  ml: 'VOLUME',
+  l: 'VOLUME',
+  tsp: 'VOLUME',
+  tbsp: 'VOLUME',
+  fl_oz: 'VOLUME',
+  cup: 'VOLUME',
+  pt: 'VOLUME',
+  qt: 'VOLUME',
+  gal: 'VOLUME',
+  count: 'COUNT',
+}
+
+// COUNT deliberately absent -- no metric/customary distinction.
+const UNIT_SYSTEM: Partial<Record<Unit, UnitSystem>> = {
+  g: 'METRIC',
+  kg: 'METRIC',
+  ml: 'METRIC',
+  l: 'METRIC',
+  oz: 'CUSTOMARY',
+  lb: 'CUSTOMARY',
+  tsp: 'CUSTOMARY',
+  tbsp: 'CUSTOMARY',
+  fl_oz: 'CUSTOMARY',
+  cup: 'CUSTOMARY',
+  pt: 'CUSTOMARY',
+  qt: 'CUSTOMARY',
+  gal: 'CUSTOMARY',
+}
 
 // Mirrors backend/app/services/units.py's CANONICAL_UNIT -- the one unit the
 // Add Item picker itself ever writes for each (dimension, system) pair. Kept
 // deliberately small (one unit per pair, not e.g. a g-vs-kg choice within
 // metric) so the picker is just two toggles: Weight/Volume/Count and
 // Metric/Customary.
-export const CANONICAL_UNIT: Record<Dimension, Record<UnitSystem, string> | null> = {
+export const CANONICAL_UNIT: Record<Dimension, Record<UnitSystem, Unit> | null> = {
   WEIGHT: { METRIC: 'g', CUSTOMARY: 'oz' },
   VOLUME: { METRIC: 'ml', CUSTOMARY: 'cup' },
   COUNT: null,
 }
 
-export function resolveUnit(dimension: Dimension, system: UnitSystem | null): string {
+export function resolveUnit(dimension: Dimension, system: UnitSystem | null): Unit {
   if (dimension === 'COUNT') return 'count'
   return CANONICAL_UNIT[dimension]![system ?? 'CUSTOMARY']
 }
 
-// The reverse of resolveUnit -- only needs to recognize the five canonical
-// units the picker itself ever writes (unlike the backend's units.py, which
-// also has to make sense of older/foreign free-text units).
-export function guessDimension(unit: string): Dimension {
-  const key = unit.trim().toLowerCase()
-  if (key === 'g' || key === 'oz') return 'WEIGHT'
-  if (key === 'ml' || key === 'cup') return 'VOLUME'
-  return 'COUNT'
+// Every Unit has exactly one, fixed dimension/system -- these are plain
+// lookups, not guesses, now that unit fields are a closed enum instead of
+// free text (kept under their original names to avoid churning every call
+// site written when this genuinely did guess at free text).
+export function guessDimension(unit: Unit): Dimension {
+  return UNIT_DIMENSION[unit]
 }
 
-export function guessSystem(unit: string): UnitSystem | null {
-  const key = unit.trim().toLowerCase()
-  if (key === 'g' || key === 'ml') return 'METRIC'
-  if (key === 'oz' || key === 'cup') return 'CUSTOMARY'
-  return null
+export function guessSystem(unit: Unit): UnitSystem | null {
+  return UNIT_SYSTEM[unit] ?? null
 }
 
 export const DIMENSION_LABELS: Record<Dimension, string> = {

@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from app.schemas.receipt_import import ParsedReceiptItem
+from app.schemas.units import Unit
 from app.services import receipt_imports as receipt_imports_service
 from app.services.ai.base import AiProviderTimeoutError, AiProviderUnavailableError
 
@@ -16,7 +17,11 @@ def test_ai_items_to_parsed_lines_converts_valid_items() -> None:
     assert line.parsed_name == "Whole Milk"
     assert line.parsed_price == Decimal("4.99")
     assert line.parsed_quantity == Decimal("1")
+    # parsed_unit keeps the AI's raw guess verbatim; preferred_unit is the
+    # same guess coerced against the closed Unit vocabulary -- "gal" matches
+    # a real unit now (it didn't before this app tracked gallons).
     assert line.parsed_unit == "gal"
+    assert line.preferred_unit == Unit.GAL
 
 
 def test_ai_items_to_parsed_lines_strips_currency_symbol_and_commas() -> None:
@@ -38,9 +43,7 @@ def test_parse_receipt_lines_falls_back_to_regex_when_nothing_survives_coercion(
         def parse_receipt_items(self, raw_text: str) -> list[ParsedReceiptItem]:
             return [ParsedReceiptItem(name="Whole Milk", price="not-a-number-even-after-stripping")]
 
-    monkeypatch.setattr(
-        "app.services.receipt_imports.get_ai_provider", lambda: GarbledProvider()
-    )
+    monkeypatch.setattr("app.services.receipt_imports.get_ai_provider", lambda: GarbledProvider())
 
     lines = receipt_imports_service._parse_receipt_lines("WHOLE MILK 4.99\nSUBTOTAL 4.99")
 
@@ -75,9 +78,7 @@ def test_parse_receipt_lines_uses_ai_result_when_available(monkeypatch) -> None:
         def parse_receipt_items(self, raw_text: str) -> list[ParsedReceiptItem]:
             return [ParsedReceiptItem(name="Whole Milk", price="4.99")]
 
-    monkeypatch.setattr(
-        "app.services.receipt_imports.get_ai_provider", lambda: FakeProvider()
-    )
+    monkeypatch.setattr("app.services.receipt_imports.get_ai_provider", lambda: FakeProvider())
 
     lines = receipt_imports_service._parse_receipt_lines("WHOLE MILK 4.99")
 
@@ -102,9 +103,7 @@ def test_parse_receipt_lines_falls_back_to_regex_on_ai_timeout(monkeypatch) -> N
         def parse_receipt_items(self, raw_text: str) -> list[ParsedReceiptItem]:
             raise AiProviderTimeoutError("took too long")
 
-    monkeypatch.setattr(
-        "app.services.receipt_imports.get_ai_provider", lambda: SlowProvider()
-    )
+    monkeypatch.setattr("app.services.receipt_imports.get_ai_provider", lambda: SlowProvider())
 
     lines = receipt_imports_service._parse_receipt_lines("WHOLE MILK 4.99\nSUBTOTAL 4.99")
 

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, TriangleAlert } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { Modal } from '../../components/Modal'
 import { WarningCounts } from '../../components/WarningCounts'
+import { UNIT_LABELS } from '../../lib/units'
 import type { ExpiryWarning, StockWarning } from '../../types/entities'
 
 interface Props {
@@ -112,7 +113,7 @@ export function WarningsButton({ householdId, stockWarnings, expiryWarnings, onI
           // alone isn't a unique key here.
           key: `${w.household_food_variant_id}-${w.preferred_unit}`,
           name: w.food_name,
-          description: `You had ${w.reference_quantity} ${w.preferred_unit} last time -- none left now.`,
+          description: `You had ${w.reference_quantity} ${UNIT_LABELS[w.preferred_unit]} last time -- none left now.`,
           onIgnore: () => ignoreStock(w.household_food_variant_id, w.preferred_unit),
         })),
       LOW_STOCK: stockWarnings
@@ -120,7 +121,7 @@ export function WarningsButton({ householdId, stockWarnings, expiryWarnings, onI
         .map((w) => ({
           key: `${w.household_food_variant_id}-${w.preferred_unit}`,
           name: w.food_name,
-          description: `${w.remaining_quantity} ${w.preferred_unit} left, out of ${w.reference_quantity} last purchased.`,
+          description: `${w.remaining_quantity} ${UNIT_LABELS[w.preferred_unit]} left, out of ${w.reference_quantity} last purchased.`,
           onIgnore: () => ignoreStock(w.household_food_variant_id, w.preferred_unit),
         })),
       EXPIRED: expiryWarnings
@@ -168,9 +169,7 @@ export function WarningsButton({ householdId, stockWarnings, expiryWarnings, onI
       {open && (
         <Modal title="Warnings" onClose={() => setOpen(false)}>
           {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}
-          {!hasWarnings && (
-            <p className="text-sm text-muted">No warnings right now.</p>
-          )}
+          {!hasWarnings && <p className="text-sm text-muted">No warnings right now.</p>}
           <div className="flex max-h-[70vh] flex-col gap-2 overflow-y-auto">
             {GROUP_ORDER.filter((key) => groups[key].length > 0).map((key) => {
               const rows = groups[key]

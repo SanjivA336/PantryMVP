@@ -7,6 +7,7 @@ import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { FOOD_CATEGORY_LABELS } from '../../lib/foodCategories'
 import {
   DIMENSION_LABELS,
+  UNIT_LABELS,
   UNIT_SYSTEM_LABELS,
   guessDimension,
   guessSystem,
@@ -340,7 +341,7 @@ function CostAndQuantitySection({
           />
         </div>
         <div className="flex-1">
-          <label className={fieldLabelClass}>Amount ({item.preferred_unit})</label>
+          <label className={fieldLabelClass}>Amount ({UNIT_LABELS[item.preferred_unit]})</label>
           <input
             type="number"
             step="any"
@@ -368,7 +369,7 @@ function CostAndQuantitySection({
         <div className="flex-1">
           <label className={fieldLabelClass}>Amount</label>
           <p className="text-text">
-            {item.total_quantity} {item.preferred_unit}
+            {item.total_quantity} {UNIT_LABELS[item.preferred_unit]}
           </p>
         </div>
       </div>

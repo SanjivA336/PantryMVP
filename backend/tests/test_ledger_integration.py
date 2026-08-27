@@ -139,7 +139,7 @@ async def _create_item(
             "global_food_definition_id": milk_id,
             "storage_location_id": household["storage_location_id"],
             "quantity": quantity,
-            "preferred_unit": "unit",
+            "preferred_unit": "count",
             "cost": cost,
             "allowed_member_ids": [household["member_ids"][i] for i in allowed_member_indices],
             "accounting_type": accounting_type,
@@ -247,8 +247,9 @@ async def test_item_creation_posts_nothing(api_client, provision) -> None:
     not touch the ledger at all -- nothing is owed until the item's story
     ends."""
     household = await provision(2)
-    item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                               allowed_member_indices=[0, 1])
+    item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0, 1]
+    )
     assert item["debt_frozen_at"] is None
 
     entries = await _entries(api_client, household)
@@ -265,8 +266,9 @@ async def test_live_preview_matches_frozen_result_exactly(api_client, provision)
     change from the user's point of view when the item's story ends."""
     household = await provision(4)
     a, b, c, d = household["member_ids"]
-    item = await _create_item(api_client, household, quantity="12", cost="12.00",
-                               allowed_member_indices=[0, 1, 2, 3])
+    item = await _create_item(
+        api_client, household, quantity="12", cost="12.00", allowed_member_indices=[0, 1, 2, 3]
+    )
 
     assert (await _consume(api_client, household, item["id"], 0, "4")).status_code == 200
 
@@ -303,8 +305,9 @@ async def test_undocumented_usage_splits_the_remaining_allotment_evenly(
     consuming) still has to freeze a real, equal-split debt."""
     household = await provision(2)
     a, b = household["member_ids"]
-    item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                               allowed_member_indices=[0, 1])
+    item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0, 1]
+    )
 
     discard = await _discard(api_client, household, item["id"])
     assert discard.status_code == 200, discard.text
@@ -316,8 +319,14 @@ async def test_undocumented_usage_splits_the_remaining_allotment_evenly(
 
 async def test_personal_item_never_freezes_or_posts(api_client, provision) -> None:
     household = await provision(2)
-    item = await _create_item(api_client, household, quantity="5", cost="9.99",
-                               allowed_member_indices=[0], accounting_type="PERSONAL")
+    item = await _create_item(
+        api_client,
+        household,
+        quantity="5",
+        cost="9.99",
+        allowed_member_indices=[0],
+        accounting_type="PERSONAL",
+    )
 
     consume = await _consume(api_client, household, item["id"], 0, "5")
     assert consume.status_code == 200, consume.text
@@ -330,8 +339,9 @@ async def test_personal_item_never_freezes_or_posts(api_client, provision) -> No
 
 async def test_zero_cost_item_produces_no_entries(api_client, provision) -> None:
     household = await provision(2)
-    item = await _create_item(api_client, household, quantity="10", cost="0",
-                               allowed_member_indices=[0, 1])
+    item = await _create_item(
+        api_client, household, quantity="10", cost="0", allowed_member_indices=[0, 1]
+    )
 
     discard = await _discard(api_client, household, item["id"])
     assert discard.status_code == 200, discard.text
@@ -342,8 +352,9 @@ async def test_zero_cost_item_produces_no_entries(api_client, provision) -> None
 
 async def test_single_allowed_member_produces_no_entries(api_client, provision) -> None:
     household = await provision(2)
-    item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                               allowed_member_indices=[0])
+    item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0]
+    )
 
     consume = await _consume(api_client, household, item["id"], 0, "10")
     assert consume.status_code == 200, consume.text
@@ -359,8 +370,9 @@ async def test_single_allowed_member_produces_no_entries(api_client, provision) 
 
 async def test_direct_edit_allowed_live_blocked_once_frozen(api_client, provision) -> None:
     household = await provision(2)
-    item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                               allowed_member_indices=[0, 1])
+    item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0, 1]
+    )
 
     live_edit = await _patch(api_client, household, item["id"], {"cost": "12.00"})
     assert live_edit.status_code == 200, live_edit.text
@@ -375,8 +387,9 @@ async def test_direct_edit_allowed_live_blocked_once_frozen(api_client, provisio
 
 async def test_correction_rejected_before_freeze(api_client, provision) -> None:
     household = await provision(2)
-    item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                               allowed_member_indices=[0, 1])
+    item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0, 1]
+    )
 
     correction = await _correct(api_client, household, item["id"], new_cost="5.00")
     assert correction.status_code == 400, correction.text
@@ -401,8 +414,9 @@ async def test_correction_adjusts_only_the_member_whose_usage_drove_the_original
     """
     household = await provision(3)
     a, b, c = household["member_ids"]
-    item = await _create_item(api_client, household, quantity="12", cost="12.00",
-                               allowed_member_indices=[0, 1, 2])
+    item = await _create_item(
+        api_client, household, quantity="12", cost="12.00", allowed_member_indices=[0, 1, 2]
+    )
 
     assert (await _consume(api_client, household, item["id"], 0, "4")).status_code == 200
     drain = await _consume(api_client, household, item["id"], 1, "8")
@@ -443,8 +457,9 @@ async def test_concurrent_discard_freezes_exactly_once(api_client, provision) ->
     PURCHASE entries -- silently doubling everyone's debt."""
     household = await provision(2)
     a, b = household["member_ids"]
-    item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                               allowed_member_indices=[0, 1])
+    item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0, 1]
+    )
     assert (await _consume(api_client, household, item["id"], 1, "8")).status_code == 200
 
     results = await asyncio.gather(
@@ -465,8 +480,9 @@ async def test_concurrent_discard_freezes_exactly_once(api_client, provision) ->
 async def test_ledger_entries_are_immutable(api_client, provision) -> None:
     settings = get_settings()
     household = await provision(2)
-    item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                               allowed_member_indices=[0, 1])
+    item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0, 1]
+    )
     assert (await _discard(api_client, household, item["id"])).status_code == 200
     entries = await _entries(api_client, household)
     entry_id = entries[0]["id"]
@@ -509,9 +525,7 @@ async def test_ledger_single_writer_direct_insert_rejected(api_client, provision
     assert response.status_code in (401, 403)
 
 
-async def test_roster_editable_while_live_frozen_once_debt_finalized(
-    api_client, provision
-) -> None:
+async def test_roster_editable_while_live_frozen_once_debt_finalized(api_client, provision) -> None:
     """SHARED roster edits are free while the item's debt is still live
     (nothing posted yet, so nothing to protect), but blocked once frozen,
     same as cost/quantity. PERSONAL items stay free forever regardless.
@@ -524,12 +538,20 @@ async def test_roster_editable_while_live_frozen_once_debt_finalized(
     settings = get_settings()
     household = await provision(3)
 
-    live_item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                                    allowed_member_indices=[0, 1])
-    frozen_item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                                      allowed_member_indices=[0, 1])
-    personal_item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                                        allowed_member_indices=[0], accounting_type="PERSONAL")
+    live_item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0, 1]
+    )
+    frozen_item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0, 1]
+    )
+    personal_item = await _create_item(
+        api_client,
+        household,
+        quantity="10",
+        cost="10.00",
+        allowed_member_indices=[0],
+        accounting_type="PERSONAL",
+    )
     assert (await _discard(api_client, household, frozen_item["id"])).status_code == 200
 
     async def _try_add(item_id: str, member_index: int) -> httpx.Response:
@@ -559,8 +581,9 @@ async def test_roster_editable_while_live_frozen_once_debt_finalized(
 async def test_balances_endpoint_reflects_net_amounts(api_client, provision) -> None:
     household = await provision(2)
     a, b = household["member_ids"]
-    item = await _create_item(api_client, household, quantity="10", cost="10.00",
-                               allowed_member_indices=[0, 1])
+    item = await _create_item(
+        api_client, household, quantity="10", cost="10.00", allowed_member_indices=[0, 1]
+    )
     assert (await _consume(api_client, household, item["id"], 1, "8")).status_code == 200
     assert (await _discard(api_client, household, item["id"])).status_code == 200
 

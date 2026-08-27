@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Clock } from 'lucide-react'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { CategoryDot } from '../../components/CategoryDot'
+import { UNIT_LABELS } from '../../lib/units'
 import type { InventoryItem, InventoryItemStatus } from '../../types/entities'
 
 // Not an audit log -- a browsable ledger of every purchase ever logged for
@@ -28,7 +29,11 @@ function formatDate(iso: string): string {
 
 export function HistoryPage() {
   const { householdId } = useParams<{ householdId: string }>()
-  const { data: items, loading, error } = useHouseholdResource<InventoryItem[]>(
+  const {
+    data: items,
+    loading,
+    error,
+  } = useHouseholdResource<InventoryItem[]>(
     householdId ? `/api/households/${householdId}/inventory-items` : null,
   )
   const [search, setSearch] = useState('')
@@ -79,7 +84,7 @@ export function HistoryPage() {
                   <div className="min-w-0">
                     <p className="truncate font-medium">{item.food_name}</p>
                     <p className="text-xs text-faint">
-                      {item.total_quantity} {item.preferred_unit} · ${item.cost} ·{' '}
+                      {item.total_quantity} {UNIT_LABELS[item.preferred_unit]} · ${item.cost} ·{' '}
                       {formatDate(item.purchased_at)}
                     </p>
                   </div>

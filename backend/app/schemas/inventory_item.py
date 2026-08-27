@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.food_definition import AccountingType, FoodCategory
+from app.schemas.units import Unit
 
 
 class InventoryItemStatus(StrEnum):
@@ -34,7 +35,7 @@ class InventoryItem(BaseModel):
     purchase_event_id: UUID
     quantity: Decimal
     total_quantity: Decimal
-    preferred_unit: str
+    preferred_unit: Unit
     cost: Decimal
     purchased_at: datetime
     expiry_date: date | None
@@ -81,7 +82,7 @@ class CreateInventoryItemRequest(BaseModel):
     global_food_definition_id: UUID
     storage_location_id: UUID
     quantity: Decimal = Field(gt=0)
-    preferred_unit: str = Field(min_length=1, max_length=20)
+    preferred_unit: Unit
     cost: Decimal = Field(default=Decimal(0), ge=0)
     expiry_date: date | None = None
     best_by_date: date | None = None
@@ -123,7 +124,7 @@ class UpdateInventoryItemRequest(BaseModel):
     # Same-dimension system swap only (e.g. oz -> g) -- resolved server-side
     # against the food's dimension; never a dimension change, since that's
     # tied to the food type itself, which isn't editable here.
-    preferred_unit: str | None = Field(default=None, min_length=1, max_length=20)
+    preferred_unit: Unit | None = None
     cost: Decimal | None = Field(default=None, ge=0)
     total_quantity: Decimal | None = Field(default=None, gt=0)
     allowed_member_ids: list[UUID] | None = Field(default=None, min_length=1)

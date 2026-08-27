@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.units import Unit
+
 
 class AccountingType(StrEnum):
     # The one split rule for anyone but a solo owner -- an equal allotment
@@ -32,7 +34,7 @@ class FoodCategory(StrEnum):
 class FoodDefinition(BaseModel):
     id: UUID
     name: str
-    preferred_unit: str
+    preferred_unit: Unit
     category: FoodCategory
     accounting_type_default: AccountingType
     shelf_life_days: int | None
@@ -48,7 +50,7 @@ class FoodDefinition(BaseModel):
 
 class CreateFoodDefinitionRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    preferred_unit: str = Field(min_length=1, max_length=20)
+    preferred_unit: Unit
     category: FoodCategory = FoodCategory.OTHER
     accounting_type_default: AccountingType = AccountingType.SHARED
     shelf_life_days: int | None = Field(default=None, gt=0)

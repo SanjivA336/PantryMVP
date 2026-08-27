@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.core.supabase import get_service_client
 from app.schemas.inventory_item import InventoryItem
-from app.schemas.units import Dimension
+from app.schemas.units import Dimension, Unit
 from app.schemas.warning import (
     ExpiryWarning,
     ExpiryWarningType,
@@ -202,7 +202,7 @@ def ignore_expiry_warning(household_id: UUID, inventory_item_id: UUID) -> None:
 
 
 def ignore_stock_warning(
-    household_id: UUID, household_food_variant_id: UUID, reference_unit: str
+    household_id: UUID, household_food_variant_id: UUID, reference_unit: Unit
 ) -> None:
     """Ignores the warning as computed *right now* -- keyed to today's
     reference purchase, not the variant alone, so a later restock (which
@@ -241,7 +241,7 @@ def ignore_stock_warning(
         {
             "household_id": str(household_id),
             "household_food_variant_id": str(household_food_variant_id),
-            "reference_unit": most_recent.preferred_unit,
+            "reference_unit": most_recent.preferred_unit.value,
             "reference_purchased_at": most_recent.purchased_at.isoformat(),
         }
     ).execute()

@@ -121,9 +121,9 @@ def test_falls_back_to_catalog_dimension_and_household_default_when_never_tracke
 ) -> None:
     monkeypatch.setattr(inventory_service, "get_service_client", lambda: _FakeClient(None))
     monkeypatch.setattr(
-        inventory_service.food_definitions_service, "get_by_id", lambda fid: _food(
-            preferred_unit="ml"
-        )
+        inventory_service.food_definitions_service,
+        "get_by_id",
+        lambda fid: _food(preferred_unit="ml"),
     )
     monkeypatch.setattr(
         inventory_service.households_service,
@@ -144,9 +144,9 @@ def test_falls_back_to_catalog_dimension_and_household_default_when_never_tracke
 def test_falls_back_to_customary_household_default(monkeypatch) -> None:
     monkeypatch.setattr(inventory_service, "get_service_client", lambda: _FakeClient(None))
     monkeypatch.setattr(
-        inventory_service.food_definitions_service, "get_by_id", lambda fid: _food(
-            preferred_unit="g"
-        )
+        inventory_service.food_definitions_service,
+        "get_by_id",
+        lambda fid: _food(preferred_unit="g"),
     )
     monkeypatch.setattr(
         inventory_service.households_service,
@@ -159,26 +159,6 @@ def test_falls_back_to_customary_household_default(monkeypatch) -> None:
     assert preference.dimension == "WEIGHT"
     assert preference.unit_system == "CUSTOMARY"
     assert preference.unit == "oz"
-
-
-def test_unrecognized_catalog_unit_falls_back_to_count_with_no_system(monkeypatch) -> None:
-    monkeypatch.setattr(inventory_service, "get_service_client", lambda: _FakeClient(None))
-    monkeypatch.setattr(
-        inventory_service.food_definitions_service, "get_by_id", lambda fid: _food(
-            preferred_unit="stick"
-        )
-    )
-    monkeypatch.setattr(
-        inventory_service.households_service,
-        "get_household",
-        lambda hh: _household(preferred_unit_system="METRIC"),
-    )
-
-    preference = inventory_service.resolve_measurement_preference(uuid.uuid4(), uuid.uuid4())
-
-    assert preference.dimension == "COUNT"
-    assert preference.unit_system is None
-    assert preference.unit == "count"
 
 
 def test_remember_measurement_choice_records_dimension_and_system(monkeypatch) -> None:

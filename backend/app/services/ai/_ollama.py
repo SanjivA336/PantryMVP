@@ -13,12 +13,20 @@ from app.schemas.recipe_ai import (
     GenerateRecipeParams,
     SubstitutionSuggestion,
 )
+from app.schemas.units import Unit
 from app.services.ai.base import (
     AiOutputParsingError,
     AiProvider,
     AiProviderTimeoutError,
     AiProviderUnavailableError,
 )
+
+# Shared verbatim across every prompt below that asks the model for a unit,
+# so it always sees the exact same closed vocabulary instead of a vague
+# "a unit string" that the coercion in DraftRecipeIngredient/
+# SubstitutionSuggestion/ParsedReceiptItem would otherwise have to guess at
+# after the fact.
+_UNIT_VOCAB = '"' + '", "'.join(u.value for u in Unit) + '"'
 
 # Deliberately NO embedded example recipe in these prompts: an early version
 # included one, and llama2 would sometimes just echo the example back
@@ -28,47 +36,48 @@ from app.services.ai.base import (
 # with "the actual task" when the example looks like real output. A plain-
 # language schema description, with no JSON blob to latch onto, tests as
 # reliably following the real input instead.
-_PARSE_RECIPE_SYSTEM = """You are a recipe-extraction assistant. Given raw recipe
+_PARSE_RECIPE_SYSTEM = f"""You are a recipe-extraction assistant. Given raw recipe
 text, extract it into JSON with exactly these keys: "name" (string), "description"
 (string or null), "servings" (integer or null), "prep_time_minutes" (integer or
 null), "cook_time_minutes" (integer or null), "instructions" (array of short step
 strings, in order), "ingredients" (array of objects each with "name" (the food
 only, no quantity/unit baked in), "quantity" (a decimal number as a string --
-convert fractions like "1/2" to "0.5" -- or null if not stated), "unit" (string or
-null), "note" (string or null)). Extract from the ACTUAL recipe text the user
-provides. Respond with ONLY the JSON object. No commentary, no markdown fences.
-Do not put ingredient lines inside "instructions" -- ingredients belong only in
-the "ingredients" array. Do not prefix each instruction string with its own step
-number (e.g. "1.", "Step 2:") -- the array's order already conveys that."""
+convert fractions like "1/2" to "0.5" -- or null if not stated), "unit" (one of
+{_UNIT_VOCAB}, or null if not stated or if none of those fit), "note" (string or
+null)). Extract from the ACTUAL recipe text the user provides. Respond with ONLY
+the JSON object. No commentary, no markdown fences. Do not put ingredient lines
+inside "instructions" -- ingredients belong only in the "ingredients" array. Do
+not prefix each instruction string with its own step number (e.g. "1.",
+"Step 2:") -- the array's order already conveys that."""
 
-_GENERATE_RECIPE_SYSTEM = """You are a recipe-writing assistant. Invent an original
+_GENERATE_RECIPE_SYSTEM = f"""You are a recipe-writing assistant. Invent an original
 recipe matching the constraints the user gives you, as JSON with exactly these
 keys: "name" (string), "description" (string or null), "servings" (integer or
 null), "prep_time_minutes" (integer or null), "cook_time_minutes" (integer or
 null), "instructions" (array of short step strings, in order), "ingredients"
 (array of objects each with "name" (the food only, no quantity/unit baked in),
-"quantity" (a decimal number as a string, or null), "unit" (string or null),
-"note" (string or null)). Respond with ONLY the JSON object. No commentary, no
-markdown fences. Do not put ingredient lines inside "instructions" -- ingredients
-belong only in the "ingredients" array. Do not prefix each instruction string
-with its own step number (e.g. "1.", "Step 2:") -- the array's order already
-conveys that."""
+"quantity" (a decimal number as a string, or null), "unit" (one of {_UNIT_VOCAB},
+or null if none of those fit), "note" (string or null)). Respond with ONLY the
+JSON object. No commentary, no markdown fences. Do not put ingredient lines
+inside "instructions" -- ingredients belong only in the "ingredients" array. Do
+not prefix each instruction string with its own step number (e.g. "1.",
+"Step 2:") -- the array's order already conveys that."""
 
-_SUBSTITUTION_SYSTEM = """You are a cooking assistant suggesting ingredient
+_SUBSTITUTION_SYSTEM = f"""You are a cooking assistant suggesting ingredient
 substitutions. Given one ingredient (with its quantity and unit, if known) plus
 the rest of a recipe for context, respond with a JSON ARRAY (not a single object)
 of 3 to 5 substitution objects, each with "name" (string), "quantity" (a decimal
 number as a string, or null -- how much of the SUBSTITUTE is needed to match the
 original ingredient's contribution, which may differ from the original amount),
-"unit" (string or null -- the substitute's own natural unit, which may differ
-from the original ingredient's unit, e.g. counted vs weighed), and "note" (a
-short reason or usage tip, under 15 words, or null).
-Example shape only, do not copy this content: [{"name": "...", "quantity": "...",
-"unit": "...", "note": "..."}, {"name": "...", "quantity": "...", "unit": "...",
-"note": "..."}]. Respond with ONLY the JSON array. No commentary, no markdown
+"unit" (one of {_UNIT_VOCAB}, or null -- the substitute's own natural unit,
+which may differ from the original ingredient's unit, e.g. counted vs weighed),
+and "note" (a short reason or usage tip, under 15 words, or null).
+Example shape only, do not copy this content: [{{"name": "...", "quantity": "...",
+"unit": "...", "note": "..."}}, {{"name": "...", "quantity": "...", "unit": "...",
+"note": "..."}}]. Respond with ONLY the JSON array. No commentary, no markdown
 fences."""
 
-_PARSE_RECEIPT_SYSTEM = """You are a receipt-extraction assistant. Given raw OCR
+_PARSE_RECEIPT_SYSTEM = f"""You are a receipt-extraction assistant. Given raw OCR
 text from a grocery or retail receipt, extract every purchased line item into a
 JSON ARRAY (not a single object) of objects, each with exactly these keys:
 "name" (string -- the product name/description as printed, cleaned up from
@@ -77,8 +86,9 @@ string, with NO currency symbol and NO commas -- "4.99", never "$4.99" -- the
 item's own price as printed), "quantity" (a PLAIN decimal number as a string
 with nothing else attached -- "0.778", never "0.778kg NET @ $5.99/kg" -- or
 null if the receipt doesn't clearly state a single number for how many/how
-much of this item were bought), "unit" (a short string like "lb", "oz", "ct",
-or null). A weight/rate breakdown line like "0.778kg NET @ $5.99/kg" printed
+much of this item were bought), "unit" (one of {_UNIT_VOCAB}, or your best
+guess at the closest one of those, or null if none fit). A weight/rate
+breakdown line like "0.778kg NET @ $5.99/kg" printed
 under an item belongs in "quantity" (just "0.778") and "unit" (just "kg"), NOT
 copied verbatim into either field. Every returned item MUST have both a "name"
 and a "price" -- if either is missing or unreadable for a line, leave that
@@ -87,9 +97,9 @@ aren't purchased items: subtotal, tax, total, payment/card info, loyalty/
 coupon lines, store name or address, cashier/register info, barcodes. Extract
 only from the ACTUAL receipt text provided. Respond with ONLY the JSON array.
 No commentary, no markdown fences.
-Example shape only, do not copy this content: [{"name": "...", "price": "4.99",
-"quantity": "0.778", "unit": "kg"}, {"name": "...", "price": "1.50", "quantity":
-null, "unit": null}]."""
+Example shape only, do not copy this content: [{{"name": "...", "price": "4.99",
+"quantity": "0.778", "unit": "kg"}}, {{"name": "...", "price": "1.50", "quantity":
+null, "unit": null}}]."""
 
 
 def _extract_json_span(text: str) -> str | None:
@@ -237,7 +247,7 @@ class OllamaProvider(AiProvider):
         self,
         ingredient_name: str,
         ingredient_quantity: str | None,
-        ingredient_unit: str | None,
+        ingredient_unit: Unit | None,
         recipe_name: str | None,
         other_ingredient_names: list[str],
     ) -> list[SubstitutionSuggestion]:

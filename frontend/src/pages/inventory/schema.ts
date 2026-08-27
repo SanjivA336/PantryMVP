@@ -1,9 +1,11 @@
 import { z } from 'zod'
+import { ALL_UNITS } from '../../lib/units'
+import type { Unit } from '../../types/entities'
 
 export const addInventoryItemSchema = z.object({
   storage_location_id: z.string().min(1, 'Pick a storage location'),
   quantity: z.coerce.number().positive('Quantity must be greater than 0'),
-  preferred_unit: z.string().min(1),
+  preferred_unit: z.enum(ALL_UNITS as [Unit, ...Unit[]]),
   cost: z.coerce.number().min(0).optional(),
   expiry_date: z.string().optional(),
   best_by_date: z.string().optional(),

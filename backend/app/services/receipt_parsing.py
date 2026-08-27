@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal
 
+from app.schemas.units import Unit
+
 # Common receipt boilerplate that isn't a purchased item.
 _NOISE_LINE_RE = re.compile(
     r"subtotal|total|tax|cash|change|debit|credit|visa|mastercard|"
@@ -24,8 +26,17 @@ class ParsedLine:
     raw_line_text: str
     parsed_name: str | None
     parsed_quantity: Decimal | None
+    # The raw, never-edited parser guess -- kept as free text even here,
+    # regardless of source, since it's audit context, not a value the app
+    # ever reads back as a real unit (see preferred_unit below for that).
     parsed_unit: str | None
     parsed_price: Decimal | None
+    # The editable/confirmable unit receipt_import_items.preferred_unit
+    # gets pre-filled with -- None whenever parsed_unit doesn't match a
+    # real Unit (the regex parser never guesses one at all; the AI parser's
+    # guess goes through coerce_unit_from_ai first, see
+    # receipt_imports.py's _ai_items_to_parsed_lines).
+    preferred_unit: Unit | None = None
 
 
 def _is_noise(line: str) -> bool:

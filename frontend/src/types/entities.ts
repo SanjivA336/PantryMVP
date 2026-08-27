@@ -1,5 +1,25 @@
 export type UnitSystem = 'METRIC' | 'CUSTOMARY'
 
+// Mirrors backend/app/schemas/units.py's Unit enum -- the closed vocabulary
+// every unit field in the app stores. COUNT deliberately stays the single
+// 'count' value rather than enumerating package types (bag, box, can, ...),
+// since their actual contents vary by product.
+export type Unit =
+  | 'g'
+  | 'kg'
+  | 'oz'
+  | 'lb'
+  | 'ml'
+  | 'l'
+  | 'tsp'
+  | 'tbsp'
+  | 'fl_oz'
+  | 'cup'
+  | 'pt'
+  | 'qt'
+  | 'gal'
+  | 'count'
+
 export interface Household {
   id: string
   name: string
@@ -55,7 +75,7 @@ export type FoodCategory =
 export interface FoodDefinition {
   id: string
   name: string
-  preferred_unit: string
+  preferred_unit: Unit
   category: FoodCategory
   accounting_type_default: AccountingType
   shelf_life_days: number | null
@@ -75,7 +95,7 @@ export interface MeasurementPreference {
   dimension: Dimension
   // null only for COUNT, which has no metric/customary distinction.
   unit_system: UnitSystem | null
-  unit: string
+  unit: Unit
 }
 
 export type InventoryItemStatus = 'ACTIVE' | 'EMPTY' | 'DISCARDED' | 'EXPIRED' | 'LOST'
@@ -89,7 +109,7 @@ export interface InventoryItem {
   purchase_event_id: string
   quantity: string
   total_quantity: string
-  preferred_unit: string
+  preferred_unit: Unit
   cost: string
   purchased_at: string
   expiry_date: string | null
@@ -175,7 +195,7 @@ export interface StockWarning {
   type: StockWarningType
   household_food_variant_id: string
   food_name: string
-  preferred_unit: string
+  preferred_unit: Unit
   remaining_quantity: string
   reference_quantity: string
   reference_purchased_at: string
@@ -234,7 +254,7 @@ export interface RecipeIngredient {
   food_name: string
   category: FoodCategory | null
   quantity: string
-  unit: string
+  unit: Unit
   note: string | null
   position: number
   available: boolean
@@ -251,7 +271,7 @@ export interface RecipeDetail extends Recipe {
 export interface DraftRecipeIngredient {
   name: string
   quantity: string | null
-  unit: string | null
+  unit: Unit | null
   note: string | null
   // Filled in server-side when the AI's ingredient name exactly matches a
   // real food (inventory first, then the wider catalog) -- null means no
@@ -273,7 +293,7 @@ export interface DraftRecipe {
 export interface SubstitutionSuggestion {
   name: string
   quantity: string | null
-  unit: string | null
+  unit: Unit | null
   note: string | null
 }
 
@@ -310,7 +330,7 @@ export interface ReceiptImportItem {
   storage_location_id: string | null
   storage_location_name: string | null
   quantity: string | null
-  preferred_unit: string | null
+  preferred_unit: Unit | null
   cost: string | null
   accounting_type: AccountingType | null
   allowed_member_ids: string[]

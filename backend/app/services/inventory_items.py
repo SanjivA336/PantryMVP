@@ -13,7 +13,7 @@ from app.schemas.inventory_item import (
     RemovalReason,
     UpdateInventoryItemRequest,
 )
-from app.schemas.units import Dimension, MeasurementPreference, UnitSystem
+from app.schemas.units import Dimension, MeasurementPreference, Unit, UnitSystem
 from app.services import accounting as accounting_service
 from app.services import food_definitions as food_definitions_service
 from app.services import households as households_service
@@ -123,7 +123,7 @@ def create_manual(
             "p_global_food_definition_id": str(body.global_food_definition_id),
             "p_storage_location_id": str(body.storage_location_id),
             "p_quantity": str(body.quantity),
-            "p_preferred_unit": body.preferred_unit,
+            "p_preferred_unit": body.preferred_unit.value,
             "p_cost": str(body.cost),
             "p_expiry_date": body.expiry_date.isoformat() if body.expiry_date else None,
             "p_best_by_date": body.best_by_date.isoformat() if body.best_by_date else None,
@@ -182,13 +182,10 @@ def resolve_measurement_preference(
     )
 
 
-def _remember_measurement_choice(household_food_variant_id: UUID, preferred_unit: str) -> None:
+def _remember_measurement_choice(household_food_variant_id: UUID, preferred_unit: Unit) -> None:
     """Records the dimension/system implied by a just-created item's chosen
     unit onto its household_food_variant, so the next Add Item for this food
-    in this household defaults to the same choice. Best-effort: an
-    unrecognized unit guesses COUNT (see units.guess_dimension), which is
-    harmless here since it just means the next add falls back to the usual
-    default resolution instead of a remembered one.
+    in this household defaults to the same choice.
     """
     dimension = units_service.guess_dimension(preferred_unit)
     system = units_service.guess_system(preferred_unit)
@@ -319,7 +316,7 @@ def update_item(
         )
         if converted_quantity is None or converted_total is None:
             raise UnitDimensionMismatchError
-        updates["preferred_unit"] = new_unit
+        updates["preferred_unit"] = new_unit.value
         updates["quantity"] = str(converted_quantity)
         updates["total_quantity"] = str(converted_total)
         _remember_measurement_choice(current.household_food_variant_id, new_unit)
@@ -363,9 +360,9 @@ def update_item(
         # derived from at freeze time, so it needs to stay in sync while
         # the roster is still live-editable.
         if current.accounting_type != "PERSONAL":
-            client.table(_TABLE).update(
-                {"split_member_count": len(body.allowed_member_ids)}
-            ).eq("id", str(item_id)).execute()
+            client.table(_TABLE).update({"split_member_count": len(body.allowed_member_ids)}).eq(
+                "id", str(item_id)
+            ).execute()
 
     return get_by_id(household_id, item_id)  # type: ignore[return-value]
 

@@ -9,6 +9,7 @@ from app.schemas.recipe_ai import (
     ImportRecipeRequest,
     SubstitutionSuggestion,
 )
+from app.schemas.units import Unit
 from app.services import food_definitions as food_definitions_service
 from app.services import inventory_items as inventory_service
 from app.services.ai import get_ai_provider
@@ -40,9 +41,7 @@ def _draft_from_json(data: dict[str, Any]) -> DraftRecipe:
     try:
         return DraftRecipe.model_validate({**data, "source_url": None})
     except ValidationError as exc:
-        raise RecipeShareParsingError(
-            "That file doesn't look like a valid recipe export."
-        ) from exc
+        raise RecipeShareParsingError("That file doesn't look like a valid recipe export.") from exc
 
 
 def _resolve_ingredient_food_ids(household_id: UUID, draft: DraftRecipe) -> None:
@@ -85,7 +84,7 @@ def generate_recipe(household_id: UUID, params: GenerateRecipeParams) -> DraftRe
 def suggest_substitutions(
     ingredient_name: str,
     ingredient_quantity: str | None,
-    ingredient_unit: str | None,
+    ingredient_unit: Unit | None,
     recipe_name: str | None,
     other_ingredient_names: list[str],
 ) -> list[SubstitutionSuggestion]:

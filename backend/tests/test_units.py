@@ -1,63 +1,104 @@
 from decimal import Decimal
 
-from app.schemas.units import Dimension, UnitSystem
+import pytest
+
+from app.schemas.units import Dimension, Unit, UnitSystem, coerce_unit, coerce_unit_from_ai
 from app.services import units as units_service
 
 
 def test_convert_same_unit_is_identity() -> None:
-    assert units_service.convert(Decimal("5"), "g", "g") == Decimal("5")
+    assert units_service.convert(Decimal("5"), Unit.G, Unit.G) == Decimal("5")
 
 
 def test_convert_within_weight_dimension() -> None:
-    assert units_service.convert(Decimal("1"), "kg", "g") == Decimal("1000")
-    assert units_service.convert(Decimal("1"), "lb", "oz") == Decimal("453.592") / Decimal(
+    assert units_service.convert(Decimal("1"), Unit.KG, Unit.G) == Decimal("1000")
+    assert units_service.convert(Decimal("1"), Unit.LB, Unit.OZ) == Decimal("453.592") / Decimal(
         "28.3495"
     )
 
 
 def test_convert_within_volume_dimension() -> None:
-    assert units_service.convert(Decimal("1"), "l", "ml") == Decimal("1000")
+    assert units_service.convert(Decimal("1"), Unit.L, Unit.ML) == Decimal("1000")
+    assert units_service.convert(Decimal("1"), Unit.GAL, Unit.CUP) == Decimal("3785.41") / Decimal(
+        "236.588"
+    )
 
 
 def test_convert_across_dimensions_returns_none() -> None:
-    assert units_service.convert(Decimal("1"), "g", "ml") is None
-    assert units_service.convert(Decimal("1"), "cup", "oz") is None
+    assert units_service.convert(Decimal("1"), Unit.G, Unit.ML) is None
+    assert units_service.convert(Decimal("1"), Unit.CUP, Unit.OZ) is None
 
 
-def test_convert_count_units_only_match_when_identical() -> None:
-    assert units_service.convert(Decimal("2"), "count", "count") == Decimal("2")
-    assert units_service.convert(Decimal("2"), "count", "bag") is None
+def test_convert_count_is_identity_only_against_itself() -> None:
+    # COUNT has exactly one member -- there's no other count-dimension unit
+    # left to compare it against, unlike weight/volume where two distinct
+    # recognized units can still be cross-converted.
+    assert units_service.convert(Decimal("2"), Unit.COUNT, Unit.COUNT) == Decimal("2")
 
 
-def test_guess_dimension_recognizes_known_units() -> None:
-    assert units_service.guess_dimension("g") == Dimension.WEIGHT
-    assert units_service.guess_dimension("OZ") == Dimension.WEIGHT
-    assert units_service.guess_dimension("ml") == Dimension.VOLUME
-    assert units_service.guess_dimension("cup") == Dimension.VOLUME
+def test_guess_dimension_recognizes_every_unit() -> None:
+    assert units_service.guess_dimension(Unit.G) == Dimension.WEIGHT
+    assert units_service.guess_dimension(Unit.OZ) == Dimension.WEIGHT
+    assert units_service.guess_dimension(Unit.ML) == Dimension.VOLUME
+    assert units_service.guess_dimension(Unit.CUP) == Dimension.VOLUME
+    assert units_service.guess_dimension(Unit.GAL) == Dimension.VOLUME
+    assert units_service.guess_dimension(Unit.COUNT) == Dimension.COUNT
 
 
-def test_guess_dimension_defaults_unrecognized_to_count() -> None:
-    assert units_service.guess_dimension("stick") == Dimension.COUNT
-    assert units_service.guess_dimension("") == Dimension.COUNT
+def test_guess_dimension_raises_for_a_non_unit_value() -> None:
+    # No longer a "guess" now that Unit is a closed enum enforced by both
+    # Pydantic and the `unit` Postgres column -- a value outside it reaching
+    # this function is a real bug, not data to fall back gracefully from.
+    with pytest.raises(KeyError):
+        units_service.guess_dimension("stick")  # type: ignore[arg-type]
 
 
 def test_guess_system_matches_metric_and_customary() -> None:
-    assert units_service.guess_system("g") == UnitSystem.METRIC
-    assert units_service.guess_system("oz") == UnitSystem.CUSTOMARY
-    assert units_service.guess_system("bag") is None
+    assert units_service.guess_system(Unit.G) == UnitSystem.METRIC
+    assert units_service.guess_system(Unit.OZ) == UnitSystem.CUSTOMARY
+    assert units_service.guess_system(Unit.COUNT) is None
 
 
 def test_resolve_unit_picks_the_canonical_unit_per_pair() -> None:
-    assert units_service.resolve_unit(Dimension.WEIGHT, UnitSystem.METRIC) == "g"
-    assert units_service.resolve_unit(Dimension.WEIGHT, UnitSystem.CUSTOMARY) == "oz"
-    assert units_service.resolve_unit(Dimension.VOLUME, UnitSystem.METRIC) == "ml"
-    assert units_service.resolve_unit(Dimension.VOLUME, UnitSystem.CUSTOMARY) == "cup"
+    assert units_service.resolve_unit(Dimension.WEIGHT, UnitSystem.METRIC) == Unit.G
+    assert units_service.resolve_unit(Dimension.WEIGHT, UnitSystem.CUSTOMARY) == Unit.OZ
+    assert units_service.resolve_unit(Dimension.VOLUME, UnitSystem.METRIC) == Unit.ML
+    assert units_service.resolve_unit(Dimension.VOLUME, UnitSystem.CUSTOMARY) == Unit.CUP
 
 
 def test_resolve_unit_for_count_ignores_system() -> None:
-    assert units_service.resolve_unit(Dimension.COUNT, None) == "count"
-    assert units_service.resolve_unit(Dimension.COUNT, UnitSystem.METRIC) == "count"
+    assert units_service.resolve_unit(Dimension.COUNT, None) == Unit.COUNT
+    assert units_service.resolve_unit(Dimension.COUNT, UnitSystem.METRIC) == Unit.COUNT
 
 
 def test_resolve_unit_defaults_missing_system_to_customary() -> None:
-    assert units_service.resolve_unit(Dimension.WEIGHT, None) == "oz"
+    assert units_service.resolve_unit(Dimension.WEIGHT, None) == Unit.OZ
+
+
+def test_coerce_unit_matches_exact_values_case_and_whitespace_insensitively() -> None:
+    assert coerce_unit("g") == Unit.G
+    assert coerce_unit("OZ") == Unit.OZ
+    assert coerce_unit(" cup ") == Unit.CUP
+
+
+def test_coerce_unit_matches_known_aliases() -> None:
+    assert coerce_unit("pounds") == Unit.LB
+    assert coerce_unit("each") == Unit.COUNT
+    assert coerce_unit("fl oz") == Unit.FL_OZ
+    assert coerce_unit("Gallons") == Unit.GAL
+
+
+def test_coerce_unit_returns_none_for_unrecognized_or_missing() -> None:
+    assert coerce_unit("stick") is None
+    assert coerce_unit(None) is None
+    assert coerce_unit("") is None
+    assert coerce_unit("   ") is None
+
+
+def test_coerce_unit_from_ai_tolerates_a_non_string_value() -> None:
+    # A weak local model occasionally returns a bare JSON number/bool
+    # instead of a string -- this must degrade to None, not raise.
+    assert coerce_unit_from_ai(2) is None
+    assert coerce_unit_from_ai(True) is None
+    assert coerce_unit_from_ai(None) is None
+    assert coerce_unit_from_ai("kg") == Unit.KG

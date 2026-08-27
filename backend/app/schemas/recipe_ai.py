@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.schemas.units import Unit, coerce_unit_from_ai
+
 
 class DraftRecipeIngredient(BaseModel):
     """`name` is always the AI's raw text -- `global_food_definition_id` is
@@ -14,11 +16,11 @@ class DraftRecipeIngredient(BaseModel):
 
     name: str = Field(min_length=1)
     quantity: str | None = None
-    unit: str | None = None
+    unit: Unit | None = None
     note: str | None = None
     global_food_definition_id: UUID | None = None
 
-    @field_validator("quantity", "unit", "note", mode="before")
+    @field_validator("quantity", "note", mode="before")
     @classmethod
     def _coerce_to_string(cls, value: object) -> object:
         # A weak local model occasionally returns a bare JSON number (e.g.
@@ -29,6 +31,17 @@ class DraftRecipeIngredient(BaseModel):
         if value is None or isinstance(value, str):
             return value
         return str(value)
+
+    @field_validator("unit", mode="before")
+    @classmethod
+    def _coerce_unit(cls, value: object) -> Unit | None:
+        # A value outside the closed Unit vocabulary (typos, a unit this
+        # app doesn't track, a non-string type) becomes None rather than
+        # failing the whole draft -- same reasoning as _coerce_to_string
+        # above, just landing on "unset" instead of "stringified" for a
+        # field that can't be freely retyped by the user the way a text
+        # input could.
+        return coerce_unit_from_ai(value)
 
 
 class DraftRecipe(BaseModel):
@@ -119,7 +132,7 @@ class GenerateRecipeParams(BaseModel):
 class SubstitutionRequest(BaseModel):
     ingredient_name: str = Field(min_length=1)
     ingredient_quantity: str | None = None
-    ingredient_unit: str | None = None
+    ingredient_unit: Unit | None = None
     recipe_name: str | None = None
     other_ingredient_names: list[str] = Field(default_factory=list)
 
@@ -131,7 +144,7 @@ class SubstitutionSuggestion(BaseModel):
     # same unit (e.g. bananas by count, oatmeal by weight), so this can't be
     # assumed equal to the original ingredient's own quantity/unit.
     quantity: str | None = None
-    unit: str | None = None
+    unit: Unit | None = None
     note: str | None = None
 
     @field_validator("quantity", mode="before")
@@ -140,3 +153,8 @@ class SubstitutionSuggestion(BaseModel):
         if value is None or isinstance(value, str):
             return value
         return str(value)
+
+    @field_validator("unit", mode="before")
+    @classmethod
+    def _coerce_unit(cls, value: object) -> Unit | None:
+        return coerce_unit_from_ai(value)

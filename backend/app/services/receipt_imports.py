@@ -16,6 +16,7 @@ from app.schemas.receipt_import import (
     ReceiptImportSessionWithItems,
     UpdateReceiptImportItemRequest,
 )
+from app.schemas.units import coerce_unit_from_ai
 from app.services import food_definitions as food_definitions_service
 from app.services import inventory_items as inventory_service
 from app.services import receipt_parsing
@@ -149,7 +150,12 @@ def _ai_items_to_parsed_lines(items: list[ParsedReceiptItem]) -> list[receipt_pa
                 raw_line_text=item.name,
                 parsed_name=item.name,
                 parsed_quantity=_coerce_decimal(item.quantity),
+                # parsed_unit keeps the AI's raw guess verbatim (audit
+                # context, see ParsedLine); preferred_unit is the same guess
+                # coerced against the closed Unit vocabulary, used to
+                # pre-fill the review page's actual (editable) field.
                 parsed_unit=item.unit,
+                preferred_unit=coerce_unit_from_ai(item.unit),
                 parsed_price=price,
             )
         )
@@ -254,7 +260,9 @@ def process_session(household_id: UUID, session_id: UUID) -> ReceiptImportSessio
                         "quantity": (
                             str(line.parsed_quantity) if line.parsed_quantity is not None else None
                         ),
-                        "preferred_unit": line.parsed_unit,
+                        "preferred_unit": (
+                            line.preferred_unit.value if line.preferred_unit is not None else None
+                        ),
                         "cost": str(line.parsed_price) if line.parsed_price is not None else None,
                     }
                     for i, line in enumerate(parsed_lines)

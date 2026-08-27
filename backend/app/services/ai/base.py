@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from app.schemas.receipt_import import ParsedReceiptItem
 from app.schemas.recipe_ai import DraftRecipe, GenerateRecipeParams, SubstitutionSuggestion
+from app.schemas.units import Unit
 
 
 class AiProviderError(Exception):
@@ -40,7 +41,7 @@ class AiProvider(ABC):
         self,
         ingredient_name: str,
         ingredient_quantity: str | None,
-        ingredient_unit: str | None,
+        ingredient_unit: Unit | None,
         recipe_name: str | None,
         other_ingredient_names: list[str],
     ) -> list[SubstitutionSuggestion]: ...

@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.units import Unit
+
 
 class ExpiryWarningType(StrEnum):
     EXPIRING_SOON = "EXPIRING_SOON"
@@ -31,7 +33,7 @@ class StockWarning(BaseModel):
     type: StockWarningType
     household_food_variant_id: UUID
     food_name: str
-    preferred_unit: str
+    preferred_unit: Unit
     remaining_quantity: Decimal
     # The most recent purchase's total_quantity for this food, regardless of
     # that purchase's current status -- the baseline "what a normal buy looks

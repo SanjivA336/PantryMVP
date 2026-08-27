@@ -268,7 +268,11 @@ export function AddInventoryItemPage() {
     reset({
       storage_location_id: storageLocationId,
       quantity: '',
-      preferred_unit: '',
+      // A placeholder until a new food is picked and the measurement-
+      // preference effect resolves a real one -- the field is a readOnly
+      // display driven by resolveUnit()/chooseDimension(), never typed
+      // directly, so this value is never actually submitted as-is.
+      preferred_unit: 'count',
       cost: '',
       expiry_date: '',
       best_by_date: '',
@@ -329,9 +333,7 @@ export function AddInventoryItemPage() {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-muted">
-            Nickname (optional)
-          </label>
+          <label className="mb-1.5 block text-sm font-medium text-muted">Nickname (optional)</label>
           <input
             type="text"
             placeholder={food?.name ?? 'e.g. HEB milk'}
@@ -538,8 +540,8 @@ export function AddInventoryItemPage() {
           )}
           {selectedMemberIds.length > 1 && (
             <p className="mt-2 text-xs text-faint">
-              Split evenly by default. Anyone who ends up using more than their share pays for
-              the extra themselves, and everyone else's share shrinks to match -- no need to pick
+              Split evenly by default. Anyone who ends up using more than their share pays for the
+              extra themselves, and everyone else's share shrinks to match -- no need to pick
               anything up front.
             </p>
           )}

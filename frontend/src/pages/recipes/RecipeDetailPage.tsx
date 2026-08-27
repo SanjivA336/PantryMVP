@@ -5,6 +5,7 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
+import { UNIT_LABELS } from '../../lib/units'
 import type { RecipeDetail, RecipeIngredient, SubstitutionSuggestion } from '../../types/entities'
 
 // A portable, human-readable export -- shared by hand (text/JSON file) with
@@ -35,7 +36,11 @@ function downloadRecipeAsJson(recipe: RecipeDetail) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  const slug = recipe.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const slug = recipe.name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
   link.download = `${slug || 'recipe'}.json`
   link.click()
   URL.revokeObjectURL(url)
@@ -58,7 +63,7 @@ function scaledQuantityLabel(ingredient: RecipeIngredient, scale: number): strin
   // than 2 decimal places (scaling e.g. 1/3 servings can produce long
   // floats that aren't meaningful at kitchen-measurement precision).
   const rounded = Math.round(scaled * 100) / 100
-  return `${rounded} ${ingredient.unit}`
+  return `${rounded} ${UNIT_LABELS[ingredient.unit]}`
 }
 
 function AvailabilityBadge({ ingredient, scale }: { ingredient: RecipeIngredient; scale: number }) {
@@ -75,7 +80,7 @@ function AvailabilityBadge({ ingredient, scale }: { ingredient: RecipeIngredient
     if (onHand < needed) {
       return (
         <span className="rounded-pill bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning">
-          Not quite enough ({onHand} {ingredient.unit} on hand)
+          Not quite enough ({onHand} {UNIT_LABELS[ingredient.unit]} on hand)
         </span>
       )
     }
@@ -173,11 +178,7 @@ export function RecipeDetailPage() {
           >
             Edit
           </Link>
-          <button
-            type="button"
-            onClick={deleteRecipe}
-            className="text-danger hover:underline"
-          >
+          <button type="button" onClick={deleteRecipe} className="text-danger hover:underline">
             Delete
           </button>
         </div>
@@ -242,7 +243,14 @@ export function RecipeDetailPage() {
                         <span className="font-medium text-text">{suggestion.name}</span>
                         {(suggestion.quantity || suggestion.unit) && (
                           <span className="ml-1 text-faint">
-                            ({[suggestion.quantity, suggestion.unit].filter(Boolean).join(' ')})
+                            (
+                            {[
+                              suggestion.quantity,
+                              suggestion.unit ? UNIT_LABELS[suggestion.unit] : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            )
                           </span>
                         )}
                         {suggestion.note && <span className="ml-1">— {suggestion.note}</span>}

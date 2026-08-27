@@ -5,12 +5,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.food_definition import FoodCategory
+from app.schemas.units import Unit
 
 
 class RecipeIngredientInput(BaseModel):
     global_food_definition_id: UUID
     quantity: Decimal = Field(gt=0)
-    unit: str = Field(min_length=1, max_length=20)
+    unit: Unit
     note: str | None = None
 
 
@@ -61,14 +62,15 @@ class RecipeIngredient(BaseModel):
     food_name: str
     category: FoodCategory | None
     quantity: Decimal
-    unit: str
+    unit: Unit
     note: str | None
     position: int
     # Enrichment computed live against current inventory -- never stored.
-    # available_quantity is populated only when the ingredient's unit
-    # exactly matches what's on hand; otherwise it's a plain yes/no via
-    # `available` (see the resolved design decision: real unit conversion
-    # is out of scope for this phase).
+    # available_quantity is populated whenever on-hand stock converts into
+    # this ingredient's unit (same-dimension, e.g. oz on hand for a recipe
+    # asking for grams); a pantry stocked in a different dimension (weight
+    # vs. volume) falls back to a plain yes/no via `available` instead,
+    # since that needs a food's density, which this app never asks for.
     available: bool
     available_quantity: Decimal | None
 

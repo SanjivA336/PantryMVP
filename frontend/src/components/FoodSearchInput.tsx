@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { apiClient, ApiError } from '../lib/apiClient'
 import { CategoryDot } from './CategoryDot'
 import { FOOD_CATEGORIES, FOOD_CATEGORY_LABELS } from '../lib/foodCategories'
-import type { FoodCategory, FoodDefinition } from '../types/entities'
+import { DIMENSION_LABELS, UNITS_BY_DIMENSION, UNIT_LABELS } from '../lib/units'
+import type { Dimension, FoodCategory, FoodDefinition, Unit } from '../types/entities'
+
+const DIMENSIONS: Dimension[] = ['WEIGHT', 'VOLUME', 'COUNT']
 
 interface Props {
   // Callers that only have a food's id/name on hand (e.g. pre-filling an
   // edit form from a recipe ingredient, which doesn't carry the full
   // FoodDefinition) can pass just that much -- this component only ever
   // reads `.name`/`.category` off the current value.
-  value: Pick<FoodDefinition, 'id' | 'name'> & Partial<Pick<FoodDefinition, 'category'>> | null
+  value: (Pick<FoodDefinition, 'id' | 'name'> & Partial<Pick<FoodDefinition, 'category'>>) | null
   onChange: (food: FoodDefinition | null) => void
   // Pre-fills the search box (and fires the initial search) with a name
   // suggested by something upstream, e.g. an AI-parsed ingredient name that
@@ -22,7 +25,7 @@ export function FoodSearchInput({ value, onChange, initialQuery }: Props) {
   const [results, setResults] = useState<FoodDefinition[]>([])
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [newUnit, setNewUnit] = useState('count')
+  const [newUnit, setNewUnit] = useState<Unit>('count')
   const [newCategory, setNewCategory] = useState<FoodCategory>('OTHER')
   const [createError, setCreateError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -134,11 +137,17 @@ export function FoodSearchInput({ value, onChange, initialQuery }: Props) {
                 <select
                   className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text"
                   value={newUnit}
-                  onChange={(e) => setNewUnit(e.target.value)}
+                  onChange={(e) => setNewUnit(e.target.value as Unit)}
                 >
-                  <option value="count">count</option>
-                  <option value="g">g</option>
-                  <option value="ml">ml</option>
+                  {DIMENSIONS.map((dim) => (
+                    <optgroup key={dim} label={DIMENSION_LABELS[dim]}>
+                      {UNITS_BY_DIMENSION[dim].map((u) => (
+                        <option key={u} value={u}>
+                          {UNIT_LABELS[u]}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
               <div>

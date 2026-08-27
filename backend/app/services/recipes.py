@@ -109,9 +109,7 @@ def _ingredient_availability(
     return result
 
 
-def _fetch_recipe_and_ingredients(
-    user_id: UUID, recipe_id: UUID
-) -> tuple[dict, list[dict]] | None:
+def _fetch_recipe_and_ingredients(user_id: UUID, recipe_id: UUID) -> tuple[dict, list[dict]] | None:
     """The two raw-row queries get_recipe builds on. Split out so
     update_recipe's pre-update defaulting fetch (which only reads these
     stored fields) can skip get_recipe's extra availability computation --
@@ -166,9 +164,7 @@ def get_recipe(household_id: UUID, user_id: UUID, recipe_id: UUID) -> RecipeDeta
     return RecipeDetail(**recipe_row, ingredients=ingredients)
 
 
-def create_recipe(
-    household_id: UUID, user_id: UUID, body: CreateRecipeRequest
-) -> RecipeDetail:
+def create_recipe(household_id: UUID, user_id: UUID, body: CreateRecipeRequest) -> RecipeDetail:
     client = get_service_client()
     rpc_result = client.rpc(
         "create_recipe",
@@ -184,7 +180,7 @@ def create_recipe(
                 {
                     "global_food_definition_id": str(ing.global_food_definition_id),
                     "quantity": str(ing.quantity),
-                    "unit": ing.unit,
+                    "unit": ing.unit.value,
                     "note": ing.note,
                 }
                 for ing in body.ingredients
@@ -238,9 +234,7 @@ def update_recipe(
                 "p_description": (
                     body.description if "description" in fields else existing_row["description"]
                 ),
-                "p_servings": (
-                    body.servings if "servings" in fields else existing_row["servings"]
-                ),
+                "p_servings": (body.servings if "servings" in fields else existing_row["servings"]),
                 "p_prep_time_minutes": (
                     body.prep_time_minutes
                     if "prep_time_minutes" in fields
@@ -252,9 +246,7 @@ def update_recipe(
                     else existing_row["cook_time_minutes"]
                 ),
                 "p_instructions": (
-                    body.instructions
-                    if "instructions" in fields
-                    else existing_row["instructions"]
+                    body.instructions if "instructions" in fields else existing_row["instructions"]
                 ),
                 "p_ingredients": [
                     {

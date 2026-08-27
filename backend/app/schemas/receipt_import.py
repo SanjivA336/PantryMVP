@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.food_definition import AccountingType, FoodCategory
+from app.schemas.units import Unit
 
 
 class ReceiptImportSessionStatus(StrEnum):
@@ -52,7 +53,7 @@ class ReceiptImportItem(BaseModel):
     storage_location_id: UUID | None
     storage_location_name: str | None
     quantity: Decimal | None
-    preferred_unit: str | None
+    preferred_unit: Unit | None
     cost: Decimal | None
     accounting_type: AccountingType | None
     allowed_member_ids: list[UUID]
@@ -107,7 +108,7 @@ class UpdateReceiptImportItemRequest(BaseModel):
     global_food_definition_id: UUID | None = None
     storage_location_id: UUID | None = None
     quantity: Decimal | None = Field(default=None, gt=0)
-    preferred_unit: str | None = None
+    preferred_unit: Unit | None = None
     cost: Decimal | None = Field(default=None, ge=0)
     accounting_type: AccountingType | None = None
     allowed_member_ids: list[UUID] | None = None

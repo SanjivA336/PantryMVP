@@ -76,7 +76,7 @@ async def _create_item(api_client, household, **overrides) -> dict:
         "global_food_definition_id": milk_id,
         "storage_location_id": household["storage_location_id"],
         "quantity": "10",
-        "preferred_unit": "unit",
+        "preferred_unit": "count",
         "cost": "10.00",
         "allowed_member_ids": [household["member_id"]],
         "accounting_type": "PERSONAL",

@@ -4,19 +4,24 @@ import { Check, X } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { FoodSearchInput } from '../../components/FoodSearchInput'
+import { DIMENSION_LABELS, UNITS_BY_DIMENSION, UNIT_LABELS } from '../../lib/units'
 import type {
   AccountingType,
+  Dimension,
   FoodDefinition,
   Member,
   ReceiptImportSessionWithItems,
   StorageLocation,
+  Unit,
 } from '../../types/entities'
+
+const DIMENSIONS: Dimension[] = ['WEIGHT', 'VOLUME', 'COUNT']
 
 interface ItemEdit {
   food: Pick<FoodDefinition, 'id' | 'name'> | null
   storageLocationId: string
   quantity: string
-  unit: string
+  unit: Unit | ''
   cost: string
   accountingType: AccountingType
   allowedMemberIds: string[]
@@ -76,7 +81,11 @@ export function ReviewReceiptSessionPage() {
             : null,
           storageLocationId: item.storage_location_id ?? '',
           quantity: item.quantity ?? item.parsed_quantity ?? '1',
-          unit: item.preferred_unit ?? item.parsed_unit ?? '',
+          // preferred_unit is already the AI/OCR guess coerced against the
+          // closed Unit vocabulary server-side -- parsed_unit (the raw,
+          // never-coerced guess) isn't safe to fall back to here, since it
+          // may not be a valid Unit at all.
+          unit: item.preferred_unit ?? '',
           cost: item.cost ?? item.parsed_price ?? '0',
           accountingType: item.accounting_type ?? 'PERSONAL',
           allowedMemberIds:
@@ -129,8 +138,8 @@ export function ReviewReceiptSessionPage() {
       setActionError('Pick a storage location for this item first')
       return
     }
-    if (status === 'CONFIRMED' && !edit.unit.trim()) {
-      setActionError('Enter a unit for this item first (e.g. "count", "g")')
+    if (status === 'CONFIRMED' && !edit.unit) {
+      setActionError('Pick a unit for this item first')
       return
     }
     if (status === 'CONFIRMED' && !(Number(edit.quantity) > 0)) {
@@ -270,13 +279,22 @@ export function ReviewReceiptSessionPage() {
                       value={edit.quantity}
                       onChange={(e) => updateEdit(item.id, { quantity: e.target.value })}
                     />
-                    <input
-                      type="text"
-                      placeholder="Unit"
-                      className={`w-24 ${inputClass}`}
+                    <select
+                      className={`w-28 ${inputClass}`}
                       value={edit.unit}
-                      onChange={(e) => updateEdit(item.id, { unit: e.target.value })}
-                    />
+                      onChange={(e) => updateEdit(item.id, { unit: e.target.value as Unit | '' })}
+                    >
+                      <option value="">Unit…</option>
+                      {DIMENSIONS.map((dim) => (
+                        <optgroup key={dim} label={DIMENSION_LABELS[dim]}>
+                          {UNITS_BY_DIMENSION[dim].map((u) => (
+                            <option key={u} value={u}>
+                              {UNIT_LABELS[u]}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
                     <input
                       type="number"
                       step="0.01"

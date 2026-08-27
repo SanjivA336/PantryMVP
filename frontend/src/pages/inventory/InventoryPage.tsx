@@ -36,6 +36,7 @@ import {
 } from '../../lib/storageTypes'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
+import { UNIT_LABELS } from '../../lib/units'
 import type {
   AccountingType,
   FoodCategory,
@@ -356,7 +357,7 @@ export function InventoryPage() {
             )}
           </div>
           <p className="mt-1 text-sm text-muted">
-            {item.quantity} / {item.total_quantity} {item.preferred_unit} ·{' '}
+            {item.quantity} / {item.total_quantity} {UNIT_LABELS[item.preferred_unit]} ·{' '}
             {item.storage_location_name}
           </p>
           {expiry && (
@@ -518,7 +519,9 @@ export function InventoryPage() {
               />
               <select
                 className={`w-full rounded-control border bg-surface-2 py-2 pl-7 pr-2 text-sm text-text outline-none focus:border-primary ${
-                  storageTypeFilter ? STORAGE_TYPE_BORDER_CLASSES[storageTypeFilter] : 'border-subtle'
+                  storageTypeFilter
+                    ? STORAGE_TYPE_BORDER_CLASSES[storageTypeFilter]
+                    : 'border-subtle'
                 }`}
                 value={storageTypeFilter}
                 onChange={(e) => setStorageTypeFilter(e.target.value as StorageLocationType | '')}

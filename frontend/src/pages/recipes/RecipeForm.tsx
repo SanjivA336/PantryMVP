@@ -4,13 +4,16 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, X } from 'lucide-react'
 import { FoodSearchInput } from '../../components/FoodSearchInput'
 import { ApiError } from '../../lib/apiClient'
-import type { FoodDefinition } from '../../types/entities'
+import { DIMENSION_LABELS, UNITS_BY_DIMENSION, UNIT_LABELS } from '../../lib/units'
+import type { Dimension, FoodDefinition, Unit } from '../../types/entities'
 import { recipeSchema, type RecipeForm as RecipeFormValues, type RecipeFormInput } from './schema'
+
+const DIMENSIONS: Dimension[] = ['WEIGHT', 'VOLUME', 'COUNT']
 
 export interface RecipeIngredientBody {
   global_food_definition_id: string
   quantity: string
-  unit: string
+  unit: Unit
   note: string | null
 }
 
@@ -32,7 +35,7 @@ export interface RecipeSubmitBody {
 export interface RecipeFormInitialIngredient {
   food: Pick<FoodDefinition, 'id' | 'name'> | null
   quantity: string
-  unit: string
+  unit: Unit | ''
   note: string
   // Only meaningful when `food` is null -- an AI-suggested ingredient name
   // to pre-seed FoodSearchInput's search box with, so the user isn't stuck
@@ -53,7 +56,7 @@ export interface RecipeFormInitial {
 interface IngredientRow {
   food: Pick<FoodDefinition, 'id' | 'name'> | null
   quantity: string
-  unit: string
+  unit: Unit | ''
   note: string
   suggestedName?: string
 }
@@ -124,7 +127,7 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
   const submit = async (values: RecipeFormValues) => {
     setFormError(null)
     const validIngredients = ingredients.filter(
-      (row) => row.food && row.quantity.trim() && row.unit.trim(),
+      (row) => row.food && row.quantity.trim() && row.unit,
     )
     if (validIngredients.length === 0) {
       setFormError('Add at least one ingredient')
@@ -143,7 +146,7 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
         ingredients: validIngredients.map((row) => ({
           global_food_definition_id: row.food!.id,
           quantity: row.quantity,
-          unit: row.unit,
+          unit: row.unit as Unit,
           note: row.note.trim() || null,
         })),
       })
@@ -207,13 +210,22 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
                   value={row.quantity}
                   onChange={(e) => updateIngredient(index, { quantity: e.target.value })}
                 />
-                <input
-                  type="text"
-                  placeholder="Unit"
-                  className={`w-24 ${fieldClass}`}
+                <select
+                  className={`w-28 ${fieldClass}`}
                   value={row.unit}
-                  onChange={(e) => updateIngredient(index, { unit: e.target.value })}
-                />
+                  onChange={(e) => updateIngredient(index, { unit: e.target.value as Unit | '' })}
+                >
+                  <option value="">Unit…</option>
+                  {DIMENSIONS.map((dim) => (
+                    <optgroup key={dim} label={DIMENSION_LABELS[dim]}>
+                      {UNITS_BY_DIMENSION[dim].map((u) => (
+                        <option key={u} value={u}>
+                          {UNIT_LABELS[u]}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
                 <input
                   type="text"
                   placeholder="Note (optional)"

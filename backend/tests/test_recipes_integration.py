@@ -177,7 +177,7 @@ async def test_ingredient_available_without_quantity_when_units_differ(
     recipe = await _create_recipe(
         api_client,
         household,
-        ingredients=[{"global_food_definition_id": butter["id"], "quantity": "1", "unit": "stick"}],
+        ingredients=[{"global_food_definition_id": butter["id"], "quantity": "1", "unit": "count"}],
     )
 
     ingredient = recipe["ingredients"][0]

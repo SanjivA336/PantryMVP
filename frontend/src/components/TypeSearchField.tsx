@@ -4,7 +4,10 @@ import { apiClient, ApiError } from '../lib/apiClient'
 import { CategoryDot } from './CategoryDot'
 import { Modal } from './Modal'
 import { FOOD_CATEGORIES, FOOD_CATEGORY_LABELS } from '../lib/foodCategories'
-import type { FoodCategory, FoodDefinition } from '../types/entities'
+import { DIMENSION_LABELS, UNITS_BY_DIMENSION, UNIT_LABELS } from '../lib/units'
+import type { Dimension, FoodCategory, FoodDefinition, Unit } from '../types/entities'
+
+const DIMENSIONS: Dimension[] = ['WEIGHT', 'VOLUME', 'COUNT']
 
 interface Props {
   value: FoodDefinition | null
@@ -27,7 +30,7 @@ export const TypeSearchField = forwardRef<TypeSearchFieldHandle, Props>(function
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FoodDefinition[]>([])
   const [creatingOpen, setCreatingOpen] = useState(false)
-  const [newUnit, setNewUnit] = useState('count')
+  const [newUnit, setNewUnit] = useState<Unit>('count')
   const [newCategory, setNewCategory] = useState<FoodCategory>('OTHER')
   const [createError, setCreateError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -158,11 +161,17 @@ export const TypeSearchField = forwardRef<TypeSearchFieldHandle, Props>(function
               <select
                 className="w-full rounded-control border border-subtle bg-surface px-2 py-2 text-sm text-text"
                 value={newUnit}
-                onChange={(e) => setNewUnit(e.target.value)}
+                onChange={(e) => setNewUnit(e.target.value as Unit)}
               >
-                <option value="count">count</option>
-                <option value="g">g</option>
-                <option value="ml">ml</option>
+                {DIMENSIONS.map((dim) => (
+                  <optgroup key={dim} label={DIMENSION_LABELS[dim]}>
+                    {UNITS_BY_DIMENSION[dim].map((u) => (
+                      <option key={u} value={u}>
+                        {UNIT_LABELS[u]}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
             <div>
