@@ -11,6 +11,7 @@ import { CreateHouseholdPage } from './pages/households/CreateHouseholdPage'
 import { JoinHouseholdPage } from './pages/households/JoinHouseholdPage'
 import { HouseholdShell } from './pages/households/HouseholdShell'
 import { SettingsPage } from './pages/settings/SettingsPage'
+import { AccountPage } from './pages/account/AccountPage'
 import { InventoryPage } from './pages/inventory/InventoryPage'
 import { AddInventoryItemPage } from './pages/inventory/AddInventoryItemPage'
 import { InventoryItemDetailPage } from './pages/inventory/InventoryItemDetailPage'
@@ -47,6 +48,7 @@ function App() {
               <Route path="history" element={<HistoryPage />} />
               <Route path="balances" element={<BalancesPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="account" element={<AccountPage />} />
               <Route path="storage/:storageLocationId" element={<InventoryPage />} />
               <Route path="shopping-list" element={<ShoppingListPage />} />
               <Route path="recipes" element={<RecipesPage />} />

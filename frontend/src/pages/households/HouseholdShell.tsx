@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useParams } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
   Check,
   ChefHat,
@@ -12,12 +12,36 @@ import {
   Scale,
   Settings,
   ShoppingCart,
+  UserCircle,
   X,
 } from 'lucide-react'
 import { apiClient } from '../../lib/apiClient'
 import { useAuth } from '../../hooks/useAuth'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import type { Household } from '../../types/entities'
+import logoSource from '../../assets/logo.svg?raw'
+
+// The raw SVG source (Vite's `?raw` import), recolored to `currentColor` and
+// resized to fill its container -- injected as real inline SVG so it can
+// follow hover state via a wrapping element's `text-*` class, the same way
+// lucide-react's icons already do. An <img> can't do this: its pixels are
+// opaque to CSS, so its color could never follow the sidebar's hover state.
+// Safe to inject as-is (dangerouslySetInnerHTML) since it's our own
+// build-time asset, never user- or runtime-supplied content.
+const coloredLogo = logoSource
+  .replace(/#ffffff/gi, 'currentColor')
+  .replace(/width="[\d.]+"/, 'width="100%"')
+  .replace(/height="[\d.]+"/, 'height="100%"')
+
+function BurrowLogo({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={className}
+      dangerouslySetInnerHTML={{ __html: coloredLogo }}
+    />
+  )
+}
 
 const PRIMARY_NAV_ITEMS = [
   { to: '', label: 'Inventory', end: true, icon: Home },
@@ -40,6 +64,7 @@ const RECIPES_NAV_ITEMS = [{ to: 'recipes', label: 'Recipes', icon: ChefHat }]
 
 export function HouseholdShell() {
   const { householdId } = useParams<{ householdId: string }>()
+  const navigate = useNavigate()
   const { signOut } = useAuth()
   const isDeveloper = useIsDeveloper()
   const [household, setHousehold] = useState<Household | null>(null)
@@ -69,14 +94,35 @@ export function HouseholdShell() {
           nav links scroll internally if they ever overflow (the household
           name/code header and the settings/sign-out footer stay pinned). */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-subtle bg-surface md:flex">
-        <div className="shrink-0 p-5">
-          <p className="truncate text-base font-semibold">{household?.name ?? 'Burrow'}</p>
-          {household && (
-            <div className="mt-0.5 flex items-center gap-1">
-              <p className="font-mono text-xs tracking-wide text-faint">{household.join_code}</p>
-              <CopyCodeButton code={household.join_code} />
+        <div className="flex shrink-0 items-start gap-2 p-3">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/', { state: { forcePicker: true } })}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                navigate('/', { state: { forcePicker: true } })
+              }
+            }}
+            title="Switch kitchens"
+            className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-control p-2 transition-colors hover:bg-surface-hover"
+          >
+            <BurrowLogo className="h-9 w-9 shrink-0 text-text transition-colors group-hover:text-primary" />
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold transition-colors group-hover:text-primary">
+                {household?.name ?? 'Burrow'}
+              </p>
+              {household && (
+                <div className="mt-0.5 flex items-center gap-1">
+                  <p className="font-mono text-xs tracking-wide text-faint">
+                    {household.join_code}
+                  </p>
+                  <CopyCodeButton code={household.join_code} />
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
@@ -106,15 +152,20 @@ export function HouseholdShell() {
               <Settings size={18} strokeWidth={1.75} />
               Settings
             </NavLink>
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              title="Sign out"
-              aria-label="Sign out"
-              className="flex shrink-0 items-center justify-center rounded-control p-2.5 text-muted transition-colors hover:bg-surface-hover hover:text-text"
+            <NavLink
+              to="account"
+              title="Account"
+              aria-label="Account"
+              className={({ isActive }) =>
+                `flex shrink-0 items-center justify-center rounded-control p-2.5 transition-colors ${
+                  isActive
+                    ? 'bg-primary-soft text-primary'
+                    : 'text-muted hover:bg-surface-hover hover:text-text'
+                }`
+              }
             >
-              <LogOut size={18} strokeWidth={1.75} />
-            </button>
+              <UserCircle size={18} strokeWidth={1.75} />
+            </NavLink>
           </div>
         </div>
       </aside>
@@ -231,7 +282,13 @@ function CopyCodeButton({ code }: { code: string }) {
   return (
     <button
       type="button"
-      onClick={copy}
+      onClick={(e) => {
+        // The sidebar's desktop header wraps this in a clickable "switch
+        // kitchens" region -- without this, copying the code would also
+        // navigate away.
+        e.stopPropagation()
+        void copy()
+      }}
       title="Copy join code"
       aria-label="Copy join code"
       className="rounded-control p-0.5 text-faint transition-colors hover:bg-surface-hover hover:text-text"

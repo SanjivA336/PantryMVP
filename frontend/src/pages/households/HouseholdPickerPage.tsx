@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { ChevronRight, Home, Plus } from 'lucide-react'
 import { apiClient } from '../../lib/apiClient'
 import type { Household } from '../../types/entities'
@@ -7,6 +7,13 @@ import type { Household } from '../../types/entities'
 export function HouseholdPickerPage() {
   const [households, setHouseholds] = useState<Household[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Set by the sidebar's "switch kitchens" button (see HouseholdShell) so a
+  // deliberate click here always shows the picker, even with just one
+  // household -- the auto-redirect below is meant only as a shortcut past
+  // an empty choice right after login, not something that should make this
+  // button feel broken for anyone with a single household.
+  const location = useLocation()
+  const forcePicker = Boolean((location.state as { forcePicker?: boolean } | null)?.forcePicker)
 
   useEffect(() => {
     apiClient
@@ -31,7 +38,7 @@ export function HouseholdPickerPage() {
     )
   }
 
-  if (households.length === 1) {
+  if (households.length === 1 && !forcePicker) {
     return <Navigate to={`/households/${households[0].id}`} replace />
   }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TriangleAlert } from 'lucide-react'
+import { LogOut, TriangleAlert } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { Modal } from '../../components/Modal'
 import { useAuth } from '../../hooks/useAuth'
@@ -8,7 +8,7 @@ import { useAuth } from '../../hooks/useAuth'
 const inputClass =
   'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
 
-export function AccountTab() {
+export function AccountPage() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
 
@@ -16,6 +16,11 @@ export function AccountTab() {
   const [confirmText, setConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const handleSignOut = async () => {
+    await signOut()
+    navigate('/login')
+  }
 
   const confirmDelete = async () => {
     setError(null)
@@ -32,10 +37,21 @@ export function AccountTab() {
 
   return (
     <div className="flex max-w-md flex-col gap-6">
+      <h2 className="text-xl font-semibold">Account</h2>
+
       <div>
         <p className="text-sm font-medium text-muted">Email</p>
         <p className="text-text">{user?.email}</p>
       </div>
+
+      <button
+        type="button"
+        onClick={() => void handleSignOut()}
+        className="flex w-fit items-center gap-2 rounded-control border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger-soft"
+      >
+        <LogOut size={16} strokeWidth={1.75} />
+        Log out
+      </button>
 
       <div className="rounded-card border border-danger/30 bg-danger-soft p-4">
         <p className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-danger">
