@@ -1,8 +1,11 @@
-"""Integration tests for receipt import sessions against the real linked
-Supabase project. `run_ocr` is monkeypatched (a real OCR API call doesn't
-belong in a test run) -- everything downstream (Storage, DB writes, RLS,
-the regex parser, finalize reusing the settlement engine) is real. Excluded
-from the default run; run explicitly with `uv run pytest -m integration`.
+"""Integration tests for the RECEIPT_SCAN purchase-session flow against the
+real linked Supabase project. `run_ocr` is monkeypatched (a real OCR API
+call doesn't belong in a test run) -- everything downstream (Storage, DB
+writes, RLS, the regex parser, finalize reusing the settlement engine) is
+real. Excluded from the default run; `uv run pytest -m integration`.
+
+The two OCR-backed routes are developer-gated, so the test user is put on
+the developer allowlist in the `household` fixture.
 
 The AI-first parsing step (see purchase_sessions._parse_receipt_lines) is
 forced to its regex fallback here via `force_regex_parsing` -- these tests
@@ -21,6 +24,7 @@ from app.core.supabase import get_service_client
 from app.main import app
 from app.services.ai.base import AiProviderUnavailableError
 from app.services.receipt_ocr import OcrResult
+from tests.conftest import make_developer
 from tests.helpers.supabase_test_users import create_test_user, delete_test_user, sign_in
 
 pytestmark = pytest.mark.integration
@@ -45,11 +49,13 @@ def force_regex_parsing(monkeypatch):
 
 
 @pytest.fixture
-async def household(api_client):
+async def household(api_client, monkeypatch):
     suffix = uuid.uuid4().hex[:8]
     user = await create_test_user(f"burrow-receipts-test-{suffix}@example.com", _PASSWORD)
     token = await sign_in(user["email"], _PASSWORD)
     headers = {"Authorization": f"Bearer {token}"}
+    # The receipt create/process routes are developer-gated.
+    make_developer(monkeypatch, uuid.UUID(user["id"]))
 
     household_resp = await api_client.post(
         "/api/households",
@@ -85,7 +91,7 @@ async def _create_and_upload_session(api_client, household) -> dict:
     service-role client, so real bytes must exist there regardless of the
     OCR call itself being mocked."""
     create_resp = await api_client.post(
-        f"/api/households/{household['household_id']}/purchase-sessions",
+        f"/api/households/{household['household_id']}/purchase-sessions/receipt",
         json={"filename": "receipt.jpg"},
         headers=household["headers"],
     )
@@ -129,7 +135,7 @@ async def test_process_parses_lines_and_filters_noise(api_client, household, mon
     assert Decimal(session["items"][0]["parsed_price"]) == Decimal("4.99")
 
 
-async def test_full_lifecycle_confirm_skip_finalize(api_client, household, monkeypatch) -> None:
+async def test_full_lifecycle_complete_and_finalize(api_client, household, monkeypatch) -> None:
     monkeypatch.setattr(
         "app.services.purchase_sessions.run_ocr",
         lambda image_bytes, mime_type: OcrResult(raw_text=_CANNED_RECEIPT_TEXT),
@@ -249,7 +255,7 @@ async def test_finalize_rejects_zero_quantity_cleanly(api_client, household, mon
         },
         headers=household["headers"],
     )
-    # quantity=0 fails Pydantic's gt=0 constraint on UpdateReceiptImportItemRequest
+    # quantity=0 fails Pydantic's gt=0 constraint on UpdatePurchaseSessionItemRequest
     # itself, so this is rejected even earlier, at the PATCH step.
     assert confirm_resp.status_code == 422
 
