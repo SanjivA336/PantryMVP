@@ -9,15 +9,18 @@ import {
   DIMENSION_LABELS,
   UNIT_LABELS,
   UNIT_SYSTEM_LABELS,
+  UNITS_BY_DIMENSION,
   guessDimension,
   guessSystem,
   resolveUnit,
 } from '../../lib/units'
 import type {
+  ConsumptionEvent,
   InventoryItem,
   Member,
   PurchaseCorrection,
   StorageLocation,
+  Unit,
   UnitSystem,
 } from '../../types/entities'
 
@@ -235,6 +238,14 @@ export function InventoryItemDetailPage() {
         />
       </div>
 
+      <UsageSection
+        householdId={householdId!}
+        itemId={itemId!}
+        displayUnit={item.preferred_unit}
+        members={members}
+        onChanged={reload}
+      />
+
       {corrections.length > 0 && (
         <div>
           <label className={fieldLabelClass}>Correction history</label>
@@ -268,6 +279,170 @@ export function InventoryItemDetailPage() {
       >
         Done
       </button>
+    </div>
+  )
+}
+
+function UsageSection({
+  householdId,
+  itemId,
+  displayUnit,
+  members,
+  onChanged,
+}: {
+  householdId: string
+  itemId: string
+  displayUnit: Unit
+  members: Member[]
+  onChanged: () => void
+}) {
+  const [events, setEvents] = useState<ConsumptionEvent[]>([])
+  const [fixing, setFixing] = useState<string | null>(null)
+  const [amount, setAmount] = useState('')
+  const [unit, setUnit] = useState<Unit>(displayUnit)
+  const [note, setNote] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const nickname = (id: string) => members.find((m) => m.id === id)?.nickname ?? 'Someone'
+  const dimensionUnits = UNITS_BY_DIMENSION[guessDimension(displayUnit)]
+
+  useEffect(() => {
+    apiClient
+      .get<ConsumptionEvent[]>(
+        `/api/households/${householdId}/inventory-items/${itemId}/consumption`,
+      )
+      .then(setEvents)
+      .catch(() => setEvents([]))
+  }, [householdId, itemId, refreshKey])
+
+  const openFix = (event: ConsumptionEvent) => {
+    setError(null)
+    setFixing(event.id)
+    setAmount(event.quantity_used)
+    setUnit(event.unit)
+    setNote('')
+  }
+
+  const submitFix = async (eventId: string) => {
+    if (!amount || Number(amount) < 0) {
+      setError('Enter the amount that was actually used.')
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    try {
+      await apiClient.post(
+        `/api/households/${householdId}/inventory-items/${itemId}/consumption-corrections`,
+        {
+          corrects_event_id: eventId,
+          actual_quantity: amount,
+          unit,
+          note: note.trim() || null,
+        },
+      )
+      setFixing(null)
+      setRefreshKey((k) => k + 1)
+      onChanged()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Something went wrong')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (events.length === 0) return null
+
+  return (
+    <div>
+      <label className={fieldLabelClass}>Usage</label>
+      <ul className="flex flex-col gap-1.5">
+        {events.map((event) =>
+          event.kind === 'CORRECTION' ? (
+            <li key={event.id} className="ml-4 text-xs text-faint">
+              ↳ adjusted by {Number(event.quantity_used) > 0 ? '+' : ''}
+              {event.quantity_used} {UNIT_LABELS[event.unit]}
+              {event.note && <span className="italic"> · "{event.note}"</span>}
+            </li>
+          ) : (
+            <li
+              key={event.id}
+              className="rounded-control border border-subtle bg-surface-2 px-3 py-2 text-xs"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted">
+                  <b className="text-text">{nickname(event.member_id)}</b> used{' '}
+                  {event.quantity_used} {UNIT_LABELS[event.unit]}
+                  {' · '}
+                  {new Date(event.consumed_at).toLocaleDateString()}
+                </span>
+                {fixing !== event.id && (
+                  <button
+                    type="button"
+                    onClick={() => openFix(event)}
+                    className="shrink-0 font-medium text-primary hover:underline"
+                  >
+                    Fix
+                  </button>
+                )}
+              </div>
+              {fixing === event.id && (
+                <div className="mt-2 flex flex-col gap-2 border-t border-subtle pt-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      autoFocus
+                      className={inputClass}
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="Actual amount used"
+                    />
+                    <select
+                      className="w-24 rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none focus:border-primary"
+                      value={unit}
+                      onChange={(e) => setUnit(e.target.value as Unit)}
+                    >
+                      {dimensionUnits.map((u) => (
+                        <option key={u} value={u}>
+                          {UNIT_LABELS[u]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Note (optional)"
+                  />
+                  {error && <p className="text-sm text-danger">{error}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => submitFix(event.id)}
+                      className="rounded-control bg-primary px-3 py-1.5 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+                    >
+                      {submitting ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFixing(null)}
+                      className="rounded-control px-3 py-1.5 text-sm font-medium text-muted hover:bg-surface-hover"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ),
+        )}
+      </ul>
     </div>
   )
 }

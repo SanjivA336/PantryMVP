@@ -203,10 +203,26 @@ export type ActivityType =
   | 'ITEM_REMOVED'
   | 'ITEM_MOVED'
   | 'COST_CORRECTED'
+  | 'USAGE_CORRECTED'
   | 'SETTLEMENT_RECORDED'
   | 'SETTLEMENT_REVERSED'
   | 'MEMBER_JOINED'
   | 'MEMBER_LEFT'
+
+export type ConsumptionEventKind = 'USAGE' | 'CORRECTION'
+
+export interface ConsumptionEvent {
+  id: string
+  member_id: string
+  inventory_item_id: string
+  // In the item's display unit. For a CORRECTION this is the signed delta.
+  quantity_used: string
+  unit: Unit
+  kind: ConsumptionEventKind
+  corrects_event_id: string | null
+  note: string | null
+  consumed_at: string
+}
 
 export interface ActivityEvent {
   id: string

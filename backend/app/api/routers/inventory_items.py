@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.auth import require_household_membership
 from app.core.responses import Envelope, ok
 from app.schemas.activity import ActivityType
+from app.schemas.consumption import ConsumptionEvent, RecordConsumptionCorrectionRequest
 from app.schemas.inventory_item import (
     ConsumeInventoryItemRequest,
     CorrectInventoryItemRequest,
@@ -215,6 +216,50 @@ def correct_inventory_item(
                 "note": body.note,
             },
         )
+    return ok(item)
+
+
+@router.get("/{item_id}/consumption", response_model=Envelope[list[ConsumptionEvent]])
+def list_item_consumption(
+    household_id: UUID,
+    item_id: UUID,
+    _member: Member = Depends(require_household_membership),
+) -> Envelope[list[ConsumptionEvent]]:
+    return ok(inventory_service.list_consumption(household_id, item_id))
+
+
+@router.post("/{item_id}/consumption-corrections", response_model=Envelope[InventoryItem])
+def correct_item_consumption(
+    household_id: UUID,
+    item_id: UUID,
+    body: RecordConsumptionCorrectionRequest,
+    caller: Member = Depends(require_household_membership),
+) -> Envelope[InventoryItem]:
+    before = inventory_service.get_by_id(household_id, item_id)
+    try:
+        item = inventory_service.correct_consumption(household_id, caller, item_id, body)
+    except inventory_service.ItemNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found") from exc
+    except inventory_service.ConsumptionEventNotFoundError as exc:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "That usage entry doesn't exist on this item",
+        ) from exc
+    except inventory_service.ConcurrentModificationError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This item was changed while you were correcting it -- reopen it and try again",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    activity_service.record(
+        household_id,
+        ActivityType.USAGE_CORRECTED,
+        actor=caller,
+        subject_name=before.food_name if before is not None else None,
+        detail={"item_id": str(item_id), "note": body.note},
+    )
     return ok(item)
 
 

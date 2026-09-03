@@ -5,6 +5,7 @@ import {
   Handshake,
   PackagePlus,
   PackageX,
+  Pencil,
   Receipt,
   RotateCcw,
   Trash2,
@@ -76,6 +77,8 @@ function iconFor(event: ActivityEvent) {
       return ArrowRightLeft
     case 'COST_CORRECTED':
       return Receipt
+    case 'USAGE_CORRECTED':
+      return Pencil
     case 'SETTLEMENT_RECORDED':
       return Handshake
     case 'SETTLEMENT_REVERSED':
@@ -125,6 +128,12 @@ function describe(event: ActivityEvent): ReactNode {
         <>
           <b>{actor}</b> corrected <b>{subject}</b> cost: ${String(d.previous_cost)} → $
           {String(d.new_cost)}
+        </>
+      )
+    case 'USAGE_CORRECTED':
+      return (
+        <>
+          <b>{actor}</b> corrected a usage entry on <b>{subject}</b>
         </>
       )
     case 'SETTLEMENT_RECORDED':

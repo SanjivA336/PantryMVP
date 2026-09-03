@@ -4,6 +4,7 @@ from uuid import UUID
 from postgrest.exceptions import APIError
 
 from app.core.supabase import get_service_client
+from app.schemas.consumption import ConsumptionEvent, RecordConsumptionCorrectionRequest
 from app.schemas.food_definition import AccountingType
 from app.schemas.inventory_item import (
     CorrectInventoryItemRequest,
@@ -13,6 +14,7 @@ from app.schemas.inventory_item import (
     RemovalReason,
     UpdateInventoryItemRequest,
 )
+from app.schemas.member import Member
 from app.schemas.units import Dimension, MeasurementPreference, Unit, UnitSystem
 from app.services import accounting as accounting_service
 from app.services import food_definitions as food_definitions_service
@@ -73,9 +75,16 @@ class UnitDimensionMismatchError(Exception):
 
 
 class ConcurrentModificationError(Exception):
-    """Raised by correct_item when the item changed between the baseline
-    read and the compare-and-swap claim -- another correction (or edit)
-    landed first. The caller should re-read and retry."""
+    """Raised by correct_item / correct_consumption when the item changed
+    between the baseline read and the compare-and-swap claim -- another
+    correction (or edit) landed first. The caller should re-read and retry."""
+
+    pass
+
+
+class ConsumptionEventNotFoundError(Exception):
+    """The consumption event a correction targets doesn't exist, doesn't
+    belong to this item, or isn't an original USAGE entry."""
 
     pass
 
@@ -566,6 +575,242 @@ def list_corrections(household_id: UUID, item_id: UUID) -> list[PurchaseCorrecti
                     )
         corrections.append(PurchaseCorrection(**row))
     return corrections
+
+
+def list_consumption(household_id: UUID, item_id: UUID) -> list[ConsumptionEvent]:
+    """Every usage + correction row for an item, oldest first -- powers the
+    "Usage" list on the item detail page. quantity_used is converted from
+    the stored base value into the item's display unit, same as everywhere
+    else the API speaks quantities."""
+    client = get_service_client()
+    item = (
+        client.table(_TABLE).select("display_unit").eq("id", str(item_id)).maybe_single().execute()
+    )
+    display_unit = Unit(item.data["display_unit"]) if item and item.data else Unit.COUNT
+
+    rows = (
+        client.table("consumption_events")
+        .select("*")
+        .eq("household_id", str(household_id))
+        .eq("inventory_item_id", str(item_id))
+        .order("consumed_at", desc=False)
+        .execute()
+    ).data
+    events: list[ConsumptionEvent] = []
+    for row in rows:
+        events.append(
+            ConsumptionEvent(
+                id=row["id"],
+                member_id=row["member_id"],
+                inventory_item_id=row["inventory_item_id"],
+                quantity_used=units_service.display_quantity(
+                    Decimal(str(row["quantity_used"])), display_unit
+                ),
+                unit=display_unit,
+                kind=row["kind"],
+                corrects_event_id=row["corrects_event_id"],
+                note=row["note"],
+                consumed_at=row["consumed_at"],
+            )
+        )
+    return events
+
+
+def _post_usage_correction_adjustments(
+    client,
+    household_id: UUID,
+    item: InventoryItem,
+    total_base: Decimal,
+    corrected_member_id: UUID,
+    delta_base: Decimal,
+) -> None:
+    """A frozen item's PURCHASE ledger_entries were split against the usage
+    on record at freeze time. A usage correction changes that split, so
+    post the per-member difference as ADJUSTMENT entries -- exactly the
+    shape correct_item uses for a cost change, except the driver here is
+    the usage delta, not a cost delta. Assumes the CORRECTION event has
+    already been written (so consumption_events reflects the new usage).
+    """
+    purchase_event = (
+        client.table("purchase_events")
+        .select("member_id")
+        .eq("id", str(item.purchase_event_id))
+        .single()
+        .execute()
+    )
+    buyer_id = UUID(purchase_event.data["member_id"])
+    allowed = (
+        client.table("inventory_item_allowed_members")
+        .select("member_id")
+        .eq("inventory_item_id", str(item.id))
+        .execute()
+    )
+    member_ids = [UUID(row["member_id"]) for row in allowed.data]
+
+    consumption = (
+        client.table("consumption_events")
+        .select("member_id, quantity_used")
+        .eq("inventory_item_id", str(item.id))
+        .execute()
+    )
+    new_usage: dict[UUID, Decimal] = {}
+    for row in consumption.data:
+        member_id = UUID(row["member_id"])
+        new_usage[member_id] = new_usage.get(member_id, Decimal(0)) + Decimal(
+            str(row["quantity_used"])
+        )
+    old_usage = dict(new_usage)
+    old_usage[corrected_member_id] = old_usage.get(corrected_member_id, Decimal(0)) - delta_base
+
+    cost = Decimal(str(item.cost))
+    old_shares = accounting_service.compute_item_shares(
+        total_quantity=total_base,
+        total_cost=cost,
+        member_ids=member_ids,
+        buyer_id=buyer_id,
+        usage_by_member=dict(old_usage),
+    )
+    new_shares = accounting_service.compute_item_shares(
+        total_quantity=total_base,
+        total_cost=cost,
+        member_ids=member_ids,
+        buyer_id=buyer_id,
+        usage_by_member=dict(new_usage),
+    )
+
+    entries = []
+    for member_id in member_ids:
+        if member_id == buyer_id:
+            continue
+        diff = new_shares.get(member_id, Decimal(0)) - old_shares.get(member_id, Decimal(0))
+        if diff == 0:
+            continue
+        # diff > 0: this member's final share went up -> they owe the buyer
+        # more. diff < 0: their share dropped -> the buyer owes them back.
+        entries.append(
+            {
+                "household_id": str(household_id),
+                "creditor_member_id": str(buyer_id if diff > 0 else member_id),
+                "debtor_member_id": str(member_id if diff > 0 else buyer_id),
+                "amount": str(abs(diff)),
+                "reason": "ADJUSTMENT",
+            }
+        )
+    if entries:
+        client.table("ledger_entries").insert(entries).execute()
+
+
+def correct_consumption(
+    household_id: UUID,
+    caller: Member,
+    item_id: UUID,
+    body: RecordConsumptionCorrectionRequest,
+) -> InventoryItem:
+    """Append a CORRECTION row that fixes a mis-logged usage entry.
+
+    consumption_events stays immutable -- this writes a new signed-delta
+    row, never edits the original. inventory_items.quantity is a
+    maintained cache, so it's recomputed here (current - delta); the
+    billing side is either live (nothing to do, _live_shares nets the
+    delta on the next read) or already frozen (post ADJUSTMENT entries for
+    the re-split). If the correction empties a still-live item, it freezes
+    the same way consume() does.
+    """
+    current = get_by_id(household_id, item_id)
+    if current is None:
+        raise ItemNotFoundError
+    raw = _raw_base(household_id, item_id)
+    assert raw is not None
+    current_qty_base, current_total_base, display_unit, baseline_updated_at = raw
+
+    client = get_service_client()
+    original = (
+        client.table("consumption_events")
+        .select("member_id, quantity_used, kind")
+        .eq("id", str(body.corrects_event_id))
+        .eq("household_id", str(household_id))
+        .eq("inventory_item_id", str(item_id))
+        .maybe_single()
+        .execute()
+    )
+    if not original or not original.data or original.data["kind"] != "USAGE":
+        raise ConsumptionEventNotFoundError
+    corrected_member_id = UUID(original.data["member_id"])
+    original_base = Decimal(str(original.data["quantity_used"]))
+
+    # Net of any earlier corrections to this same entry, so a second
+    # correction measures its delta from the current effective value, not
+    # the untouched original.
+    priors = (
+        client.table("consumption_events")
+        .select("quantity_used")
+        .eq("corrects_event_id", str(body.corrects_event_id))
+        .execute()
+    )
+    effective_base = original_base + sum(
+        (Decimal(str(r["quantity_used"])) for r in priors.data), Decimal(0)
+    )
+
+    unit = body.unit or display_unit
+    if units_service.guess_dimension(unit) != units_service.guess_dimension(display_unit):
+        raise ValueError("That unit isn't compatible with how this item is measured")
+    actual_base = units_service.to_base(body.actual_quantity, unit)
+    delta_base = actual_base - effective_base
+    if delta_base == 0:
+        raise ValueError("The corrected amount matches what's already recorded")
+
+    # Σ usage moves by delta, so remaining moves by -delta.
+    new_quantity_base = current_qty_base - delta_base
+    if new_quantity_base < 0:
+        raise ValueError("That would put more total usage on the item than it ever held")
+    if new_quantity_base > current_total_base:
+        raise ValueError("That correction implies negative total usage")
+
+    # Compare-and-swap on the item row before writing anything -- two
+    # concurrent corrections would otherwise both recompute quantity and
+    # (for a frozen item) both post adjustments. Mirrors correct_item.
+    claim = (
+        client.table(_TABLE)
+        .update({"quantity": str(new_quantity_base)})
+        .eq("household_id", str(household_id))
+        .eq("id", str(item_id))
+        .eq("updated_at", baseline_updated_at)
+        .execute()
+    )
+    if not claim.data:
+        raise ConcurrentModificationError
+
+    client.table("consumption_events").insert(
+        {
+            "household_id": str(household_id),
+            "member_id": str(corrected_member_id),
+            "inventory_item_id": str(item_id),
+            "quantity_used": str(delta_base),
+            "kind": "CORRECTION",
+            "corrects_event_id": str(body.corrects_event_id),
+            "note": body.note,
+        }
+    ).execute()
+
+    if current.debt_frozen_at is not None and current.accounting_type != "PERSONAL":
+        _post_usage_correction_adjustments(
+            client, household_id, current, current_total_base, corrected_member_id, delta_base
+        )
+    else:
+        # A correction that pushes usage to the item's limit takes quantity
+        # to 0, and the inventory_items quantity=0 trigger has already
+        # flipped a still-ACTIVE item to EMPTY on the claim above. Freeze
+        # it, the same way consume() does. freeze_item_debt no-ops for
+        # PERSONAL and for anything already frozen.
+        refreshed = get_by_id(household_id, item_id)
+        if (
+            refreshed is not None
+            and refreshed.status != "ACTIVE"
+            and refreshed.debt_frozen_at is None
+        ):
+            accounting_service.freeze_item_debt(item_id)
+
+    return get_by_id(household_id, item_id)  # type: ignore[return-value]
 
 
 def find_last_cost(
