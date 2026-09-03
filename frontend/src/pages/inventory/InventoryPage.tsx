@@ -13,7 +13,6 @@ import {
   Rows3,
   Trash2,
   UtensilsCrossed,
-  X,
 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
@@ -37,6 +36,7 @@ import {
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
 import { UNIT_LABELS } from '../../lib/units'
+import { UseItemModal } from './UseItemModal'
 import type {
   AccountingType,
   FoodCategory,
@@ -134,8 +134,7 @@ export function InventoryPage() {
   }, [reload, reloadWarnings, reloadStorageLocations])
   useRealtimeSubscription('inventory_items', householdId ?? null, reloadAll)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [consumeAmounts, setConsumeAmounts] = useState<Record<string, string>>({})
-  const [usingItemId, setUsingItemId] = useState<string | null>(null)
+  const [usingItem, setUsingItem] = useState<InventoryItem | null>(null)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<FoodCategory | ''>('')
   const [storageTypeFilter, setStorageTypeFilter] = useState<StorageLocationType | ''>('')
@@ -299,28 +298,6 @@ export function InventoryPage() {
     return counts
   }, [warnings, activeItemLocationById, activeLocationsByVariant])
 
-  const startUsing = (itemId: string) => {
-    setUsingItemId(itemId)
-    setConsumeAmounts((prev) => ({ ...prev, [itemId]: '' }))
-  }
-  const cancelUsing = () => setUsingItemId(null)
-
-  const consume = async (item: InventoryItem) => {
-    const amount = consumeAmounts[item.id]
-    if (!amount || Number(amount) <= 0) return
-    setActionError(null)
-    try {
-      await apiClient.post(`/api/households/${householdId}/inventory-items/${item.id}/consume`, {
-        quantity_used: amount,
-      })
-      setConsumeAmounts((prev) => ({ ...prev, [item.id]: '' }))
-      setUsingItemId(null)
-      reloadAll()
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
-    }
-  }
-
   const discard = async (item: InventoryItem, reason: RemovalReason) => {
     setActionError(null)
     try {
@@ -335,7 +312,6 @@ export function InventoryPage() {
 
   const renderItemCard = (item: InventoryItem) => {
     const expiry = item.expiry_date ? expiryText(item.expiry_date) : null
-    const isUsing = usingItemId === item.id
     return (
       <li
         key={item.id}
@@ -368,48 +344,13 @@ export function InventoryPage() {
         </div>
 
         <div className="mt-auto flex items-center justify-between gap-2 border-t border-subtle pt-3">
-          {isUsing ? (
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number"
-                step="any"
-                autoFocus
-                placeholder="Qty"
-                className="w-16 rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
-                value={consumeAmounts[item.id] ?? ''}
-                onChange={(e) =>
-                  setConsumeAmounts((prev) => ({ ...prev, [item.id]: e.target.value }))
-                }
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') consume(item)
-                  if (e.key === 'Escape') cancelUsing()
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => consume(item)}
-                className="rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
-              >
-                Confirm
-              </button>
-              <button
-                type="button"
-                onClick={cancelUsing}
-                className="rounded-control p-2 text-faint transition-colors hover:bg-surface-hover hover:text-text"
-                aria-label="Cancel"
-              >
-                <X size={16} strokeWidth={1.75} />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => startUsing(item.id)}
-              className="rounded-control bg-primary-soft px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary hover:text-bg"
-            >
-              Use
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setUsingItem(item)}
+            className="rounded-control bg-primary-soft px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary hover:text-bg"
+          >
+            Use
+          </button>
           <div className="flex items-center gap-0.5">
             <button
               type="button"
@@ -729,6 +670,15 @@ export function InventoryPage() {
             </button>
           </form>
         </Modal>
+      )}
+
+      {usingItem && (
+        <UseItemModal
+          item={usingItem}
+          householdId={householdId!}
+          onClose={() => setUsingItem(null)}
+          onConsumed={reloadAll}
+        />
       )}
     </div>
   )

@@ -21,7 +21,6 @@ class LedgerEntry(BaseModel):
     reason: LedgerEntryReason
     source_purchase_event_id: UUID | None
     source_consumption_event_id: UUID | None
-    settled_at: datetime | None
     created_at: datetime
 
 

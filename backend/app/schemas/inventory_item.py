@@ -103,6 +103,12 @@ class CreateInventoryItemRequest(BaseModel):
 
 class ConsumeInventoryItemRequest(BaseModel):
     quantity_used: Decimal = Field(gt=0)
+    # The unit `quantity_used` is expressed in. Omitted means "the item's
+    # own unit" (the historical behavior). When given and different, the
+    # router converts to the item's unit before decrementing -- only a
+    # same-dimension unit is accepted (converting cups to grams needs a
+    # density this app never asks for).
+    unit: Unit | None = None
 
 
 class UpdateInventoryItemRequest(BaseModel):

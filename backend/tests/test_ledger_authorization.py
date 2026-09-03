@@ -19,7 +19,6 @@ def _entry(household_id: uuid.UUID, **overrides) -> LedgerEntryDetail:
         reason="PURCHASE",
         source_purchase_event_id=uuid.uuid4(),
         source_consumption_event_id=None,
-        settled_at=None,
         created_at=now,
         food_name="Butter",
     )

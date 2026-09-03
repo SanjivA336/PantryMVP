@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import require_household_admin, require_household_membership
 from app.core.responses import Envelope, ok
+from app.schemas.activity import ActivityType
 from app.schemas.member import Member, UpdateMemberRequest
+from app.services import activity as activity_service
 from app.services import households as households_service
 from app.services import members as members_service
 
@@ -87,6 +89,13 @@ def leave_household(
     _ensure_not_last_admin(household_id, caller)
     _ensure_not_owner(household_id, caller)
     updated = members_service.deactivate_member(household_id, member_id)
+    activity_service.record(
+        household_id,
+        ActivityType.MEMBER_LEFT,
+        actor=caller,
+        subject_name=caller.nickname,
+        detail={"removed_by_admin": False},
+    )
     return ok(updated)
 
 
@@ -94,7 +103,7 @@ def leave_household(
 def remove_member(
     household_id: UUID,
     member_id: UUID,
-    _admin: Member = Depends(require_household_admin),
+    admin: Member = Depends(require_household_admin),
 ) -> Envelope[Member]:
     target = members_service.get_member_by_id(household_id, member_id)
     if target is None:
@@ -102,4 +111,11 @@ def remove_member(
     _ensure_not_last_admin(household_id, target)
     _ensure_not_owner(household_id, target)
     updated = members_service.deactivate_member(household_id, member_id)
+    activity_service.record(
+        household_id,
+        ActivityType.MEMBER_LEFT,
+        actor=admin,
+        subject_name=target.nickname,
+        detail={"removed_by_admin": True},
+    )
     return ok(updated)

@@ -159,7 +159,6 @@ export interface LedgerEntry {
   reason: LedgerEntryReason
   source_purchase_event_id: string | null
   source_consumption_event_id: string | null
-  settled_at: string | null
   created_at: string
 }
 
@@ -177,6 +176,49 @@ export interface Settlement {
   debtor_member_id: string
   creditor_member_id: string
   amount: string
+}
+
+// A payment that actually happened, logged after the fact -- distinct from
+// Settlement above (a step in the computed settle-up plan). A row with
+// reverses_settlement_id set is a reversal (parties swapped) that undoes
+// the settlement it points at; the UI hides it and marks the original.
+export interface SettlementRecord {
+  id: string
+  household_id: string
+  payer_member_id: string
+  payee_member_id: string
+  amount: string
+  note: string | null
+  recorded_by_member_id: string
+  reverses_settlement_id: string | null
+  created_at: string
+}
+
+// Mirrors backend/app/schemas/activity.py's ActivityType. ITEM_REMOVED
+// covers all four endings via detail.reason (USED_UP / DISCARDED /
+// EXPIRED / LOST).
+export type ActivityType =
+  | 'ITEM_ADDED'
+  | 'ITEM_CONSUMED'
+  | 'ITEM_REMOVED'
+  | 'ITEM_MOVED'
+  | 'COST_CORRECTED'
+  | 'SETTLEMENT_RECORDED'
+  | 'SETTLEMENT_REVERSED'
+  | 'MEMBER_JOINED'
+  | 'MEMBER_LEFT'
+
+export interface ActivityEvent {
+  id: string
+  household_id: string
+  type: ActivityType
+  // Null when there's no actor worth showing (an item hitting zero) or the
+  // actor's account was later deleted -- actor_nickname stays readable.
+  actor_member_id: string | null
+  actor_nickname: string | null
+  subject_name: string | null
+  detail: Record<string, unknown>
+  created_at: string
 }
 
 export type ExpiryWarningType = 'EXPIRING_SOON' | 'EXPIRED'

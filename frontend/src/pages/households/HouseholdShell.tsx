@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
+  Activity,
   Check,
   ChefHat,
-  Clock,
   Copy,
   Home,
   LogOut,
@@ -47,8 +47,14 @@ const PRIMARY_NAV_ITEMS = [
   { to: '', label: 'Inventory', end: true, icon: Home },
   { to: 'shopping-list', label: 'Shopping List', icon: ShoppingCart },
   { to: 'balances', label: 'Balances', icon: Scale },
-  { to: 'history', label: 'History', icon: Clock },
+  { to: 'activity', label: 'Activity', icon: Activity },
 ]
+
+// The mobile bottom bar only has room for a few tabs before "More" -- keep
+// it to the three most-used, and let Activity live under "More" (still a
+// full sidebar item on desktop).
+const MOBILE_BOTTOM_NAV_ITEMS = PRIMARY_NAV_ITEMS.slice(0, 3)
+const MOBILE_MORE_NAV_ITEMS = PRIMARY_NAV_ITEMS.slice(3)
 
 // Experimental (AI/OCR-backed, real inference cost) -- hidden from the nav
 // entirely unless useIsDeveloper() says otherwise. The backend enforces
@@ -214,7 +220,7 @@ export function HouseholdShell() {
 
       {/* Mobile bottom tab bar */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex items-stretch justify-around border-t border-subtle bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
-        {PRIMARY_NAV_ITEMS.map((item) => (
+        {MOBILE_BOTTOM_NAV_ITEMS.map((item) => (
           <BottomTabLink key={item.label} {...item} />
         ))}
         <button
@@ -249,6 +255,9 @@ export function HouseholdShell() {
               </button>
             </div>
             <div className="flex flex-col gap-0.5">
+              {MOBILE_MORE_NAV_ITEMS.map((item) => (
+                <SidebarLink key={item.label} {...item} onClick={() => setMoreOpen(false)} />
+              ))}
               {isDeveloper &&
                 SECONDARY_NAV_ITEMS.map((item) => (
                   <SidebarLink key={item.label} {...item} onClick={() => setMoreOpen(false)} />

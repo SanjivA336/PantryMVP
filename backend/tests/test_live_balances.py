@@ -43,6 +43,7 @@ class _FakeClient:
         purchase_event_rows=None,
         allowed_member_rows=None,
         consumption_event_rows=None,
+        settlement_rows=None,
     ):
         self._tables = {
             "ledger_entries": ledger_rows or [],
@@ -51,6 +52,7 @@ class _FakeClient:
             "purchase_events": purchase_event_rows or [],
             "inventory_item_allowed_members": allowed_member_rows or [],
             "consumption_events": consumption_event_rows or [],
+            "settlement_records": settlement_rows or [],
         }
 
     def table(self, name):
@@ -139,6 +141,69 @@ def test_compute_balances_blends_live_share_on_top_of_a_real_ledger_entry(monkey
     assert balances[0].debtor_member_id == debtor
     assert balances[0].creditor_member_id == buyer
     assert balances[0].amount == Decimal("7.00")
+
+
+def test_recorded_settlement_cancels_debt_in_the_same_direction(monkeypatch) -> None:
+    """A real $5 debt (debtor -> buyer) plus a recorded $2 payment from
+    debtor to buyer nets to a $3 remaining balance -- the payment reduces
+    what the debtor owes, exactly as if $2 of ledger entries had never been
+    posted."""
+    household_id = uuid.uuid4()
+    buyer, debtor = uuid.uuid4(), uuid.uuid4()
+
+    client = _FakeClient(
+        ledger_rows=[
+            {
+                "debtor_member_id": str(debtor),
+                "creditor_member_id": str(buyer),
+                "amount": "5.00",
+            }
+        ],
+        settlement_rows=[
+            {
+                "payer_member_id": str(debtor),
+                "payee_member_id": str(buyer),
+                "amount": "2.00",
+            }
+        ],
+    )
+    monkeypatch.setattr("app.services.ledger.get_service_client", lambda: client)
+
+    balances = ledger_service.compute_balances(household_id)
+
+    assert len(balances) == 1
+    assert balances[0].debtor_member_id == debtor
+    assert balances[0].creditor_member_id == buyer
+    assert balances[0].amount == Decimal("3.00")
+
+
+def test_reversal_row_re_adds_the_debt_it_cancelled(monkeypatch) -> None:
+    """The reversal is stored as an ordinary row with payer/payee swapped,
+    so a settlement and its reversal sum back to zero net effect -- the
+    original $5 debt is fully restored."""
+    household_id = uuid.uuid4()
+    buyer, debtor = uuid.uuid4(), uuid.uuid4()
+
+    client = _FakeClient(
+        ledger_rows=[
+            {
+                "debtor_member_id": str(debtor),
+                "creditor_member_id": str(buyer),
+                "amount": "5.00",
+            }
+        ],
+        settlement_rows=[
+            {"payer_member_id": str(debtor), "payee_member_id": str(buyer), "amount": "5.00"},
+            {"payer_member_id": str(buyer), "payee_member_id": str(debtor), "amount": "5.00"},
+        ],
+    )
+    monkeypatch.setattr("app.services.ledger.get_service_client", lambda: client)
+
+    balances = ledger_service.compute_balances(household_id)
+
+    assert len(balances) == 1
+    assert balances[0].debtor_member_id == debtor
+    assert balances[0].amount == Decimal("5.00")
 
 
 def test_frozen_items_never_contribute_a_live_share(monkeypatch) -> None:

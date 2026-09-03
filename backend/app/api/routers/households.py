@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import get_current_user_id, require_household_admin, require_household_membership
 from app.core.responses import Envelope, ok
+from app.schemas.activity import ActivityType
 from app.schemas.household import (
     CreateHouseholdRequest,
     Household,
@@ -12,6 +13,7 @@ from app.schemas.household import (
     UpdateHouseholdRequest,
 )
 from app.schemas.member import Member
+from app.services import activity as activity_service
 from app.services import households as households_service
 from app.services import members as members_service
 
@@ -43,6 +45,16 @@ def join_household(
         )
     except households_service.InvalidJoinCodeError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Invalid join code") from exc
+
+    joined_member = members_service.get_active_member(household.id, user_id)
+    if joined_member is not None:
+        activity_service.record(
+            household.id,
+            ActivityType.MEMBER_JOINED,
+            actor=joined_member,
+            subject_name=joined_member.nickname,
+            detail={},
+        )
     return ok(household)
 
 

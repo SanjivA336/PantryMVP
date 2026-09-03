@@ -201,12 +201,38 @@ def _live_shares(household_id: UUID) -> list[tuple[UUID, UUID, Decimal]]:
     return triples
 
 
+def _recorded_settlement_deltas(household_id: UUID) -> list[tuple[UUID, UUID, Decimal]]:
+    """(payer, payee, amount) for every settlement_records row, reversals
+    included -- a reversal is just a row with the parties swapped, so
+    applying the same "payer paid payee" rule to it cancels its original
+    with no special-casing.
+
+    Read here directly rather than through settlements_service so it rides
+    the same get_service_client the rest of this module's balance math
+    uses (and stays trivially fake-able in the balance unit tests).
+    """
+    client = get_service_client()
+    result = (
+        client.table("settlement_records")
+        .select("payer_member_id, payee_member_id, amount")
+        .eq("household_id", str(household_id))
+        .execute()
+    )
+    return [
+        (UUID(r["payer_member_id"]), UUID(r["payee_member_id"]), Decimal(str(r["amount"])))
+        for r in result.data
+    ]
+
+
 def compute_balances(household_id: UUID) -> list[LedgerBalance]:
-    """Net, pairwise balances across all currently-unsettled entries, plus
-    every not-yet-frozen item's live computed share (see _live_shares) --
-    blended into the exact same net dict, indistinguishable to the caller,
-    which is the point: an active item's debt should look exactly as real
-    as an already-frozen one until it isn't.
+    """Net, pairwise balances across three blended sources: every posted
+    ledger entry, every not-yet-frozen item's live computed share (see
+    _live_shares), and every recorded settlement (see
+    settlements_service.settlement_deltas) -- all folded into one net dict,
+    indistinguishable to the caller. That's the point: an active item's
+    debt should look exactly as real as an already-frozen one, and a
+    payment someone logged should cancel debt exactly as if the ledger
+    entries it covered had never been posted.
 
     Computed here in Python over the raw rows rather than as a SQL view:
     the netting (collapsing "A owes B $5" and "B owes A $3" into one "A
@@ -218,7 +244,6 @@ def compute_balances(household_id: UUID) -> list[LedgerBalance]:
         client.table(_TABLE)
         .select("creditor_member_id, debtor_member_id, amount")
         .eq("household_id", str(household_id))
-        .is_("settled_at", "null")
         .execute()
     )
     ghost_ids = _ghost_member_ids(household_id)
@@ -237,6 +262,14 @@ def compute_balances(household_id: UUID) -> list[LedgerBalance]:
         if debtor in ghost_ids or creditor in ghost_ids:
             continue
         net[(debtor, creditor)] += amount
+
+    # A recorded payment from payer to payee reduces what payer owes payee.
+    # Modeled as debt in the opposite direction (payee "owes" payer that
+    # much), so after the forward/reverse netting below it cancels cleanly.
+    for payer, payee, amount in _recorded_settlement_deltas(household_id):
+        if payer in ghost_ids or payee in ghost_ids:
+            continue
+        net[(payee, payer)] += amount
 
     seen_pairs: set[frozenset[UUID]] = set()
     balances: list[LedgerBalance] = []

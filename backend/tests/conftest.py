@@ -83,6 +83,40 @@ class MemberStore(dict):
         return member
 
 
+@pytest.fixture(autouse=True)
+def captured_activity(request, monkeypatch):
+    """Stub app.services.activity.record for unit tests.
+
+    The activity feed is now a side effect of nearly every mutating
+    endpoint, and record() reaches for a real service-role client. Autouse
+    so no unit test hits the network through that side effect; the yielded
+    list captures every emitted event so a test can assert on it.
+
+    Skipped for the integration/rls suites, which run against the real
+    project and may want the genuine write (same reasoning mock_jwks uses
+    to stay opt-in there).
+    """
+    if request.node.get_closest_marker("integration") or request.node.get_closest_marker("rls"):
+        yield []
+        return
+
+    events: list[dict] = []
+
+    def fake_record(household_id, type_, *, actor=None, subject_name=None, detail=None):
+        events.append(
+            {
+                "household_id": household_id,
+                "type": type_,
+                "actor": actor,
+                "subject_name": subject_name,
+                "detail": detail or {},
+            }
+        )
+
+    monkeypatch.setattr("app.services.activity.record", fake_record)
+    yield events
+
+
 @pytest.fixture
 def fake_members(monkeypatch):
     """In-memory fake for app.services.members, so require_household_membership

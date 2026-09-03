@@ -1,9 +1,16 @@
 import { useMemo } from 'react'
 import { BarChart3 } from 'lucide-react'
-import type { LedgerEntryDetail, Member } from '../../types/entities'
+import type {
+  LedgerBalance,
+  LedgerEntryDetail,
+  Member,
+  SettlementRecord,
+} from '../../types/entities'
 
 interface Props {
   entries: LedgerEntryDetail[] | null
+  balances: LedgerBalance[] | null
+  settlements: SettlementRecord[] | null
   members: Member[] | null
   loading: boolean
 }
@@ -20,7 +27,8 @@ const LINE_COLORS = [
   'var(--color-category-snacks-sweets)',
 ]
 
-const CARD_CLASS = 'flex flex-col gap-3 rounded-card border border-subtle bg-surface p-4 shadow-card'
+const CARD_CLASS =
+  'flex flex-col gap-3 rounded-card border border-subtle bg-surface p-4 shadow-card'
 
 function EmptyChart({ label }: { label: string }) {
   return <p className="py-6 text-center text-sm text-muted">{label}</p>
@@ -75,7 +83,8 @@ function NetBalanceOverTimeChart({
   // preserveAspectRatio="none" lets this stretch to fill the card's actual
   // width responsively -- fine for a simple trend line where exact aspect
   // ratio doesn't matter, avoids needing to recompute the viewBox on resize.
-  const xScale = (t: number) => (maxT === minT ? W / 2 : PAD + ((t - minT) / (maxT - minT)) * (W - PAD * 2))
+  const xScale = (t: number) =>
+    maxT === minT ? W / 2 : PAD + ((t - minT) / (maxT - minT)) * (W - PAD * 2)
   const yScale = (v: number) =>
     maxV === minV ? H / 2 : H - PAD - ((v - minV) / (maxV - minV)) * (H - PAD * 2)
   const zeroY = yScale(0)
@@ -155,16 +164,25 @@ function TopFoodsChart({ entries }: { entries: LedgerEntryDetail[] }) {
   )
 }
 
-function SettledDonutChart({ entries }: { entries: LedgerEntryDetail[] }) {
+function SettledDonutChart({
+  balances,
+  settlements,
+}: {
+  balances: LedgerBalance[]
+  settlements: SettlementRecord[]
+}) {
   const { settledTotal, outstandingTotal } = useMemo(() => {
-    let settled = 0
-    let outstanding = 0
-    for (const entry of entries) {
-      if (entry.settled_at) settled += Number(entry.amount)
-      else outstanding += Number(entry.amount)
-    }
+    // Recorded payments, net of reversals: a reversal row carries the same
+    // amount as its original with reverses_settlement_id set, so the pair
+    // sums to zero.
+    const settled = settlements.reduce(
+      (sum, s) => sum + (s.reverses_settlement_id ? -Number(s.amount) : Number(s.amount)),
+      0,
+    )
+    // What's still owed right now, across every remaining pairwise balance.
+    const outstanding = balances.reduce((sum, b) => sum + Number(b.amount), 0)
     return { settledTotal: settled, outstandingTotal: outstanding }
-  }, [entries])
+  }, [balances, settlements])
 
   const total = settledTotal + outstandingTotal
   if (total === 0) return <EmptyChart label="No activity yet." />
@@ -214,7 +232,7 @@ function SettledDonutChart({ entries }: { entries: LedgerEntryDetail[] }) {
   )
 }
 
-export function BalancesDashboard({ entries, members, loading }: Props) {
+export function BalancesDashboard({ entries, balances, settlements, members, loading }: Props) {
   if (loading) return <p className="text-sm text-muted">Loading…</p>
 
   if (!entries || entries.length === 0) {
@@ -240,7 +258,7 @@ export function BalancesDashboard({ entries, members, loading }: Props) {
       </div>
       <div className={CARD_CLASS}>
         <h3 className="text-sm font-semibold text-muted">Settled vs. outstanding</h3>
-        <SettledDonutChart entries={entries} />
+        <SettledDonutChart balances={balances ?? []} settlements={settlements ?? []} />
       </div>
     </div>
   )

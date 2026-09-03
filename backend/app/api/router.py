@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routers import (
+    activity,
     food_definitions,
     households,
     inventory_items,
@@ -23,6 +24,7 @@ api_router.include_router(storage_locations.router)
 api_router.include_router(food_definitions.router)
 api_router.include_router(inventory_items.router)
 api_router.include_router(ledger.router)
+api_router.include_router(activity.router)
 api_router.include_router(warnings.router)
 api_router.include_router(shopping_list.router)
 api_router.include_router(recipes.router)

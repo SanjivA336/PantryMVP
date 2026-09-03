@@ -5,7 +5,13 @@ import { ScrollSpy } from '../../components/ScrollSpy'
 import { useAuth } from '../../hooks/useAuth'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
-import type { LedgerBalance, LedgerEntryDetail, Member, Settlement } from '../../types/entities'
+import type {
+  LedgerBalance,
+  LedgerEntryDetail,
+  Member,
+  Settlement,
+  SettlementRecord,
+} from '../../types/entities'
 import { BalancesDashboard } from './BalancesDashboard'
 import { MembersSection } from './MembersSection'
 import { SettlementsSection } from './SettlementsSection'
@@ -45,16 +51,26 @@ export function BalancesPage() {
   } = useHouseholdResource<Settlement[]>(
     householdId ? `/api/households/${householdId}/ledger/settlements` : null,
   )
+  const {
+    data: settlementRecords,
+    loading: recordsLoading,
+    reload: reloadRecords,
+  } = useHouseholdResource<SettlementRecord[]>(
+    householdId ? `/api/households/${householdId}/ledger/settlement-records` : null,
+  )
 
   const reloadAll = useCallback(() => {
     reloadBalances()
     reloadEntries()
     reloadSettlements()
-  }, [reloadBalances, reloadEntries, reloadSettlements])
+    reloadRecords()
+  }, [reloadBalances, reloadEntries, reloadSettlements, reloadRecords])
   // A purchase/consumption on any device changes balances, the dashboard's
-  // charts, and the settle-up plan all at once -- one subscription driving
-  // all three keeps them from silently going stale independently.
+  // charts, and the settle-up plan all at once; a recorded (or reversed)
+  // payment moves the same numbers. One reload for both channels keeps the
+  // three sections from silently going stale independently.
   useRealtimeSubscription('ledger_entries', householdId ?? null, reloadAll)
+  useRealtimeSubscription('settlement_records', householdId ?? null, reloadAll)
 
   return (
     <div className="flex flex-col gap-10">
@@ -76,15 +92,24 @@ export function BalancesPage() {
 
       <section id="dashboard" className="scroll-mt-6">
         <h3 className="mb-3 text-sm font-semibold text-muted">Dashboard</h3>
-        <BalancesDashboard entries={entries} members={members} loading={entriesLoading} />
+        <BalancesDashboard
+          entries={entries}
+          balances={balances}
+          settlements={settlementRecords}
+          members={members}
+          loading={entriesLoading || recordsLoading}
+        />
       </section>
 
       <section id="settlements" className="scroll-mt-6">
         <h3 className="mb-3 text-sm font-semibold text-muted">Settlements</h3>
         <SettlementsSection
+          householdId={householdId ?? ''}
           settlements={settlements}
+          settlementRecords={settlementRecords}
           members={members}
-          loading={settlementsLoading}
+          loading={settlementsLoading || recordsLoading}
+          onChange={reloadAll}
         />
       </section>
     </div>
