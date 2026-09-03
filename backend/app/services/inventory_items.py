@@ -78,6 +78,17 @@ def _flatten(row: dict) -> InventoryItem:
     allowed = row.pop("inventory_item_allowed_members", None) or []
     global_definition = variant.get("global_food_definitions") or {}
 
+    # quantity / total_quantity are persisted in the dimension's base unit
+    # (migration 0028). The API still speaks the user's unit, so convert
+    # back here -- this is the read boundary. `display_unit` (the column) is
+    # surfaced under the schema's long-standing `preferred_unit` name.
+    display_unit = Unit(row.pop("display_unit"))
+    row["preferred_unit"] = display_unit
+    row["quantity"] = units_service.display_quantity(Decimal(str(row["quantity"])), display_unit)
+    row["total_quantity"] = units_service.display_quantity(
+        Decimal(str(row["total_quantity"])), display_unit
+    )
+
     # This item's own label wins over the food's name -- two jugs of the
     # same food definition can be told apart ("HEB milk" vs "Costco milk")
     # without needing separate variants or losing the shared running total.
@@ -88,6 +99,29 @@ def _flatten(row: dict) -> InventoryItem:
     row["allowed_member_ids"] = [a["member_id"] for a in allowed]
 
     return InventoryItem(**row)
+
+
+def _raw_base(household_id: UUID, item_id: UUID) -> tuple[Decimal, Decimal, Unit] | None:
+    """(quantity, total_quantity, display_unit) straight off the row, with
+    the quantities in their stored base unit -- for the handful of writes
+    (update_item / correct_item) that do additive quantity math and need an
+    exact base value, not the rounded display value _flatten returns."""
+    client = get_service_client()
+    result = (
+        client.table(_TABLE)
+        .select("quantity, total_quantity, display_unit")
+        .eq("household_id", str(household_id))
+        .eq("id", str(item_id))
+        .maybe_single()
+        .execute()
+    )
+    if not result or not result.data:
+        return None
+    return (
+        Decimal(str(result.data["quantity"])),
+        Decimal(str(result.data["total_quantity"])),
+        Unit(result.data["display_unit"]),
+    )
 
 
 def _resolve_accounting_type(body: CreateInventoryItemRequest) -> AccountingType:
@@ -122,7 +156,10 @@ def create_manual(
             "p_member_id": str(member_id),
             "p_global_food_definition_id": str(body.global_food_definition_id),
             "p_storage_location_id": str(body.storage_location_id),
-            "p_quantity": str(body.quantity),
+            # Persisted in base units; the RPC writes what it's given. The
+            # unit itself still rides along (as p_preferred_unit) and lands
+            # in the display_unit column.
+            "p_quantity": str(units_service.to_base(body.quantity, body.preferred_unit)),
             "p_preferred_unit": body.preferred_unit.value,
             "p_cost": str(body.cost),
             "p_expiry_date": body.expiry_date.isoformat() if body.expiry_date else None,
@@ -308,17 +345,11 @@ def update_item(
             current.preferred_unit
         ):
             raise UnitDimensionMismatchError
-        converted_quantity = units_service.convert(
-            current.quantity, current.preferred_unit, new_unit
-        )
-        converted_total = units_service.convert(
-            current.total_quantity, current.preferred_unit, new_unit
-        )
-        if converted_quantity is None or converted_total is None:
-            raise UnitDimensionMismatchError
-        updates["preferred_unit"] = new_unit.value
-        updates["quantity"] = str(converted_quantity)
-        updates["total_quantity"] = str(converted_total)
+        # Just a display preference now -- the stored quantity is in base
+        # units and doesn't move. This is what makes repeated metric<->
+        # customary toggles a no-op instead of an error-accumulating
+        # multiply/divide (see migration 0028).
+        updates["display_unit"] = new_unit.value
         _remember_measurement_choice(current.household_food_variant_id, new_unit)
 
     frozen_gated_fields = {"cost", "total_quantity", "allowed_member_ids"}
@@ -331,13 +362,17 @@ def update_item(
         # Applies the delta additively to both total_quantity and the
         # current remaining quantity -- "we actually had 10 the whole time"
         # should add to what's left, not overwrite it and silently erase
-        # whatever's already been consumed.
-        delta = body.total_quantity - current.total_quantity
-        new_quantity = current.quantity + delta
-        if new_quantity < 0:
+        # whatever's already been consumed. All in base units: body's value
+        # is in the item's display unit, everything stored is base.
+        raw = _raw_base(household_id, item_id)
+        assert raw is not None
+        current_qty_base, current_total_base, display_unit = raw
+        new_total_base = units_service.to_base(body.total_quantity, display_unit)
+        new_quantity_base = current_qty_base + (new_total_base - current_total_base)
+        if new_quantity_base < 0:
             raise ValueError("That would take the remaining quantity below zero")
-        updates["total_quantity"] = str(body.total_quantity)
-        updates["quantity"] = str(new_quantity)
+        updates["total_quantity"] = str(new_total_base)
+        updates["quantity"] = str(new_quantity_base)
 
     client = get_service_client()
     if updates:
@@ -383,6 +418,9 @@ def correct_item(
         raise ItemNotFoundError
     if current.debt_frozen_at is None:
         raise ItemNotFrozenError
+    raw = _raw_base(household_id, item_id)
+    assert raw is not None
+    current_qty_base, current_total_base, display_unit = raw
 
     client = get_service_client()
     correction_row: dict = {
@@ -398,14 +436,17 @@ def correct_item(
         correction_row["new_cost"] = str(body.new_cost)
         item_updates["cost"] = str(body.new_cost)
     if body.new_total_quantity is not None:
-        delta = body.new_total_quantity - current.total_quantity
-        new_quantity = current.quantity + delta
-        if new_quantity < 0:
+        # body's value is in the item's display unit; everything stored
+        # (here and on purchase_corrections) is base. list_corrections
+        # converts these snapshots back for display.
+        new_total_base = units_service.to_base(body.new_total_quantity, display_unit)
+        new_quantity_base = current_qty_base + (new_total_base - current_total_base)
+        if new_quantity_base < 0:
             raise ValueError("That would take the remaining quantity below zero")
-        correction_row["previous_total_quantity"] = str(current.total_quantity)
-        correction_row["new_total_quantity"] = str(body.new_total_quantity)
-        item_updates["total_quantity"] = str(body.new_total_quantity)
-        item_updates["quantity"] = str(new_quantity)
+        correction_row["previous_total_quantity"] = str(current_total_base)
+        correction_row["new_total_quantity"] = str(new_total_base)
+        item_updates["total_quantity"] = str(new_total_base)
+        item_updates["quantity"] = str(new_quantity_base)
 
     client.table("purchase_corrections").insert(correction_row).execute()
     if item_updates:
@@ -448,7 +489,9 @@ def correct_item(
             # the one whose share moves, instead of smearing the delta
             # equally across everyone regardless of who actually drove it.
             shares = accounting_service.compute_item_shares(
-                total_quantity=current.total_quantity,
+                # Base units, to line up with the base consumption_events
+                # quantities in usage_by_member above.
+                total_quantity=current_total_base,
                 total_cost=abs(delta_cost),
                 member_ids=member_ids,
                 buyer_id=buyer_id,
@@ -476,6 +519,11 @@ def correct_item(
 
 def list_corrections(household_id: UUID, item_id: UUID) -> list[PurchaseCorrection]:
     client = get_service_client()
+    item = (
+        client.table(_TABLE).select("display_unit").eq("id", str(item_id)).maybe_single().execute()
+    )
+    display_unit = Unit(item.data["display_unit"]) if item and item.data else None
+
     result = (
         client.table("purchase_corrections")
         .select("*")
@@ -484,18 +532,32 @@ def list_corrections(household_id: UUID, item_id: UUID) -> list[PurchaseCorrecti
         .order("created_at", desc=True)
         .execute()
     )
-    return [PurchaseCorrection(**row) for row in result.data]
+    corrections: list[PurchaseCorrection] = []
+    for row in result.data:
+        # The quantity snapshots are stored in base units; render them in
+        # the item's current display unit. Cost columns are dollars, left
+        # alone.
+        if display_unit is not None:
+            for field in ("previous_total_quantity", "new_total_quantity"):
+                if row.get(field) is not None:
+                    row[field] = str(
+                        units_service.display_quantity(Decimal(str(row[field])), display_unit)
+                    )
+        corrections.append(PurchaseCorrection(**row))
+    return corrections
 
 
 def find_last_cost(
-    household_id: UUID, global_food_definition_id: UUID, quantity: Decimal
+    household_id: UUID,
+    global_food_definition_id: UUID,
+    quantity: Decimal,
+    unit: Unit,
 ) -> Decimal | None:
-    """Cost of the most recent past purchase of this exact food + quantity in
-    this household, if any -- powers the Add Item form's "same as last time"
-    cost autofill. Two plain single-table lookups rather than one filtered
-    join: PostgREST needs an explicit !inner hint to filter on an embedded
-    table's column, which is easy to get subtly wrong; a household only has
-    one variant per food definition anyway; both look up rows.
+    """Cost of the most recent past purchase of this food at this same
+    quantity in this household -- powers the Add Item form's "same as last
+    time" cost autofill. `quantity`/`unit` are what the form currently
+    shows; stored total_quantity is in base units, so compare on the
+    display value rounded the same way the API rounds it.
     """
     client = get_service_client()
     variant_result = (
@@ -511,17 +573,19 @@ def find_last_cost(
 
     item_result = (
         client.table(_TABLE)
-        .select("cost")
+        .select("cost, total_quantity")
         .eq("household_id", str(household_id))
         .eq("household_food_variant_id", variant_result.data["id"])
-        .eq("total_quantity", str(quantity))
         .order("purchased_at", desc=True)
-        .limit(1)
+        .limit(20)
         .execute()
     )
-    if not item_result.data:
-        return None
-    return Decimal(str(item_result.data[0]["cost"]))
+    target = units_service.display_quantity(units_service.to_base(quantity, unit), unit)
+    for row in item_result.data:
+        stored = units_service.display_quantity(Decimal(str(row["total_quantity"])), unit)
+        if stored == target:
+            return Decimal(str(row["cost"]))
+    return None
 
 
 def allowed_member_ids_are_valid(household_id: UUID, member_ids: list[UUID]) -> bool:

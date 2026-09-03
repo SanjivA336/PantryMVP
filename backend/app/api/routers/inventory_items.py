@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.auth import require_household_membership
 from app.core.responses import Envelope, ok
+from app.schemas.activity import ActivityType
 from app.schemas.inventory_item import (
     ConsumeInventoryItemRequest,
     CorrectInventoryItemRequest,
@@ -15,8 +16,10 @@ from app.schemas.inventory_item import (
     UpdateInventoryItemRequest,
 )
 from app.schemas.member import Member
-from app.schemas.units import MeasurementPreference
+from app.schemas.units import MeasurementPreference, Unit
+from app.services import activity as activity_service
 from app.services import inventory_items as inventory_service
+from app.services import units as units_service
 
 router = APIRouter(prefix="/households/{household_id}/inventory-items", tags=["inventory"])
 
@@ -38,10 +41,11 @@ def get_last_cost(
     household_id: UUID,
     global_food_definition_id: UUID,
     quantity: Decimal,
+    unit: Unit,
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[Decimal | None]:
     return ok(
-        inventory_service.find_last_cost(household_id, global_food_definition_id, quantity)
+        inventory_service.find_last_cost(household_id, global_food_definition_id, quantity, unit)
     )
 
 
@@ -79,6 +83,20 @@ def create_inventory_item(
         item = inventory_service.create_manual(household_id, buyer_id, body)
     except inventory_service.FoodDefinitionNotFoundError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Food definition not found") from exc
+
+    activity_service.record(
+        household_id,
+        ActivityType.ITEM_ADDED,
+        actor=caller,
+        subject_name=item.food_name,
+        detail={
+            "item_id": str(item.id),
+            "quantity": str(item.total_quantity),
+            "unit": item.preferred_unit.value,
+            "storage_location": item.storage_location_name,
+            "bought_by": None if buyer_id == caller.id else str(buyer_id),
+        },
+    )
     return ok(item)
 
 
@@ -99,7 +117,7 @@ def update_inventory_item(
     household_id: UUID,
     item_id: UUID,
     body: UpdateInventoryItemRequest,
-    _member: Member = Depends(require_household_membership),
+    member: Member = Depends(require_household_membership),
 ) -> Envelope[InventoryItem]:
     if body.allowed_member_ids is not None and not inventory_service.allowed_member_ids_are_valid(
         household_id, body.allowed_member_ids
@@ -108,6 +126,14 @@ def update_inventory_item(
             status.HTTP_400_BAD_REQUEST,
             "allowed_member_ids must all be active members of this household",
         )
+    # Only fetched when a storage move is actually in the payload -- needed
+    # for the "from" side of the ITEM_MOVED event, which the post-update
+    # item can't supply on its own.
+    before = (
+        inventory_service.get_by_id(household_id, item_id)
+        if "storage_location_id" in body.model_fields_set and body.storage_location_id is not None
+        else None
+    )
     try:
         item = inventory_service.update_item(household_id, item_id, body)
     except inventory_service.ItemNotFoundError as exc:
@@ -126,6 +152,19 @@ def update_inventory_item(
         ) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    if before is not None and before.storage_location_id != item.storage_location_id:
+        activity_service.record(
+            household_id,
+            ActivityType.ITEM_MOVED,
+            actor=member,
+            subject_name=item.food_name,
+            detail={
+                "item_id": str(item.id),
+                "from_location": before.storage_location_name,
+                "to_location": item.storage_location_name,
+            },
+        )
     return ok(item)
 
 
@@ -145,6 +184,7 @@ def correct_inventory_item(
     body: CorrectInventoryItemRequest,
     caller: Member = Depends(require_household_membership),
 ) -> Envelope[InventoryItem]:
+    before = inventory_service.get_by_id(household_id, item_id)
     try:
         item = inventory_service.correct_item(household_id, caller.id, item_id, body)
     except inventory_service.ItemNotFoundError as exc:
@@ -156,6 +196,20 @@ def correct_inventory_item(
         ) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    if before is not None and body.new_cost is not None and body.new_cost != before.cost:
+        activity_service.record(
+            household_id,
+            ActivityType.COST_CORRECTED,
+            actor=caller,
+            subject_name=before.food_name,
+            detail={
+                "item_id": str(item_id),
+                "previous_cost": str(before.cost),
+                "new_cost": str(body.new_cost),
+                "note": body.note,
+            },
+        )
     return ok(item)
 
 
@@ -166,8 +220,23 @@ def consume_inventory_item(
     body: ConsumeInventoryItemRequest,
     caller: Member = Depends(require_household_membership),
 ) -> Envelope[InventoryItem]:
+    item_before = inventory_service.get_by_id(household_id, item_id)
+    if item_before is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+
+    # Stored quantities are in base units, so the decrement has to be too.
+    used_unit = body.unit or item_before.preferred_unit
+    if units_service.guess_dimension(used_unit) != units_service.guess_dimension(
+        item_before.preferred_unit
+    ):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "That unit can't be converted to how this item is measured",
+        )
+    used_base = units_service.to_base(body.quantity_used, used_unit)
+
     try:
-        item = inventory_service.consume(household_id, caller.id, item_id, body.quantity_used)
+        item = inventory_service.consume(household_id, caller.id, item_id, used_base)
     except inventory_service.InsufficientQuantityError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -178,6 +247,31 @@ def consume_inventory_item(
             status.HTTP_403_FORBIDDEN,
             "You are not on this item's allowed-members list",
         ) from exc
+
+    # Record what the human actually entered, not the converted-to-item-unit
+    # value -- "used 1 cup" reads better than "used 236.588 ml".
+    activity_service.record(
+        household_id,
+        ActivityType.ITEM_CONSUMED,
+        actor=caller,
+        subject_name=item.food_name,
+        detail={
+            "item_id": str(item.id),
+            "amount": str(body.quantity_used),
+            "unit": (body.unit or item_before.preferred_unit).value,
+        },
+    )
+    # Consuming the last of something ends its story (the DB trigger flips
+    # status to EMPTY). Reported without an actor, per the feed's design --
+    # "the milk is used up", not "Sam used up the milk".
+    if item.status != "ACTIVE":
+        activity_service.record(
+            household_id,
+            ActivityType.ITEM_REMOVED,
+            actor=None,
+            subject_name=item.food_name,
+            detail={"item_id": str(item.id), "reason": "USED_UP"},
+        )
     return ok(item)
 
 
@@ -186,7 +280,7 @@ def discard_inventory_item(
     household_id: UUID,
     item_id: UUID,
     reason: RemovalReason = Query(default=RemovalReason.DISCARDED),
-    _member: Member = Depends(require_household_membership),
+    member: Member = Depends(require_household_membership),
 ) -> Envelope[InventoryItem]:
     # A query param, not a request body — DELETE-with-a-body is against HTTP
     # convention (some proxies/CDNs silently strip it), and httpx's own test
@@ -195,4 +289,12 @@ def discard_inventory_item(
         item = inventory_service.discard(household_id, item_id, reason)
     except ValueError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+
+    activity_service.record(
+        household_id,
+        ActivityType.ITEM_REMOVED,
+        actor=member,
+        subject_name=item.food_name,
+        detail={"item_id": str(item.id), "reason": reason.value},
+    )
     return ok(item)

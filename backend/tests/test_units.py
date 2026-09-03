@@ -101,4 +101,27 @@ def test_coerce_unit_from_ai_tolerates_a_non_string_value() -> None:
     assert coerce_unit_from_ai(2) is None
     assert coerce_unit_from_ai(True) is None
     assert coerce_unit_from_ai(None) is None
+
+
+def test_base_unit_for_dimension() -> None:
+    assert units_service.base_unit_for(Dimension.WEIGHT) == Unit.G
+    assert units_service.base_unit_for(Dimension.VOLUME) == Unit.ML
+    assert units_service.base_unit_for(Dimension.COUNT) == Unit.COUNT
+
+
+def test_to_base_and_from_base_round_trip() -> None:
+    assert units_service.to_base(Decimal("1"), Unit.KG) == Decimal("1000")
+    assert units_service.to_base(Decimal("2"), Unit.CUP) == Decimal("473.176")
+    assert units_service.to_base(Decimal("3"), Unit.COUNT) == Decimal("3")
+    # from_base is the exact inverse for a clean factor.
+    assert units_service.from_base(Decimal("1000"), Unit.KG) == Decimal("1")
+    assert units_service.from_base(Decimal("453.592"), Unit.LB) == Decimal("1")
+
+
+def test_display_quantity_rounds_to_three_places() -> None:
+    # 1 oz -> 28.3495 g stored; shown back in oz it's 1, shown in g it's
+    # 28.350 (3 dp).
+    assert units_service.display_quantity(Decimal("28.3495"), Unit.OZ) == Decimal("1.000")
+    assert units_service.display_quantity(Decimal("28.3495"), Unit.G) == Decimal("28.350")
+    assert units_service.display_quantity(Decimal("1500"), Unit.KG) == Decimal("1.5")
     assert coerce_unit_from_ai("kg") == Unit.KG

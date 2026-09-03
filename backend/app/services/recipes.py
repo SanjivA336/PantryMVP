@@ -9,9 +9,9 @@ from app.schemas.recipe import (
     Recipe,
     RecipeDetail,
     RecipeIngredient,
-    RecipeIngredientInput,
     UpdateRecipeRequest,
 )
+from app.schemas.units import Dimension, Unit
 from app.services import units as units_service
 
 _RECIPES_TABLE = "recipes"
@@ -43,14 +43,13 @@ def _ingredient_availability(
     you're currently viewing the recipe from (the same recipe can show
     different availability in different households you belong to).
 
-    available_quantity converts on-hand stock into the recipe's requested
-    unit (e.g. the pantry has it in grams, the recipe asks for ounces) via
-    units.convert -- exact-unit and same-dimension matches both resolve to a
-    real number now. A pantry stocked in a different *dimension* than the
-    recipe asks for (weight on hand, recipe wants volume, or vice versa)
-    can't be compared without a density this app never asks for, so that
-    case falls back to binary available/unavailable with no quantity shown,
-    per the resolved no-density decision.
+    Everything is stored in base units now (migration 0028), so on-hand
+    stock and the ingredient's requirement are directly comparable whenever
+    they're the same *dimension* -- a plain sum, no conversion. Stock that
+    exists only in a different dimension (weight on hand, recipe wants
+    volume) still can't be quantified without a density this app never asks
+    for, so that falls back to a binary yes/no. available_quantity is
+    returned in the ingredient's own display unit.
     """
     food_ids = {row["global_food_definition_id"] for row in ingredient_rows}
     if not food_ids:
@@ -67,20 +66,21 @@ def _ingredient_availability(
     variant_id_by_food_id = {row["global_food_definition_id"]: row["id"] for row in variants.data}
     variant_ids = list(variant_id_by_food_id.values())
 
-    on_hand: dict[str, list[tuple[Decimal, str]]] = {}
+    # (base quantity, dimension) per active pantry item, grouped by variant.
+    on_hand: dict[str, list[tuple[Decimal, Dimension]]] = {}
     if variant_ids:
         items = (
             client.table("inventory_items")
-            .select("household_food_variant_id, quantity, preferred_unit")
+            .select("household_food_variant_id, quantity, display_unit")
             .eq("household_id", str(household_id))
             .eq("status", "ACTIVE")
             .in_("household_food_variant_id", variant_ids)
             .execute()
         )
         for row in items.data:
-            variant_id = row["household_food_variant_id"]
-            qty = Decimal(str(row["quantity"]))
-            on_hand.setdefault(variant_id, []).append((qty, row["preferred_unit"]))
+            base_qty = Decimal(str(row["quantity"]))
+            dimension = units_service.guess_dimension(Unit(row["display_unit"]))
+            on_hand.setdefault(row["household_food_variant_id"], []).append((base_qty, dimension))
 
     result: dict[UUID, tuple[bool, Decimal | None]] = {}
     for row in ingredient_rows:
@@ -90,21 +90,19 @@ def _ingredient_availability(
             result[UUID(row["id"])] = (False, None)
             continue
 
-        requested_unit = row["unit"]
-        convertible_total = Decimal(0)
-        any_convertible = False
-        for qty, unit in stock:
-            converted = units_service.convert(qty, unit, requested_unit)
-            if converted is not None:
-                convertible_total += converted
-                any_convertible = True
-
-        if any_convertible:
-            available = convertible_total > 0
-            result[UUID(row["id"])] = (available, convertible_total if available else None)
+        ingredient_unit = Unit(row["display_unit"])
+        ingredient_dimension = units_service.guess_dimension(ingredient_unit)
+        same_dimension_base = sum(
+            (qty for qty, dim in stock if dim == ingredient_dimension), Decimal(0)
+        )
+        if same_dimension_base > 0:
+            result[UUID(row["id"])] = (
+                True,
+                units_service.display_quantity(same_dimension_base, ingredient_unit),
+            )
         else:
-            total_any_unit = sum((qty for qty, _ in stock), Decimal(0))
-            result[UUID(row["id"])] = (total_any_unit > 0, None)
+            total_any_dimension = sum((qty for qty, _ in stock), Decimal(0))
+            result[UUID(row["id"])] = (total_any_dimension > 0, None)
 
     return result
 
@@ -150,10 +148,17 @@ def get_recipe(household_id: UUID, user_id: UUID, recipe_id: UUID) -> RecipeDeta
     ingredients: list[RecipeIngredient] = []
     for row in ingredient_rows:
         food = row.pop("global_food_definitions", None) or {}
+        # Stored in base units under `display_unit` (migration 0028) --
+        # surface it in the user's unit under the schema's `unit` name, the
+        # read boundary for recipes.
+        display_unit = Unit(row.pop("display_unit"))
+        base_quantity = Decimal(str(row.pop("quantity")))
         available, available_quantity = availability.get(UUID(row["id"]), (False, None))
         ingredients.append(
             RecipeIngredient(
                 **row,
+                unit=display_unit,
+                quantity=units_service.display_quantity(base_quantity, display_unit),
                 food_name=food.get("name", "Unknown food"),
                 category=food.get("category"),
                 available=available,
@@ -179,7 +184,8 @@ def create_recipe(household_id: UUID, user_id: UUID, body: CreateRecipeRequest) 
             "p_ingredients": [
                 {
                     "global_food_definition_id": str(ing.global_food_definition_id),
-                    "quantity": str(ing.quantity),
+                    # Persisted in base units; the RPC stores what it's given.
+                    "quantity": str(units_service.to_base(ing.quantity, ing.unit)),
                     "unit": ing.unit.value,
                     "note": ing.note,
                 }
@@ -209,19 +215,30 @@ def update_recipe(
     existing_row, existing_ingredient_rows = fetched
 
     fields = body.model_fields_set
-    ingredients: list[RecipeIngredientInput] = (
-        body.ingredients
-        if "ingredients" in fields and body.ingredients is not None
-        else [
-            RecipeIngredientInput(
-                global_food_definition_id=row["global_food_definition_id"],
-                quantity=row["quantity"],
-                unit=row["unit"],
-                note=row["note"],
-            )
+    if "ingredients" in fields and body.ingredients is not None:
+        # Caller-supplied, in display units -> convert to base.
+        ingredient_payload = [
+            {
+                "global_food_definition_id": str(ing.global_food_definition_id),
+                "quantity": str(units_service.to_base(ing.quantity, ing.unit)),
+                "unit": ing.unit.value,
+                "note": ing.note,
+            }
+            for ing in body.ingredients
+        ]
+    else:
+        # Untouched rows -- already base, passed straight through. Round-
+        # tripping them base->display->base would introduce drift on every
+        # ingredient-less PATCH.
+        ingredient_payload = [
+            {
+                "global_food_definition_id": str(row["global_food_definition_id"]),
+                "quantity": str(row["quantity"]),
+                "unit": row["display_unit"],
+                "note": row["note"],
+            }
             for row in existing_ingredient_rows
         ]
-    )
 
     client = get_service_client()
     try:
@@ -248,15 +265,7 @@ def update_recipe(
                 "p_instructions": (
                     body.instructions if "instructions" in fields else existing_row["instructions"]
                 ),
-                "p_ingredients": [
-                    {
-                        "global_food_definition_id": str(ing.global_food_definition_id),
-                        "quantity": str(ing.quantity),
-                        "unit": ing.unit,
-                        "note": ing.note,
-                    }
-                    for ing in ingredients
-                ],
+                "p_ingredients": ingredient_payload,
             },
         ).execute()
     except APIError as exc:

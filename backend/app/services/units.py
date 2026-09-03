@@ -1,6 +1,11 @@
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.schemas.units import Dimension, Unit, UnitSystem
+
+# The precision the API has always exposed for a stored quantity
+# (inventory_items.quantity was numeric(10,3) before migration 0028).
+# from_base results are rounded to this at the read edge and nowhere else.
+_DISPLAY_QUANTUM = Decimal("0.001")
 
 # Base unit per dimension: grams for weight, milliliters for volume, plain
 # count for count. Every unit's factor converts 1 of that unit into this
@@ -71,6 +76,42 @@ CANONICAL_UNIT: dict[tuple[Dimension, UnitSystem], Unit] = {
     (Dimension.VOLUME, UnitSystem.METRIC): Unit.ML,
     (Dimension.VOLUME, UnitSystem.CUSTOMARY): Unit.CUP,
 }
+
+
+# The unit every stored quantity is actually persisted in, per dimension
+# (see migration 0028). Grams / millilitres / count -- so a lost or
+# corrupted display_unit is a cosmetic problem, never a "what does this
+# number mean" one, and all same-dimension math is a plain add with no
+# conversion in the middle.
+_BASE_UNIT: dict[Dimension, Unit] = {
+    Dimension.WEIGHT: Unit.G,
+    Dimension.VOLUME: Unit.ML,
+    Dimension.COUNT: Unit.COUNT,
+}
+
+
+def base_unit_for(dimension: Dimension) -> Unit:
+    return _BASE_UNIT[dimension]
+
+
+def to_base(quantity: Decimal, unit: Unit) -> Decimal:
+    """A quantity expressed in `unit` -> the same quantity in that unit's
+    base unit (g / ml / count). Used at every write boundary so nothing but
+    a base value is ever persisted."""
+    return quantity * _TO_BASE[unit]
+
+
+def from_base(base_quantity: Decimal, display_unit: Unit) -> Decimal:
+    """The inverse of to_base: a persisted base value -> the exact number
+    for a user who's chosen `display_unit`. Not rounded -- use
+    display_quantity for anything the API returns."""
+    return base_quantity / _TO_BASE[display_unit]
+
+
+def display_quantity(base_quantity: Decimal, display_unit: Unit) -> Decimal:
+    """from_base, rounded to the precision the API has always exposed. The
+    single place base->display rounding happens."""
+    return from_base(base_quantity, display_unit).quantize(_DISPLAY_QUANTUM, rounding=ROUND_HALF_UP)
 
 
 def resolve_unit(dimension: Dimension, system: UnitSystem | None) -> Unit:

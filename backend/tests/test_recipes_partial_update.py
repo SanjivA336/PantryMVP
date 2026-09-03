@@ -20,8 +20,9 @@ def _existing(**recipe_overrides) -> tuple[dict, list[dict]]:
     recipe_row.update(recipe_overrides)
     ingredient_row = {
         "global_food_definition_id": uuid.uuid4(),
-        "quantity": Decimal("2"),
-        "unit": "cup",
+        # A stored row: quantity in base units, unit as `display_unit`.
+        "quantity": Decimal("473.176"),
+        "display_unit": "cup",
         "note": None,
     }
     return recipe_row, [ingredient_row]
@@ -123,9 +124,7 @@ def test_updating_ingredients_replaces_the_full_list(monkeypatch, rpc_calls) -> 
         uuid.uuid4(),
         uuid.uuid4(),
         UpdateRecipeRequest(
-            ingredients=[
-                {"global_food_definition_id": new_food_id, "quantity": "1", "unit": "cup"}
-            ]
+            ingredients=[{"global_food_definition_id": new_food_id, "quantity": "1", "unit": "cup"}]
         ),
     )
 

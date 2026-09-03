@@ -192,16 +192,17 @@ export function AddInventoryItemPage() {
   // sitting there from an earlier autofill is fair game to replace, same as
   // the x button's "clear it and make it eligible for a fresh suggestion."
   const quantityValue = watch('quantity')
+  const unitValue = watch('preferred_unit')
   const costLookupRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => {
     if (!food || !householdId) return
     const qty = Number(quantityValue)
-    if (!quantityValue || Number.isNaN(qty) || qty <= 0) return
+    if (!quantityValue || Number.isNaN(qty) || qty <= 0 || !unitValue) return
     clearTimeout(costLookupRef.current)
     costLookupRef.current = setTimeout(async () => {
       try {
         const lastCost = await apiClient.get<string | null>(
-          `/api/households/${householdId}/inventory-items/last-cost?global_food_definition_id=${food.id}&quantity=${qty}`,
+          `/api/households/${householdId}/inventory-items/last-cost?global_food_definition_id=${food.id}&quantity=${qty}&unit=${unitValue}`,
         )
         if (lastCost !== null && !customized.cost) {
           setValue('cost', lastCost)
@@ -212,7 +213,7 @@ export function AddInventoryItemPage() {
       }
     }, 400)
     return () => clearTimeout(costLookupRef.current)
-  }, [food, quantityValue, householdId, customized.cost, setValue])
+  }, [food, quantityValue, unitValue, householdId, customized.cost, setValue])
 
   const selectedMemberIds = watch('allowed_member_ids') ?? []
   const accountingType = watch('accounting_type')

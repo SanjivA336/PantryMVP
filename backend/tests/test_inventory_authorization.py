@@ -91,7 +91,7 @@ def fake_inventory(monkeypatch):
         "app.services.inventory_items.allowed_member_ids_are_valid", lambda h, ids: True
     )
     monkeypatch.setattr(
-        "app.services.inventory_items.find_last_cost", lambda h, food_id, qty: None
+        "app.services.inventory_items.find_last_cost", lambda h, food_id, qty, unit: None
     )
 
     return store
@@ -285,6 +285,43 @@ async def test_consume_within_available_succeeds(client, fake_members, fake_inve
     assert response.json()["data"]["quantity"] == "3"
 
 
+async def test_consume_converts_a_same_dimension_unit_before_decrementing(
+    client, fake_members, fake_inventory
+) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+    item = _item(household_id, preferred_unit="g", quantity=Decimal("1000"))
+    fake_inventory[item.id] = item
+
+    response = await client.post(
+        f"/api/households/{household_id}/inventory-items/{item.id}/consume",
+        json={"quantity_used": "0.5", "unit": "kg"},
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 200
+    # 0.5 kg -> 500 g decremented from 1000 g.
+    assert Decimal(response.json()["data"]["quantity"]) == Decimal("500")
+
+
+async def test_consume_rejects_a_cross_dimension_unit(client, fake_members, fake_inventory) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id))
+    item = _item(household_id, preferred_unit="g", quantity=Decimal("1000"))
+    fake_inventory[item.id] = item
+
+    response = await client.post(
+        f"/api/households/{household_id}/inventory-items/{item.id}/consume",
+        json={"quantity_used": "1", "unit": "cup"},
+        headers=auth_header(user_id),
+    )
+
+    assert response.status_code == 400
+    assert fake_inventory[item.id].quantity == Decimal("1000")
+
+
 async def test_consume_by_disallowed_member_is_rejected(
     client, fake_members, fake_inventory, monkeypatch
 ) -> None:
@@ -330,23 +367,21 @@ async def test_non_member_cannot_get_last_cost(client, fake_members, fake_invent
 
     response = await client.get(
         f"/api/households/{household_id}/inventory-items/last-cost",
-        params={"global_food_definition_id": str(uuid.uuid4()), "quantity": "2"},
+        params={"global_food_definition_id": str(uuid.uuid4()), "quantity": "2", "unit": "count"},
         headers=auth_header(outsider_id),
     )
 
     assert response.status_code == 403
 
 
-async def test_last_cost_returns_null_when_no_history(
-    client, fake_members, fake_inventory
-) -> None:
+async def test_last_cost_returns_null_when_no_history(client, fake_members, fake_inventory) -> None:
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
 
     response = await client.get(
         f"/api/households/{household_id}/inventory-items/last-cost",
-        params={"global_food_definition_id": str(uuid.uuid4()), "quantity": "2"},
+        params={"global_food_definition_id": str(uuid.uuid4()), "quantity": "2", "unit": "count"},
         headers=auth_header(user_id),
     )
 
@@ -363,12 +398,12 @@ async def test_last_cost_returns_match_when_found(
     fake_members.seed(make_member(household_id, user_id))
     monkeypatch.setattr(
         "app.services.inventory_items.find_last_cost",
-        lambda h, fid, qty: Decimal("4.99") if fid == food_id else None,
+        lambda h, fid, qty, unit: Decimal("4.99") if fid == food_id else None,
     )
 
     response = await client.get(
         f"/api/households/{household_id}/inventory-items/last-cost",
-        params={"global_food_definition_id": str(food_id), "quantity": "2"},
+        params={"global_food_definition_id": str(food_id), "quantity": "2", "unit": "count"},
         headers=auth_header(user_id),
     )
 
