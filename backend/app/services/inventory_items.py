@@ -72,6 +72,14 @@ class UnitDimensionMismatchError(Exception):
     pass
 
 
+class ConcurrentModificationError(Exception):
+    """Raised by correct_item when the item changed between the baseline
+    read and the compare-and-swap claim -- another correction (or edit)
+    landed first. The caller should re-read and retry."""
+
+    pass
+
+
 def _flatten(row: dict) -> InventoryItem:
     variant = row.pop("household_food_variants", None) or {}
     storage = row.pop("storage_locations", None) or {}
@@ -101,15 +109,17 @@ def _flatten(row: dict) -> InventoryItem:
     return InventoryItem(**row)
 
 
-def _raw_base(household_id: UUID, item_id: UUID) -> tuple[Decimal, Decimal, Unit] | None:
-    """(quantity, total_quantity, display_unit) straight off the row, with
-    the quantities in their stored base unit -- for the handful of writes
-    (update_item / correct_item) that do additive quantity math and need an
-    exact base value, not the rounded display value _flatten returns."""
+def _raw_base(household_id: UUID, item_id: UUID) -> tuple[Decimal, Decimal, Unit, str] | None:
+    """(quantity, total_quantity, display_unit, updated_at) straight off the
+    row, with the quantities in their stored base unit -- for the handful of
+    writes (update_item / correct_item) that do additive quantity math and
+    need an exact base value, not the rounded display value _flatten
+    returns. updated_at is the raw string, used verbatim as correct_item's
+    compare-and-swap token."""
     client = get_service_client()
     result = (
         client.table(_TABLE)
-        .select("quantity, total_quantity, display_unit")
+        .select("quantity, total_quantity, display_unit, updated_at")
         .eq("household_id", str(household_id))
         .eq("id", str(item_id))
         .maybe_single()
@@ -121,6 +131,7 @@ def _raw_base(household_id: UUID, item_id: UUID) -> tuple[Decimal, Decimal, Unit
         Decimal(str(result.data["quantity"])),
         Decimal(str(result.data["total_quantity"])),
         Unit(result.data["display_unit"]),
+        result.data["updated_at"],
     )
 
 
@@ -366,7 +377,7 @@ def update_item(
         # is in the item's display unit, everything stored is base.
         raw = _raw_base(household_id, item_id)
         assert raw is not None
-        current_qty_base, current_total_base, display_unit = raw
+        current_qty_base, current_total_base, display_unit, _ = raw
         new_total_base = units_service.to_base(body.total_quantity, display_unit)
         new_quantity_base = current_qty_base + (new_total_base - current_total_base)
         if new_quantity_base < 0:
@@ -381,23 +392,18 @@ def update_item(
         ).execute()
 
     if "allowed_member_ids" in fields and body.allowed_member_ids is not None:
-        client.table("inventory_item_allowed_members").delete().eq(
-            "inventory_item_id", str(item_id)
+        # One transaction, under a row lock on the item: the delete + insert
+        # + split_member_count bump can't interleave with a concurrent
+        # roster edit, and freeze_item_debt can't catch the roster
+        # half-swapped. See migration 0030.
+        client.rpc(
+            "set_inventory_item_roster",
+            {
+                "p_household_id": str(household_id),
+                "p_item_id": str(item_id),
+                "p_member_ids": [str(m) for m in body.allowed_member_ids],
+            },
         ).execute()
-        client.table("inventory_item_allowed_members").insert(
-            [
-                {"inventory_item_id": str(item_id), "member_id": str(member_id)}
-                for member_id in body.allowed_member_ids
-            ]
-        ).execute()
-        # split_member_count mirrors the roster size for non-PERSONAL items
-        # -- it's what compute_item_shares' allotment sizing is ultimately
-        # derived from at freeze time, so it needs to stay in sync while
-        # the roster is still live-editable.
-        if current.accounting_type != "PERSONAL":
-            client.table(_TABLE).update({"split_member_count": len(body.allowed_member_ids)}).eq(
-                "id", str(item_id)
-            ).execute()
 
     return get_by_id(household_id, item_id)  # type: ignore[return-value]
 
@@ -420,7 +426,7 @@ def correct_item(
         raise ItemNotFrozenError
     raw = _raw_base(household_id, item_id)
     assert raw is not None
-    current_qty_base, current_total_base, display_unit = raw
+    current_qty_base, current_total_base, display_unit, baseline_updated_at = raw
 
     client = get_service_client()
     correction_row: dict = {
@@ -448,9 +454,24 @@ def correct_item(
         item_updates["total_quantity"] = str(new_total_base)
         item_updates["quantity"] = str(new_quantity_base)
 
+    # Claim the correction with a compare-and-swap on the item row before
+    # writing anything -- two concurrent corrections that both read the same
+    # baseline would otherwise each post their delta, adjusting the ledger
+    # by the sum while the item moved once. Mirrors freeze_item_debt's CAS.
+    # (item_updates is always non-empty: the request validator requires
+    # new_cost or new_total_quantity.)
+    claim = (
+        client.table(_TABLE)
+        .update(item_updates)
+        .eq("household_id", str(household_id))
+        .eq("id", str(item_id))
+        .eq("updated_at", baseline_updated_at)
+        .execute()
+    )
+    if not claim.data:
+        raise ConcurrentModificationError
+
     client.table("purchase_corrections").insert(correction_row).execute()
-    if item_updates:
-        client.table(_TABLE).update(item_updates).eq("id", str(item_id)).execute()
 
     if body.new_cost is not None and current.accounting_type != "PERSONAL":
         delta_cost = body.new_cost - current.cost

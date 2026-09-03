@@ -194,6 +194,11 @@ def correct_inventory_item(
             status.HTTP_400_BAD_REQUEST,
             "This item's debt hasn't been finalized yet -- edit it directly instead",
         ) from exc
+    except inventory_service.ConcurrentModificationError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This item was changed while you were correcting it -- reopen it and try again",
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 

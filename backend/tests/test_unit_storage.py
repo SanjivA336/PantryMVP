@@ -99,6 +99,7 @@ def test_total_quantity_edit_is_applied_in_base_units(monkeypatch) -> None:
             Decimal("2834.95"),  # 100 oz remaining, in g
             Decimal("5669.90"),  # 200 oz total, in g
             Unit.OZ,
+            "2026-01-01T00:00:00+00:00",  # updated_at (CAS token, unused here)
         ),
     )
     monkeypatch.setattr(inventory_service, "get_service_client", lambda: client)
