@@ -5,7 +5,7 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { EmptyState } from '../../components/EmptyState'
 import { uploadReceiptImage } from '../../lib/receiptStorage'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
-import type { CreateReceiptImportSessionResponse, ReceiptImportSession } from '../../types/entities'
+import type { CreateReceiptSessionResponse, PurchaseSession } from '../../types/entities'
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pending',
@@ -23,8 +23,8 @@ export function ScanReceiptPage() {
     loading,
     error: loadError,
     reload,
-  } = useHouseholdResource<ReceiptImportSession[]>(
-    householdId ? `/api/households/${householdId}/receipt-import-sessions` : null,
+  } = useHouseholdResource<PurchaseSession[]>(
+    householdId ? `/api/households/${householdId}/purchase-sessions?source=RECEIPT_SCAN` : null,
   )
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -37,14 +37,12 @@ export function ScanReceiptPage() {
     setUploadError(null)
     setUploading(true)
     try {
-      const created = await apiClient.post<CreateReceiptImportSessionResponse>(
-        `/api/households/${householdId}/receipt-import-sessions`,
+      const created = await apiClient.post<CreateReceiptSessionResponse>(
+        `/api/households/${householdId}/purchase-sessions/receipt`,
         { filename: file.name },
       )
       await uploadReceiptImage(created.upload_bucket, created.upload_path, file)
-      await apiClient.post(
-        `/api/households/${householdId}/receipt-import-sessions/${created.id}/process`,
-      )
+      await apiClient.post(`/api/households/${householdId}/purchase-sessions/${created.id}/process`)
       navigate(`/households/${householdId}/scan-receipt/${created.id}`)
     } catch (err) {
       setUploadError(err instanceof ApiError ? err.message : 'Something went wrong')

@@ -9,6 +9,7 @@ import {
   ListX,
   Pencil,
   Plus,
+  ShoppingBag,
   ShoppingCart,
   Sparkles,
   Trash2,
@@ -23,10 +24,14 @@ import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
 import type {
   FoodDefinition,
   HouseholdWarnings,
+  Member,
+  PurchaseSession,
   ShoppingListItem,
   ShoppingListSection,
+  StorageLocation,
 } from '../../types/entities'
 import { addShoppingListSectionSchema, type AddShoppingListSectionForm } from './schema'
+import { PurchaseWizardModal } from './PurchaseWizardModal'
 
 const inputClass =
   'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
@@ -56,11 +61,22 @@ export function ShoppingListPage() {
   const { data: warnings, reload: reloadWarnings } = useHouseholdResource<HouseholdWarnings>(
     householdId ? `/api/households/${householdId}/warnings` : null,
   )
+  const { data: members } = useHouseholdResource<Member[]>(
+    householdId ? `/api/households/${householdId}/members` : null,
+  )
+  const { data: storageLocations } = useHouseholdResource<StorageLocation[]>(
+    householdId ? `/api/households/${householdId}/storage-locations` : null,
+  )
+  const { data: purchaseSessions, reload: reloadSessions } = useHouseholdResource<
+    PurchaseSession[]
+  >(householdId ? `/api/households/${householdId}/purchase-sessions?source=SHOPPING_LIST` : null)
+
   const reloadAll = useCallback(() => {
     reloadSections()
     reloadItems()
     reloadWarnings()
-  }, [reloadSections, reloadItems, reloadWarnings])
+    reloadSessions()
+  }, [reloadSections, reloadItems, reloadWarnings, reloadSessions])
   useRealtimeSubscription('shopping_list_items', householdId ?? null, reloadAll)
   useRealtimeSubscription('shopping_list_sections', householdId ?? null, reloadAll)
   // Stock levels changing elsewhere (e.g. someone uses up an item in
@@ -78,6 +94,36 @@ export function ShoppingListPage() {
   const [openReasonFor, setOpenReasonFor] = useState<string | null>(null)
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [wizardSessionId, setWizardSessionId] = useState<string | null>(null)
+  const [startingOrder, setStartingOrder] = useState(false)
+
+  const collectedCount = (items ?? []).filter((i) => i.collected).length
+
+  const startOrder = async () => {
+    setStartingOrder(true)
+    setActionError(null)
+    try {
+      const session = await apiClient.post<{ id: string }>(
+        `/api/households/${householdId}/purchase-sessions/from-shopping-list`,
+      )
+      reloadAll()
+      setWizardSessionId(session.id)
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
+    } finally {
+      setStartingOrder(false)
+    }
+  }
+
+  const deleteOrder = async (sessionId: string) => {
+    setActionError(null)
+    try {
+      await apiClient.delete(`/api/households/${householdId}/purchase-sessions/${sessionId}`)
+      reloadSessions()
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
+    }
+  }
 
   const sectionForm = useForm<AddShoppingListSectionForm>({
     resolver: zodResolver(addShoppingListSectionSchema),
@@ -343,10 +389,22 @@ export function ShoppingListPage() {
             type="button"
             onClick={suggest}
             disabled={suggesting}
+            className="flex items-center gap-1.5 rounded-control border border-subtle bg-surface px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover disabled:opacity-50"
+          >
+            <Sparkles size={16} strokeWidth={1.75} />
+            {suggesting ? 'Suggesting…' : 'Suggest List'}
+          </button>
+          <button
+            type="button"
+            onClick={startOrder}
+            disabled={startingOrder || collectedCount === 0}
+            title={collectedCount === 0 ? 'Check off items as you shop first' : undefined}
             className="flex items-center gap-1.5 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
           >
-            <Sparkles size={16} strokeWidth={2.25} />
-            {suggesting ? 'Suggesting…' : 'Suggest List'}
+            <ShoppingBag size={16} strokeWidth={2.25} />
+            {startingOrder
+              ? 'Starting…'
+              : `Bought marked${collectedCount > 0 ? ` (${collectedCount})` : ''}`}
           </button>
         </div>
       </div>
@@ -627,6 +685,63 @@ export function ShoppingListPage() {
           </button>
         )}
       </div>
+
+      {(purchaseSessions ?? []).length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-muted">Purchases</h3>
+          <ul className="flex flex-col gap-2">
+            {(purchaseSessions ?? []).map((s) => {
+              const isDraft = s.status !== 'FINALIZED'
+              return (
+                <li
+                  key={s.id}
+                  className="flex items-center gap-3 rounded-card border border-subtle bg-surface px-4 py-3 shadow-card"
+                >
+                  <button
+                    type="button"
+                    onClick={() => isDraft && setWizardSessionId(s.id)}
+                    disabled={!isDraft}
+                    className={`min-w-0 flex-1 text-left text-sm ${isDraft ? 'hover:underline' : ''}`}
+                  >
+                    <span className="font-medium">{isDraft ? 'Draft order' : 'Completed'}</span>
+                    <span className="ml-2 text-xs text-faint">
+                      {new Date(s.created_at).toLocaleDateString()}
+                    </span>
+                  </button>
+                  {isDraft && (
+                    <button
+                      type="button"
+                      onClick={() => deleteOrder(s.id)}
+                      aria-label="Delete order"
+                      title="Delete order"
+                      className="shrink-0 rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                    >
+                      <Trash2 size={15} strokeWidth={1.75} />
+                    </button>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {wizardSessionId && (
+        <PurchaseWizardModal
+          householdId={householdId ?? ''}
+          sessionId={wizardSessionId}
+          members={members ?? []}
+          storageLocations={storageLocations ?? []}
+          onClose={() => {
+            setWizardSessionId(null)
+            reloadAll()
+          }}
+          onFinalized={() => {
+            setWizardSessionId(null)
+            reloadAll()
+          }}
+        />
+      )}
 
       {movingItem && (
         <Modal title={`Move "${movingItem.name}"`} onClose={() => setMovingItem(null)}>

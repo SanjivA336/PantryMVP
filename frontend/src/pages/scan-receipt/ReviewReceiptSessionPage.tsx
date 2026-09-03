@@ -10,7 +10,7 @@ import type {
   Dimension,
   FoodDefinition,
   Member,
-  ReceiptImportSessionWithItems,
+  PurchaseSessionWithItems,
   StorageLocation,
   Unit,
 } from '../../types/entities'
@@ -38,9 +38,9 @@ export function ReviewReceiptSessionPage() {
     loading,
     error: loadError,
     reload,
-  } = useHouseholdResource<ReceiptImportSessionWithItems>(
+  } = useHouseholdResource<PurchaseSessionWithItems>(
     householdId && sessionId
-      ? `/api/households/${householdId}/receipt-import-sessions/${sessionId}`
+      ? `/api/households/${householdId}/purchase-sessions/${sessionId}`
       : null,
   )
   const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([])
@@ -112,9 +112,7 @@ export function ReviewReceiptSessionPage() {
     setActionError(null)
     setBusy(true)
     try {
-      await apiClient.post(
-        `/api/households/${householdId}/receipt-import-sessions/${sessionId}/process`,
-      )
+      await apiClient.post(`/api/households/${householdId}/purchase-sessions/${sessionId}/process`)
       reload()
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
@@ -123,10 +121,10 @@ export function ReviewReceiptSessionPage() {
     }
   }
 
-  const submitItem = async (itemId: string, status: 'CONFIRMED' | 'SKIPPED') => {
+  const submitItem = async (itemId: string, status: 'COMPLETE' | 'PENDING') => {
     setActionError(null)
     const edit = edits[itemId]
-    if (status === 'CONFIRMED' && !edit?.food) {
+    if (status === 'COMPLETE' && !edit?.food) {
       setActionError('Pick a food for this item first')
       return
     }
@@ -134,22 +132,22 @@ export function ReviewReceiptSessionPage() {
     // so this is empty by default -- catch it here with a clear message
     // rather than letting it through to a confusing per-item failure at
     // Finalize time, once several other items may already be confirmed.
-    if (status === 'CONFIRMED' && !edit.storageLocationId) {
+    if (status === 'COMPLETE' && !edit.storageLocationId) {
       setActionError('Pick a storage location for this item first')
       return
     }
-    if (status === 'CONFIRMED' && !edit.unit) {
+    if (status === 'COMPLETE' && !edit.unit) {
       setActionError('Pick a unit for this item first')
       return
     }
-    if (status === 'CONFIRMED' && !(Number(edit.quantity) > 0)) {
+    if (status === 'COMPLETE' && !(Number(edit.quantity) > 0)) {
       setActionError('Quantity must be greater than 0')
       return
     }
     try {
       await apiClient.patch(
-        `/api/households/${householdId}/receipt-import-sessions/${sessionId}/items/${itemId}`,
-        status === 'CONFIRMED'
+        `/api/households/${householdId}/purchase-sessions/${sessionId}/items/${itemId}`,
+        status === 'COMPLETE'
           ? {
               global_food_definition_id: edit.food!.id,
               storage_location_id: edit.storageLocationId,
@@ -172,9 +170,7 @@ export function ReviewReceiptSessionPage() {
     setActionError(null)
     setBusy(true)
     try {
-      await apiClient.post(
-        `/api/households/${householdId}/receipt-import-sessions/${sessionId}/finalize`,
-      )
+      await apiClient.post(`/api/households/${householdId}/purchase-sessions/${sessionId}/finalize`)
       navigate(`/households/${householdId}`)
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
@@ -240,7 +236,7 @@ export function ReviewReceiptSessionPage() {
     )
   }
 
-  const allReviewed = session.items.every((item) => item.status !== 'NEEDS_REVIEW')
+  const allReviewed = session.items.every((item) => item.status !== 'PENDING')
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4">
@@ -251,7 +247,7 @@ export function ReviewReceiptSessionPage() {
         {session.items.map((item) => {
           const edit = edits[item.id]
           if (!edit) return null
-          const reviewed = item.status !== 'NEEDS_REVIEW'
+          const reviewed = item.status !== 'PENDING'
           return (
             <li
               key={item.id}
@@ -262,7 +258,7 @@ export function ReviewReceiptSessionPage() {
               <p className="mb-2 text-xs text-faint">Scanned as: "{item.raw_line_text}"</p>
               {reviewed ? (
                 <p className="text-sm font-medium">
-                  {item.status === 'CONFIRMED' ? edit.food?.name : 'Skipped'}
+                  {item.status === 'COMPLETE' ? edit.food?.name : 'Skipped'}
                 </p>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -349,14 +345,14 @@ export function ReviewReceiptSessionPage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => submitItem(item.id, 'CONFIRMED')}
+                      onClick={() => submitItem(item.id, 'COMPLETE')}
                       className="rounded-control bg-primary px-2 py-1.5 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
                     >
                       Confirm
                     </button>
                     <button
                       type="button"
-                      onClick={() => submitItem(item.id, 'SKIPPED')}
+                      onClick={() => submitItem(item.id, 'PENDING')}
                       className="flex items-center gap-1 rounded-control border border-subtle px-2 py-1.5 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-text"
                     >
                       <X size={14} strokeWidth={1.75} />

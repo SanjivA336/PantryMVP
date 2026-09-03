@@ -355,16 +355,17 @@ export interface SubstitutionSuggestion {
   note: string | null
 }
 
-export type ReceiptImportSessionStatus =
-  'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'FINALIZED'
-export type ReceiptImportItemStatus = 'NEEDS_REVIEW' | 'CONFIRMED' | 'SKIPPED' | 'IMPORTED'
+export type PurchaseSessionSource = 'RECEIPT_SCAN' | 'SHOPPING_LIST'
+export type PurchaseSessionStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'FINALIZED'
+export type PurchaseSessionItemStatus = 'PENDING' | 'COMPLETE' | 'IMPORTED'
 
-export interface ReceiptImportSession {
+export interface PurchaseSession {
   id: string
   household_id: string
   created_by_member_id: string
-  status: ReceiptImportSessionStatus
-  image_path: string
+  source: PurchaseSessionSource
+  status: PurchaseSessionStatus
+  image_path: string | null
   ocr_engine: string | null
   raw_ocr_text: string | null
   error_message: string | null
@@ -373,7 +374,7 @@ export interface ReceiptImportSession {
   updated_at: string
 }
 
-export interface ReceiptImportItem {
+export interface PurchaseSessionItem {
   id: string
   session_id: string
   position: number
@@ -392,17 +393,19 @@ export interface ReceiptImportItem {
   cost: string | null
   accounting_type: AccountingType | null
   allowed_member_ids: string[]
-  status: ReceiptImportItemStatus
+  buyer_member_id: string | null
+  shopping_list_item_id: string | null
+  status: PurchaseSessionItemStatus
   created_inventory_item_id: string | null
   created_at: string
   updated_at: string
 }
 
-export interface ReceiptImportSessionWithItems extends ReceiptImportSession {
-  items: ReceiptImportItem[]
+export interface PurchaseSessionWithItems extends PurchaseSession {
+  items: PurchaseSessionItem[]
 }
 
-export interface CreateReceiptImportSessionResponse {
+export interface CreateReceiptSessionResponse {
   id: string
   upload_bucket: string
   upload_path: string
