@@ -1,15 +1,15 @@
 from decimal import Decimal
 
-from app.schemas.receipt_import import ParsedReceiptItem
+from app.schemas.purchase_session import ParsedReceiptItem
 from app.schemas.units import Unit
-from app.services import receipt_imports as receipt_imports_service
+from app.services import purchase_sessions as purchase_sessions_service
 from app.services.ai.base import AiProviderTimeoutError, AiProviderUnavailableError
 
 
 def test_ai_items_to_parsed_lines_converts_valid_items() -> None:
     items = [ParsedReceiptItem(name="Whole Milk", price="4.99", quantity="1", unit="gal")]
 
-    lines = receipt_imports_service._ai_items_to_parsed_lines(items)
+    lines = purchase_sessions_service._ai_items_to_parsed_lines(items)
 
     assert len(lines) == 1
     line = lines[0]
@@ -29,7 +29,7 @@ def test_ai_items_to_parsed_lines_strips_currency_symbol_and_commas() -> None:
     # confirmed against the real model returning "$4.66" for a plain 4.66.
     items = [ParsedReceiptItem(name="Zucchini", price="$1,234.66", quantity="$0.778")]
 
-    lines = receipt_imports_service._ai_items_to_parsed_lines(items)
+    lines = purchase_sessions_service._ai_items_to_parsed_lines(items)
 
     assert len(lines) == 1
     assert lines[0].parsed_price == Decimal("1234.66")
@@ -43,9 +43,9 @@ def test_parse_receipt_lines_falls_back_to_regex_when_nothing_survives_coercion(
         def parse_receipt_items(self, raw_text: str) -> list[ParsedReceiptItem]:
             return [ParsedReceiptItem(name="Whole Milk", price="not-a-number-even-after-stripping")]
 
-    monkeypatch.setattr("app.services.receipt_imports.get_ai_provider", lambda: GarbledProvider())
+    monkeypatch.setattr("app.services.purchase_sessions.get_ai_provider", lambda: GarbledProvider())
 
-    lines = receipt_imports_service._parse_receipt_lines("WHOLE MILK 4.99\nSUBTOTAL 4.99")
+    lines = purchase_sessions_service._parse_receipt_lines("WHOLE MILK 4.99\nSUBTOTAL 4.99")
 
     assert len(lines) == 1
     assert lines[0].parsed_name == "WHOLE MILK"
@@ -57,7 +57,7 @@ def test_ai_items_to_parsed_lines_drops_items_with_unparseable_price() -> None:
         ParsedReceiptItem(name="Garbled Line", price="not-a-number"),
     ]
 
-    lines = receipt_imports_service._ai_items_to_parsed_lines(items)
+    lines = purchase_sessions_service._ai_items_to_parsed_lines(items)
 
     assert len(lines) == 1
     assert lines[0].parsed_name == "Whole Milk"
@@ -66,7 +66,7 @@ def test_ai_items_to_parsed_lines_drops_items_with_unparseable_price() -> None:
 def test_ai_items_to_parsed_lines_ignores_unparseable_quantity_without_dropping_item() -> None:
     items = [ParsedReceiptItem(name="Bananas", price="1.20", quantity="a bunch")]
 
-    lines = receipt_imports_service._ai_items_to_parsed_lines(items)
+    lines = purchase_sessions_service._ai_items_to_parsed_lines(items)
 
     assert len(lines) == 1
     assert lines[0].parsed_quantity is None
@@ -78,9 +78,9 @@ def test_parse_receipt_lines_uses_ai_result_when_available(monkeypatch) -> None:
         def parse_receipt_items(self, raw_text: str) -> list[ParsedReceiptItem]:
             return [ParsedReceiptItem(name="Whole Milk", price="4.99")]
 
-    monkeypatch.setattr("app.services.receipt_imports.get_ai_provider", lambda: FakeProvider())
+    monkeypatch.setattr("app.services.purchase_sessions.get_ai_provider", lambda: FakeProvider())
 
-    lines = receipt_imports_service._parse_receipt_lines("WHOLE MILK 4.99")
+    lines = purchase_sessions_service._parse_receipt_lines("WHOLE MILK 4.99")
 
     assert len(lines) == 1
     assert lines[0].parsed_name == "Whole Milk"
@@ -90,9 +90,9 @@ def test_parse_receipt_lines_falls_back_to_regex_on_ai_unavailable(monkeypatch) 
     def _unavailable():
         raise AiProviderUnavailableError("no ollama here")
 
-    monkeypatch.setattr("app.services.receipt_imports.get_ai_provider", _unavailable)
+    monkeypatch.setattr("app.services.purchase_sessions.get_ai_provider", _unavailable)
 
-    lines = receipt_imports_service._parse_receipt_lines("WHOLE MILK 4.99\nSUBTOTAL 4.99")
+    lines = purchase_sessions_service._parse_receipt_lines("WHOLE MILK 4.99\nSUBTOTAL 4.99")
 
     assert len(lines) == 1
     assert lines[0].parsed_name == "WHOLE MILK"
@@ -103,9 +103,9 @@ def test_parse_receipt_lines_falls_back_to_regex_on_ai_timeout(monkeypatch) -> N
         def parse_receipt_items(self, raw_text: str) -> list[ParsedReceiptItem]:
             raise AiProviderTimeoutError("took too long")
 
-    monkeypatch.setattr("app.services.receipt_imports.get_ai_provider", lambda: SlowProvider())
+    monkeypatch.setattr("app.services.purchase_sessions.get_ai_provider", lambda: SlowProvider())
 
-    lines = receipt_imports_service._parse_receipt_lines("WHOLE MILK 4.99\nSUBTOTAL 4.99")
+    lines = purchase_sessions_service._parse_receipt_lines("WHOLE MILK 4.99\nSUBTOTAL 4.99")
 
     assert len(lines) == 1
     assert lines[0].parsed_name == "WHOLE MILK"

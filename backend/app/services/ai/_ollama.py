@@ -6,7 +6,7 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import get_settings
-from app.schemas.receipt_import import ParsedReceiptItem
+from app.schemas.purchase_session import ParsedReceiptItem
 from app.schemas.recipe_ai import (
     DraftRecipe,
     DraftRecipeIngredient,

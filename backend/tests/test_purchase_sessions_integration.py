@@ -4,7 +4,7 @@ belong in a test run) -- everything downstream (Storage, DB writes, RLS,
 the regex parser, finalize reusing the settlement engine) is real. Excluded
 from the default run; run explicitly with `uv run pytest -m integration`.
 
-The AI-first parsing step (see receipt_imports._parse_receipt_lines) is
+The AI-first parsing step (see purchase_sessions._parse_receipt_lines) is
 forced to its regex fallback here via `force_regex_parsing` -- these tests
 assert exact parsed values against canned text, which a real (non-
 deterministic, slow) Ollama call would make flaky. The AI path itself is
@@ -41,7 +41,7 @@ def force_regex_parsing(monkeypatch):
     def _unavailable():
         raise AiProviderUnavailableError("stubbed unavailable for integration tests")
 
-    monkeypatch.setattr("app.services.receipt_imports.get_ai_provider", _unavailable)
+    monkeypatch.setattr("app.services.purchase_sessions.get_ai_provider", _unavailable)
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ async def _create_and_upload_session(api_client, household) -> dict:
     service-role client, so real bytes must exist there regardless of the
     OCR call itself being mocked."""
     create_resp = await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions",
+        f"/api/households/{household['household_id']}/purchase-sessions",
         json={"filename": "receipt.jpg"},
         headers=household["headers"],
     )
@@ -110,13 +110,13 @@ async def _search_food(api_client, headers, query: str) -> dict:
 
 async def test_process_parses_lines_and_filters_noise(api_client, household, monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.services.receipt_imports.run_ocr",
+        "app.services.purchase_sessions.run_ocr",
         lambda image_bytes, mime_type: OcrResult(raw_text=_CANNED_RECEIPT_TEXT),
     )
     created = await _create_and_upload_session(api_client, household)
 
     process_resp = await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{created['id']}/process",
+        f"/api/households/{household['household_id']}/purchase-sessions/{created['id']}/process",
         headers=household["headers"],
     )
     assert process_resp.status_code == 200, process_resp.text
@@ -131,21 +131,21 @@ async def test_process_parses_lines_and_filters_noise(api_client, household, mon
 
 async def test_full_lifecycle_confirm_skip_finalize(api_client, household, monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.services.receipt_imports.run_ocr",
+        "app.services.purchase_sessions.run_ocr",
         lambda image_bytes, mime_type: OcrResult(raw_text=_CANNED_RECEIPT_TEXT),
     )
     created = await _create_and_upload_session(api_client, household)
     session_id = created["id"]
 
     process_resp = await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{session_id}/process",
+        f"/api/households/{household['household_id']}/purchase-sessions/{session_id}/process",
         headers=household["headers"],
     )
     item = process_resp.json()["data"]["items"][0]
     milk = await _search_food(api_client, household["headers"], "Whole Milk")
 
     confirm_resp = await api_client.patch(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{session_id}/items/{item['id']}",
+        f"/api/households/{household['household_id']}/purchase-sessions/{session_id}/items/{item['id']}",
         json={
             "global_food_definition_id": milk["id"],
             "storage_location_id": household["storage_location_id"],
@@ -154,14 +154,14 @@ async def test_full_lifecycle_confirm_skip_finalize(api_client, household, monke
             "cost": "4.99",
             "accounting_type": "PERSONAL",
             "allowed_member_ids": [household["member_id"]],
-            "status": "CONFIRMED",
+            "status": "COMPLETE",
         },
         headers=household["headers"],
     )
     assert confirm_resp.status_code == 200, confirm_resp.text
 
     finalize_resp = await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{session_id}/finalize",
+        f"/api/households/{household['household_id']}/purchase-sessions/{session_id}/finalize",
         headers=household["headers"],
     )
     assert finalize_resp.status_code == 200, finalize_resp.text
@@ -192,7 +192,7 @@ async def test_full_lifecycle_confirm_skip_finalize(api_client, household, monke
 
     # Idempotency: finalizing again must not create a second inventory item.
     second_finalize = await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{session_id}/finalize",
+        f"/api/households/{household['household_id']}/purchase-sessions/{session_id}/finalize",
         headers=household["headers"],
     )
     assert second_finalize.status_code == 200
@@ -203,17 +203,17 @@ async def test_full_lifecycle_confirm_skip_finalize(api_client, household, monke
 
 async def test_finalize_rejects_unreviewed_items(api_client, household, monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.services.receipt_imports.run_ocr",
+        "app.services.purchase_sessions.run_ocr",
         lambda image_bytes, mime_type: OcrResult(raw_text=_CANNED_RECEIPT_TEXT),
     )
     created = await _create_and_upload_session(api_client, household)
     await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{created['id']}/process",
+        f"/api/households/{household['household_id']}/purchase-sessions/{created['id']}/process",
         headers=household["headers"],
     )
 
     finalize_resp = await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{created['id']}/finalize",
+        f"/api/households/{household['household_id']}/purchase-sessions/{created['id']}/finalize",
         headers=household["headers"],
     )
     assert finalize_resp.status_code == 400
@@ -224,19 +224,19 @@ async def test_finalize_rejects_zero_quantity_cleanly(api_client, household, mon
     unhandled 500 from a Pydantic ValidationError or DB constraint
     violation surfacing straight out of create_manual_inventory_item."""
     monkeypatch.setattr(
-        "app.services.receipt_imports.run_ocr",
+        "app.services.purchase_sessions.run_ocr",
         lambda image_bytes, mime_type: OcrResult(raw_text=_CANNED_RECEIPT_TEXT),
     )
     created = await _create_and_upload_session(api_client, household)
     process_resp = await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{created['id']}/process",
+        f"/api/households/{household['household_id']}/purchase-sessions/{created['id']}/process",
         headers=household["headers"],
     )
     item = process_resp.json()["data"]["items"][0]
     milk = await _search_food(api_client, household["headers"], "Whole Milk")
 
     confirm_resp = await api_client.patch(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{created['id']}/items/{item['id']}",
+        f"/api/households/{household['household_id']}/purchase-sessions/{created['id']}/items/{item['id']}",
         json={
             "global_food_definition_id": milk["id"],
             "storage_location_id": household["storage_location_id"],
@@ -245,7 +245,7 @@ async def test_finalize_rejects_zero_quantity_cleanly(api_client, household, mon
             "cost": "4.99",
             "accounting_type": "PERSONAL",
             "allowed_member_ids": [household["member_id"]],
-            "status": "CONFIRMED",
+            "status": "COMPLETE",
         },
         headers=household["headers"],
     )
@@ -260,9 +260,9 @@ async def test_process_retry_after_failure_is_resumable(api_client, household, m
     def _raise(image_bytes, mime_type):
         raise RuntimeError("simulated OCR outage")
 
-    monkeypatch.setattr("app.services.receipt_imports.run_ocr", _raise)
+    monkeypatch.setattr("app.services.purchase_sessions.run_ocr", _raise)
     first_attempt = await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{created['id']}/process",
+        f"/api/households/{household['household_id']}/purchase-sessions/{created['id']}/process",
         headers=household["headers"],
     )
     assert first_attempt.status_code == 200
@@ -271,11 +271,11 @@ async def test_process_retry_after_failure_is_resumable(api_client, household, m
     assert failed_session["items"] == []
 
     monkeypatch.setattr(
-        "app.services.receipt_imports.run_ocr",
+        "app.services.purchase_sessions.run_ocr",
         lambda image_bytes, mime_type: OcrResult(raw_text=_CANNED_RECEIPT_TEXT),
     )
     retry = await api_client.post(
-        f"/api/households/{household['household_id']}/receipt-import-sessions/{created['id']}/process",
+        f"/api/households/{household['household_id']}/purchase-sessions/{created['id']}/process",
         headers=household["headers"],
     )
     assert retry.status_code == 200

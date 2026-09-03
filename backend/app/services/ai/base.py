@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.schemas.receipt_import import ParsedReceiptItem
+from app.schemas.purchase_session import ParsedReceiptItem
 from app.schemas.recipe_ai import DraftRecipe, GenerateRecipeParams, SubstitutionSuggestion
 from app.schemas.units import Unit
 
