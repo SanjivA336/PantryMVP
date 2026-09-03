@@ -1,5 +1,7 @@
 from uuid import UUID
 
+from postgrest.exceptions import APIError
+
 from app.core.supabase import get_service_client
 from app.schemas.activity import ActivityType
 from app.schemas.member import Member
@@ -99,8 +101,10 @@ def reverse_settlement(
         raise SettlementNotFoundError
     target = SettlementRecord(**existing.data)
 
-    # A reversal row can't be reversed, and an original that already has a
-    # reversal pointing at it can't be reversed again.
+    # A reversal row can't itself be reversed (immutable flag, no race). The
+    # "already has a reversal" check is best-effort here -- the real guard
+    # against a concurrent double-reverse is the partial UNIQUE index on
+    # reverses_settlement_id (migration 0029), caught below.
     if target.reverses_settlement_id is not None:
         raise AlreadyReversedError
     already = (
@@ -109,23 +113,28 @@ def reverse_settlement(
     if already.data:
         raise AlreadyReversedError
 
-    inserted = (
-        client.table(_TABLE)
-        .insert(
-            {
-                "household_id": str(household_id),
-                # Parties swapped: the reversal represents payee paying payer
-                # back, which nets exactly against the original.
-                "payer_member_id": str(target.payee_member_id),
-                "payee_member_id": str(target.payer_member_id),
-                "amount": str(target.amount),
-                "note": target.note,
-                "recorded_by_member_id": str(recorded_by.id),
-                "reverses_settlement_id": str(settlement_id),
-            }
+    try:
+        inserted = (
+            client.table(_TABLE)
+            .insert(
+                {
+                    "household_id": str(household_id),
+                    # Parties swapped: the reversal represents payee paying
+                    # payer back, which nets exactly against the original.
+                    "payer_member_id": str(target.payee_member_id),
+                    "payee_member_id": str(target.payer_member_id),
+                    "amount": str(target.amount),
+                    "note": target.note,
+                    "recorded_by_member_id": str(recorded_by.id),
+                    "reverses_settlement_id": str(settlement_id),
+                }
+            )
+            .execute()
         )
-        .execute()
-    )
+    except APIError as exc:
+        # Lost a concurrent double-reverse: the unique index rejected the
+        # second reversal row.
+        raise AlreadyReversedError from exc
     reversal = SettlementRecord(**inserted.data[0])
 
     nicknames = _nickname_map(household_id)

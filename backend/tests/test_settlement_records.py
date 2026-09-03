@@ -238,3 +238,47 @@ def test_record_settlement_rejects_a_non_member(monkeypatch) -> None:
                 amount=Decimal("5"),
             ),
         )
+
+
+def test_reverse_settlement_maps_a_unique_violation_to_already_reversed(monkeypatch) -> None:
+    """The concurrent double-reverse guard: when the partial UNIQUE index on
+    reverses_settlement_id (migration 0029) rejects the second reversal
+    insert, the service surfaces it as AlreadyReversedError, not a raw
+    APIError / 500."""
+    from postgrest.exceptions import APIError
+
+    household_id = uuid.uuid4()
+    recorder = make_member(household_id, uuid.uuid4())
+    original = _record(household_id)
+
+    class _RaceyClient:
+        def table(self, _name):
+            return self
+
+        def select(self, *_a, **_k):
+            return self
+
+        def eq(self, *_a, **_k):
+            return self
+
+        def maybe_single(self):
+            return self
+
+        def insert(self, *_a, **_k):
+            return self
+
+        def execute(self):
+            # First call: the "load target" select. Then: the "already
+            # reversed?" select (empty). Then: the reversal insert -> raced.
+            self._n = getattr(self, "_n", 0) + 1
+            if self._n == 1:
+                return type("R", (), {"data": original.model_dump(mode="json")})()
+            if self._n == 2:
+                return type("R", (), {"data": []})()
+            raise APIError({"code": "23505", "message": "duplicate key value"})
+
+    monkeypatch.setattr("app.services.settlements.get_service_client", lambda: _RaceyClient())
+    monkeypatch.setattr("app.services.settlements.activity_service.record", lambda *a, **k: None)
+
+    with pytest.raises(settlements_service.AlreadyReversedError):
+        settlements_service.reverse_settlement(household_id, recorder, original.id)
