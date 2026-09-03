@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Scale } from 'lucide-react'
+import { EmptyState } from '../../components/EmptyState'
 import { Modal } from '../../components/Modal'
 import type { LedgerBalance, LedgerEntryDetail, Member } from '../../types/entities'
 
@@ -69,10 +70,7 @@ export function MembersSection({ members, balances, entries, loading, myUserId }
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : activeMembers.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-subtle p-10 text-center">
-          <Scale size={28} strokeWidth={1.5} className="text-faint" />
-          <p className="text-sm text-muted">No members yet.</p>
-        </div>
+        <EmptyState icon={Scale} title="No members yet." />
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           {activeMembers.map((member) => {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowRight, History, PartyPopper, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { EmptyState } from '../../components/EmptyState'
 import { Modal } from '../../components/Modal'
 import type { Member, Settlement, SettlementRecord } from '../../types/entities'
 
@@ -158,10 +159,7 @@ export function SettlementsSection({
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : !settlements || settlements.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-subtle p-10 text-center">
-          <PartyPopper size={28} strokeWidth={1.5} className="text-faint" />
-          <p className="text-sm text-muted">Everyone's settled up.</p>
-        </div>
+        <EmptyState icon={PartyPopper} title="Everyone's settled up." />
       ) : (
         <ul className="flex flex-col gap-2">
           {settlements.map((settlement, i) => (

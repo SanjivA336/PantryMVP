@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChefHat, Clock, Plus, Sparkles, Wand2 } from 'lucide-react'
+import { EmptyState } from '../../components/EmptyState'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import type { Recipe } from '../../types/entities'
@@ -57,10 +58,11 @@ export function RecipesPage() {
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : !recipes || recipes.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-subtle p-10 text-center">
-          <ChefHat size={28} strokeWidth={1.5} className="text-faint" />
-          <p className="text-sm text-muted">No recipes yet.</p>
-        </div>
+        <EmptyState
+          icon={ChefHat}
+          title="No recipes yet."
+          action={{ to: `/households/${householdId}/recipes/new`, label: 'New recipe' }}
+        />
       ) : (
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {recipes.map((recipe) => (

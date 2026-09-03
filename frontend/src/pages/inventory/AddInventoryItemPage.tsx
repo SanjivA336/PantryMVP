@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, X } from 'lucide-react'
+import { Check, MapPin, X } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { EmptyState } from '../../components/EmptyState'
 import { FieldTooltip } from '../../components/FieldTooltip'
 import { TypeSearchField, type TypeSearchFieldHandle } from '../../components/TypeSearchField'
 import { useAuth } from '../../hooks/useAuth'
@@ -48,6 +49,7 @@ export function AddInventoryItemPage() {
   const { user } = useAuth()
   const [food, setFood] = useState<FoodDefinition | null>(null)
   const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([])
+  const [storageLoaded, setStorageLoaded] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
   const [serverError, setServerError] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
@@ -92,6 +94,7 @@ export function AddInventoryItemPage() {
     apiClient
       .get<StorageLocation[]>(`/api/households/${householdId}/storage-locations`)
       .then(setStorageLocations)
+      .finally(() => setStorageLoaded(true))
     apiClient.get<Member[]>(`/api/households/${householdId}/members`).then((data) => {
       const active = data.filter((m) => m.is_active)
       setMembers(active)
@@ -312,6 +315,20 @@ export function AddInventoryItemPage() {
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Something went wrong')
     }
+  }
+
+  if (storageLoaded && storageLocations.length === 0) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <h2 className="mb-4 text-xl font-semibold">Add an item</h2>
+        <EmptyState
+          icon={MapPin}
+          title="No storage locations yet"
+          hint="Add a fridge, freezer, or pantry first — an item has to go somewhere."
+          action={{ to: `/households/${householdId}`, label: 'Back to inventory' }}
+        />
+      </div>
+    )
   }
 
   return (

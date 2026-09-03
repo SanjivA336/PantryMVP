@@ -36,6 +36,7 @@ import {
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
 import { UNIT_LABELS } from '../../lib/units'
+import { EmptyState } from '../../components/EmptyState'
 import { UseItemModal } from './UseItemModal'
 import type {
   AccountingType,
@@ -515,13 +516,25 @@ export function InventoryPage() {
 
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
+      ) : !storageLocationId && (allStorageLocations?.length ?? 0) === 0 ? (
+        <EmptyState
+          icon={MapPin}
+          title="No storage locations yet"
+          hint="Add a fridge, freezer, or pantry — items have to live somewhere."
+          action={{ label: 'Add a storage location', onClick: openAddStorage }}
+        />
       ) : !items || items.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-subtle p-10 text-center">
-          <Package size={28} strokeWidth={1.5} className="text-faint" />
-          <p className="text-sm text-muted">
-            {storageLocationId ? 'Nothing stored here yet.' : 'Nothing in inventory yet.'}
-          </p>
-        </div>
+        <EmptyState
+          icon={Package}
+          title={storageLocationId ? 'Nothing stored here yet.' : 'Nothing in inventory yet.'}
+          action={{
+            label: 'Add an item',
+            onClick: () =>
+              storageLocationId
+                ? navigate(`/households/${householdId}/inventory/add`)
+                : setAddPickerOpen(true),
+          }}
+        />
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted">No items match your search.</p>
       ) : showSectional ? (

@@ -13,6 +13,7 @@ import {
   Utensils,
 } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { EmptyState } from '../../components/EmptyState'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
 import { UNIT_LABELS } from '../../lib/units'
 import type { ActivityEvent, ActivityType, Unit } from '../../types/entities'
@@ -251,10 +252,7 @@ export function ActivityPage() {
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : events.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-subtle p-10 text-center">
-          <Utensils size={28} strokeWidth={1.5} className="text-faint" />
-          <p className="text-sm text-muted">Nothing here yet.</p>
-        </div>
+        <EmptyState icon={Utensils} title="Nothing here yet." />
       ) : (
         <>
           <ul className="flex flex-col gap-1.5">

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Camera, Receipt, Upload } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { EmptyState } from '../../components/EmptyState'
 import { uploadReceiptImage } from '../../lib/receiptStorage'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import type { CreateReceiptImportSessionResponse, ReceiptImportSession } from '../../types/entities'
@@ -100,10 +101,7 @@ export function ScanReceiptPage() {
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : !sessions || sessions.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-subtle p-10 text-center">
-            <Receipt size={28} strokeWidth={1.5} className="text-faint" />
-            <p className="text-sm text-muted">No receipts scanned yet.</p>
-          </div>
+          <EmptyState icon={Receipt} title="No receipts scanned yet." />
         ) : (
           <ul className="flex flex-col gap-2">
             {sessions.map((session) => (

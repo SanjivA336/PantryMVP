@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Users } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { EmptyState } from '../../components/EmptyState'
 import { useAuth } from '../../hooks/useAuth'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import type { Household, Member } from '../../types/entities'
@@ -80,10 +81,7 @@ export function MembersTab({ members: allMembers, loading, error: loadError, rel
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : members.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-subtle p-10 text-center">
-          <Users size={28} strokeWidth={1.5} className="text-faint" />
-          <p className="text-sm text-muted">No members yet.</p>
-        </div>
+        <EmptyState icon={Users} title="No members yet." />
       ) : (
         <ul className="flex flex-col gap-2">
           {members.map((member) => {
@@ -123,7 +121,9 @@ export function MembersTab({ members: allMembers, loading, error: loadError, rel
                       type="button"
                       onClick={() => toggleAdmin(member)}
                       disabled={isRowOwner}
-                      title={isRowOwner ? 'Transfer ownership before changing admin status' : undefined}
+                      title={
+                        isRowOwner ? 'Transfer ownership before changing admin status' : undefined
+                      }
                       className="rounded-control border border-subtle px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                     >
                       {member.is_admin ? 'Revoke admin' : 'Make admin'}

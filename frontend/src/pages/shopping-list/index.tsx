@@ -2,8 +2,20 @@ import { useCallback, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, ChevronDown, ChevronUp, ListX, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  ListX,
+  Pencil,
+  Plus,
+  ShoppingCart,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { EmptyState } from '../../components/EmptyState'
 import { FoodSearchInput } from '../../components/FoodSearchInput'
 import { Modal } from '../../components/Modal'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
@@ -26,10 +38,7 @@ const STOCK_REASON_LABEL: Record<string, string> = {
 
 export function ShoppingListPage() {
   const { householdId } = useParams<{ householdId: string }>()
-  const {
-    data: sections,
-    reload: reloadSections,
-  } = useHouseholdResource<ShoppingListSection[]>(
+  const { data: sections, reload: reloadSections } = useHouseholdResource<ShoppingListSection[]>(
     householdId ? `/api/households/${householdId}/shopping-list/sections` : null,
   )
   const {
@@ -237,10 +246,7 @@ export function ShoppingListPage() {
     }
     return map
   }, [itemsBySection])
-  const sectionById = useMemo(
-    () => new Map(sortedSections.map((s) => [s.id, s])),
-    [sortedSections],
-  )
+  const sectionById = useMemo(() => new Map(sortedSections.map((s) => [s.id, s])), [sortedSections])
   const sectionBuckets: { id: string | null; name: string }[] = [
     ...sortedSections.map((s) => ({ id: s.id, name: s.name })),
     { id: null, name: 'Other' },
@@ -251,8 +257,7 @@ export function ShoppingListPage() {
     const neighbor = sortedSections[index + direction]
     if (!neighbor) return
     setActionError(null)
-    const sectionUrl = (id: string) =>
-      `/api/households/${householdId}/shopping-list/sections/${id}`
+    const sectionUrl = (id: string) => `/api/households/${householdId}/shopping-list/sections/${id}`
     const [sectionResult, neighborResult] = await Promise.allSettled([
       apiClient.patch(sectionUrl(section.id), { sort_order: neighbor.sort_order }),
       apiClient.patch(sectionUrl(neighbor.id), { sort_order: section.sort_order }),
@@ -263,10 +268,14 @@ export function ShoppingListPage() {
     // whichever half succeeded instead of leaving that half-applied.
     if (sectionResult.status === 'rejected' || neighborResult.status === 'rejected') {
       if (sectionResult.status === 'fulfilled') {
-        await apiClient.patch(sectionUrl(section.id), { sort_order: section.sort_order }).catch(() => {})
+        await apiClient
+          .patch(sectionUrl(section.id), { sort_order: section.sort_order })
+          .catch(() => {})
       }
       if (neighborResult.status === 'fulfilled') {
-        await apiClient.patch(sectionUrl(neighbor.id), { sort_order: neighbor.sort_order }).catch(() => {})
+        await apiClient
+          .patch(sectionUrl(neighbor.id), { sort_order: neighbor.sort_order })
+          .catch(() => {})
       }
       setActionError('Something went wrong')
     }
@@ -289,7 +298,9 @@ export function ShoppingListPage() {
         await apiClient.patch(itemUrl(item.id), { sort_order: item.sort_order }).catch(() => {})
       }
       if (neighborResult.status === 'fulfilled') {
-        await apiClient.patch(itemUrl(neighbor.id), { sort_order: neighbor.sort_order }).catch(() => {})
+        await apiClient
+          .patch(itemUrl(neighbor.id), { sort_order: neighbor.sort_order })
+          .catch(() => {})
       }
       setActionError('Something went wrong')
     }
@@ -347,10 +358,11 @@ export function ShoppingListPage() {
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : !hasAnyItems && sortedSections.length === 0 ? (
-        <p className="text-sm text-muted">
-          Nothing on the list yet -- add a section below, or add an item and it'll land in
-          "Other."
-        </p>
+        <EmptyState
+          icon={ShoppingCart}
+          title="Nothing on the list yet."
+          hint={'Add a section below, or add an item and it’ll land in "Other."'}
+        />
       ) : null}
 
       <div className="flex flex-col gap-4">
@@ -399,12 +411,18 @@ export function ShoppingListPage() {
                     className="min-w-0 flex-1 rounded-control border border-subtle bg-surface-2 px-2 py-1 text-sm font-semibold text-text outline-none focus:border-primary"
                   />
                 ) : (
-                  <h3 className="flex-1 truncate text-sm font-semibold text-muted">{bucket.name}</h3>
+                  <h3 className="flex-1 truncate text-sm font-semibold text-muted">
+                    {bucket.name}
+                  </h3>
                 )}
                 <button
                   type="button"
                   onClick={() =>
-                    setAddingToSection(addingToSection === (bucket.id ?? 'unsectioned') ? null : (bucket.id ?? 'unsectioned'))
+                    setAddingToSection(
+                      addingToSection === (bucket.id ?? 'unsectioned')
+                        ? null
+                        : (bucket.id ?? 'unsectioned'),
+                    )
                   }
                   title="Add item to this section"
                   aria-label="Add item to this section"
@@ -451,7 +469,10 @@ export function ShoppingListPage() {
 
               {addingToSection === (bucket.id ?? 'unsectioned') && (
                 <div className="mb-2">
-                  <FoodSearchInput value={null} onChange={(food) => food && addItem(food, bucket.id)} />
+                  <FoodSearchInput
+                    value={null}
+                    onChange={(food) => food && addItem(food, bucket.id)}
+                  />
                 </div>
               )}
 
