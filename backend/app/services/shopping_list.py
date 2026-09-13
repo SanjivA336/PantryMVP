@@ -181,7 +181,7 @@ def remove_item(household_id: UUID, item_id: UUID) -> ShoppingListItem:
         .execute()
     )
     if not result.data:
-        raise ValueError("Item not found or not currently active")
+        raise ValueError("That item doesn't exist or has already been removed")
     return ShoppingListItem(**result.data[0])
 
 

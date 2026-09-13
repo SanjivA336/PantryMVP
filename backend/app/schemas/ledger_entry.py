@@ -21,6 +21,10 @@ class LedgerEntry(BaseModel):
     reason: LedgerEntryReason
     source_purchase_event_id: UUID | None
     source_consumption_event_id: UUID | None
+    # Only ever set on ADJUSTMENT entries (see migration 0033) -- a one-line
+    # "what this was for" (e.g. "Cost correction on Whole Milk"), since those
+    # entries have no source event to resolve a food name through.
+    note: str | None = None
     created_at: datetime
 
 

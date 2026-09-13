@@ -8,6 +8,14 @@ function formatAmount(n: number): string {
   return `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}`
 }
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 interface Props {
   members: Member[] | null
   balances: LedgerBalance[] | null
@@ -18,9 +26,14 @@ interface Props {
 
 export function MembersSection({ members, balances, entries, loading, myUserId }: Props) {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
-  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
 
-  const activeMembers = useMemo(() => (members ?? []).filter((m) => m.is_active), [members])
+  const activeMembers = useMemo(
+    () =>
+      (members ?? [])
+        .filter((m) => m.is_active)
+        .sort((a, b) => a.nickname.localeCompare(b.nickname)),
+    [members],
+  )
   const myMemberId = activeMembers.find((m) => m.user_id === myUserId)?.id
 
   const netByMemberId = useMemo(() => {
@@ -58,12 +71,10 @@ export function MembersSection({ members, balances, entries, loading, myUserId }
           counterpartyId: isCreditor ? entry.debtor_member_id : entry.creditor_member_id,
         }
       })
-    return relevant.sort((a, b) =>
-      sortBy === 'amount'
-        ? Math.abs(b.signedAmount) - Math.abs(a.signedAmount)
-        : new Date(b.entry.created_at).getTime() - new Date(a.entry.created_at).getTime(),
+    return relevant.sort(
+      (a, b) => new Date(b.entry.created_at).getTime() - new Date(a.entry.created_at).getTime(),
     )
-  }, [selectedMember, entries, sortBy])
+  }, [selectedMember, entries])
 
   return (
     <div className="flex flex-col gap-5">
@@ -105,32 +116,6 @@ export function MembersSection({ members, balances, entries, loading, myUserId }
           title={`${selectedMember.nickname}'s balance`}
           onClose={() => setSelectedMember(null)}
         >
-          <div className="mb-3 flex items-center gap-2 text-xs">
-            <span className="text-faint">Sort by:</span>
-            <button
-              type="button"
-              onClick={() => setSortBy('date')}
-              className={`rounded-control border px-2 py-1 font-medium transition-colors ${
-                sortBy === 'date'
-                  ? 'border-primary bg-primary-soft text-primary'
-                  : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
-              }`}
-            >
-              Date
-            </button>
-            <button
-              type="button"
-              onClick={() => setSortBy('amount')}
-              className={`rounded-control border px-2 py-1 font-medium transition-colors ${
-                sortBy === 'amount'
-                  ? 'border-primary bg-primary-soft text-primary'
-                  : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
-              }`}
-            >
-              Amount
-            </button>
-          </div>
-
           {breakdown.length === 0 ? (
             <p className="text-sm text-muted">No purchases or usage on record yet.</p>
           ) : (
@@ -147,9 +132,15 @@ export function MembersSection({ members, balances, entries, loading, myUserId }
                     title={title}
                     className="flex items-center justify-between rounded-control border border-subtle bg-surface-2 px-3 py-2 text-sm"
                   >
-                    <span className="text-text">
-                      {entry.food_name ?? (entry.reason === 'ADJUSTMENT' ? 'Adjustment' : 'Item')}
-                    </span>
+                    <div>
+                      <p className="text-text">
+                        {entry.food_name ?? (entry.reason === 'ADJUSTMENT' ? 'Adjustment' : 'Item')}
+                        {entry.reason === 'ADJUSTMENT' && entry.note && (
+                          <span className="text-muted"> ({entry.note})</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-faint">{formatDate(entry.created_at)}</p>
+                    </div>
                     <span className={signedAmount >= 0 ? 'text-primary' : 'text-danger'}>
                       {formatAmount(signedAmount)}
                     </span>

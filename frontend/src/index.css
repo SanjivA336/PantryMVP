@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /*
   Dark, off-black + green design system. Tokens are declared inside @theme
@@ -8,15 +8,20 @@
   visually consistent as it grows.
 */
 @theme {
-  /* Backgrounds -- layered, not flat: each step up reads as "closer" */
-  --color-bg: #0b0d0c;
-  --color-surface: #15181a;
-  --color-surface-2: #1c201f;
-  --color-surface-hover: #212623;
+  /* Backgrounds -- layered, not flat: each step up reads as "closer".
+     All five neutrals below share one hue (~153°, matching --color-primary)
+     at ~4% saturation -- previously each was its own low-saturation drift
+     (144°-204° depending on the token), which read as several faintly
+     different tints stacked on each other rather than one deliberate
+     off-black-green. Lightness is unchanged from the original values. */
+  --color-bg: #0c0d0d;
+  --color-surface: #161817;
+  --color-surface-2: #1d201f;
+  --color-surface-hover: #222524;
 
   /* Borders -- hairline, low-contrast on purpose */
-  --color-subtle: #262b28;
-  --color-subtle-strong: #333a36;
+  --color-subtle: #272a29;
+  --color-subtle-strong: #343937;
 
   /* Text */
   --color-text: #edefec;
@@ -33,6 +38,10 @@
   --color-danger-soft: #2b1717;
   --color-warning: #f0b84f;
   --color-warning-soft: #2b2314;
+  /* Used for "in progress / about to happen" indicators -- e.g. the Use
+     modal's remaining-amount bar, where green (already primary) is taken
+     by "what's left" and this needs to read as distinctly its own thing. */
+  --color-info: #5b9bd5;
 
   /* Food categories -- one color per FoodCategory value (backend enum),
      used as small identifying dots next to food names. Kept as their own
@@ -73,8 +82,7 @@
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
   --shadow-raised: 0 4px 12px rgba(0, 0, 0, 0.45), 0 16px 40px rgba(0, 0, 0, 0.3);
 
-  --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 /*

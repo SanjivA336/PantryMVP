@@ -487,7 +487,7 @@ def finalize(
     ):
         raise InvalidSessionStateError(session.status)
     if any(item.status == PurchaseSessionItemStatus.PENDING for item in session.items):
-        raise FinalizeValidationError("Every line must be marked complete before finalizing")
+        raise FinalizeValidationError("Every line needs to be marked complete before finalizing")
 
     client = get_service_client()
 
@@ -513,11 +513,15 @@ def finalize(
             or item.quantity <= 0
             or not item.preferred_unit
         ):
-            raise FinalizeValidationError(f"Item {item.id} is missing required fields")
+            raise FinalizeValidationError(
+                "One of the lines is missing required information. Reopen the order to fill it in."
+            )
         if not item.allowed_member_ids:
-            raise FinalizeValidationError(f"Item {item.id} has no allowed members")
+            raise FinalizeValidationError("One of the lines doesn't have anyone assigned to use it")
         if not set(item.allowed_member_ids) <= active_member_ids:
-            raise FinalizeValidationError(f"Item {item.id} has invalid allowed members")
+            raise FinalizeValidationError(
+                "One of the lines has an invalid assignment. Try re-selecting who it's for."
+            )
 
         body = CreateInventoryItemRequest(
             global_food_definition_id=item.global_food_definition_id,

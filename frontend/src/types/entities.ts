@@ -49,7 +49,6 @@ export interface StorageLocation {
   household_id: string
   name: string
   type: StorageLocationType
-  description: string | null
   created_at: string
   updated_at: string
 }
@@ -80,7 +79,6 @@ export interface FoodDefinition {
   accounting_type_default: AccountingType
   shelf_life_days: number | null
   freezer_shelf_life_days: number | null
-  common_substitutions: string[]
   created_by_user_id: string | null
   is_verified: boolean
   usage_count: number
@@ -159,6 +157,10 @@ export interface LedgerEntry {
   reason: LedgerEntryReason
   source_purchase_event_id: string | null
   source_consumption_event_id: string | null
+  // Only ever set on ADJUSTMENT entries -- a one-line "what this was for"
+  // (e.g. "Cost correction on Whole Milk"), since those have no source
+  // event to resolve a food name through.
+  note: string | null
   created_at: string
 }
 

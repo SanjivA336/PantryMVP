@@ -80,7 +80,7 @@ function AvailabilityBadge({ ingredient, scale }: { ingredient: RecipeIngredient
     if (onHand < needed) {
       return (
         <span className="rounded-pill bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning">
-          Not quite enough ({onHand} {UNIT_LABELS[ingredient.unit]} on hand)
+          Not enough ({onHand} {UNIT_LABELS[ingredient.unit]} on hand)
         </span>
       )
     }
@@ -253,7 +253,7 @@ export function RecipeDetailPage() {
                             )
                           </span>
                         )}
-                        {suggestion.note && <span className="ml-1">— {suggestion.note}</span>}
+                        {suggestion.note && <span className="ml-1">: {suggestion.note}</span>}
                       </li>
                     ))}
                   </ul>

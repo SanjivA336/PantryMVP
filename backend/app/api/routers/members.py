@@ -17,7 +17,7 @@ def _ensure_not_last_admin(household_id: UUID, target: Member) -> None:
     if target.is_admin and members_service.count_active_admins(household_id) <= 1:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "This is the last remaining admin — promote another member before removing them.",
+            "This is the last remaining admin. Promote another member before removing them.",
         )
 
 
@@ -31,7 +31,7 @@ def _ensure_not_owner(household_id: UUID, target: Member) -> None:
     if household is not None and target.user_id == household.owner_id:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "This member owns the kitchen — transfer ownership before removing their "
+            "This member owns the kitchen. Transfer ownership before removing their "
             "admin status or removing them.",
         )
 
@@ -59,13 +59,13 @@ def update_member(
     if body.nickname is not None:
         if not (caller.is_admin or caller.id == target.id):
             raise HTTPException(
-                status.HTTP_403_FORBIDDEN, "Can only rename yourself unless you're an admin"
+                status.HTTP_403_FORBIDDEN, "You can only rename yourself unless you're an admin"
             )
         updates["nickname"] = body.nickname
 
     if body.is_admin is not None:
         if not caller.is_admin:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "You need to be an admin to do that")
         if body.is_admin is False:
             _ensure_not_last_admin(household_id, target)
             _ensure_not_owner(household_id, target)
@@ -85,7 +85,9 @@ def leave_household(
     caller: Member = Depends(require_household_membership),
 ) -> Envelope[Member]:
     if caller.id != member_id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Can only remove yourself via this endpoint")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "You can only remove yourself, not someone else"
+        )
     _ensure_not_last_admin(household_id, caller)
     _ensure_not_owner(household_id, caller)
     updated = members_service.deactivate_member(household_id, member_id)

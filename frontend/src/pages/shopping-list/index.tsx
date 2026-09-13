@@ -4,11 +4,13 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Check,
+  CheckCheck,
   ChevronDown,
   ChevronUp,
   ListX,
   Pencil,
   Plus,
+  Receipt,
   ShoppingBag,
   ShoppingCart,
   Sparkles,
@@ -48,9 +50,9 @@ export function ShoppingListPage() {
   )
   const {
     data: items,
-    loading,
     error: loadError,
     reload: reloadItems,
+    setData: setItems,
   } = useHouseholdResource<ShoppingListItem[]>(
     householdId ? `/api/households/${householdId}/shopping-list/items` : null,
   )
@@ -85,9 +87,11 @@ export function ShoppingListPage() {
   // unrelated full reload happens to touch it.
   useRealtimeSubscription('inventory_items', householdId ?? null, reloadWarnings)
 
+  const [tab, setTab] = useState<'list' | 'purchases'>('list')
   const [actionError, setActionError] = useState<string | null>(null)
   const [suggesting, setSuggesting] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [selectingAll, setSelectingAll] = useState(false)
   const [addingToSection, setAddingToSection] = useState<string | 'unsectioned' | null>(null)
   const [addingSection, setAddingSection] = useState(false)
   const [movingItem, setMovingItem] = useState<ShoppingListItem | null>(null)
@@ -229,15 +233,50 @@ export function ShoppingListPage() {
     }
   }
 
+  // Optimistic: flips the row immediately instead of waiting on a
+  // PATCH-then-refetch round trip, which is what made this feel sluggish.
+  // Realtime (already wired up above) reconciles the confirmed value for
+  // every client, including this one; a failure rolls the row back and
+  // surfaces the error the normal way.
   const toggleCollected = async (item: ShoppingListItem) => {
     setActionError(null)
+    const nextCollected = !item.collected
+    setItems(
+      (prev) =>
+        prev?.map((i) => (i.id === item.id ? { ...i, collected: nextCollected } : i)) ?? prev,
+    )
     try {
       await apiClient.patch(`/api/households/${householdId}/shopping-list/items/${item.id}`, {
-        collected: !item.collected,
+        collected: nextCollected,
       })
-      reloadItems()
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
+      setItems(
+        (prev) =>
+          prev?.map((i) => (i.id === item.id ? { ...i, collected: item.collected } : i)) ?? prev,
+      )
+    }
+  }
+
+  const selectAll = async () => {
+    setActionError(null)
+    setSelectingAll(true)
+    const uncollected = (items ?? []).filter((i) => !i.collected)
+    setItems((prev) => prev?.map((i) => ({ ...i, collected: true })) ?? prev)
+    try {
+      const results = await Promise.allSettled(
+        uncollected.map((i) =>
+          apiClient.patch(`/api/households/${householdId}/shopping-list/items/${i.id}`, {
+            collected: true,
+          }),
+        ),
+      )
+      if (results.some((r) => r.status === 'rejected')) {
+        setActionError('Something went wrong')
+        reloadItems()
+      }
+    } finally {
+      setSelectingAll(false)
     }
   }
 
@@ -370,11 +409,36 @@ export function ShoppingListPage() {
   }
 
   const hasAnyItems = (items ?? []).length > 0
+  const uncollectedCount = (items ?? []).filter((i) => !i.collected).length
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Shopping List</h2>
+        <div className="flex gap-2">
+          {(
+            [
+              { key: 'list', label: 'List' },
+              { key: 'purchases', label: 'Purchases' },
+            ] as const
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={`rounded-control border px-3 py-1.5 text-sm font-medium transition-colors ${
+                tab === key
+                  ? 'border-primary bg-primary-soft text-primary'
+                  : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'list' && (
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -396,335 +460,377 @@ export function ShoppingListPage() {
           </button>
           <button
             type="button"
-            onClick={startOrder}
-            disabled={startingOrder || collectedCount === 0}
-            title={collectedCount === 0 ? 'Check off items as you shop first' : undefined}
-            className="flex items-center gap-1.5 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+            onClick={selectAll}
+            disabled={selectingAll || uncollectedCount === 0}
+            className="flex items-center gap-1.5 rounded-control border border-subtle bg-surface px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover disabled:opacity-50"
           >
-            <ShoppingBag size={16} strokeWidth={2.25} />
-            {startingOrder
-              ? 'Starting…'
-              : `Bought marked${collectedCount > 0 ? ` (${collectedCount})` : ''}`}
+            <CheckCheck size={16} strokeWidth={1.75} />
+            Select All
           </button>
         </div>
-      </div>
+      )}
 
       {(loadError || actionError) && (
         <p className="text-sm text-danger">{loadError ?? actionError}</p>
       )}
 
-      {loading ? (
-        <p className="text-sm text-muted">Loading…</p>
-      ) : !hasAnyItems && sortedSections.length === 0 ? (
-        <EmptyState
-          icon={ShoppingCart}
-          title="Nothing on the list yet."
-          hint={'Add a section below, or add an item and it’ll land in "Other."'}
-        />
-      ) : null}
+      {tab === 'list' && (
+        <>
+          {/* Gated on `items === null` (never loaded yet), not the `loading`
+          flag -- `loading` also flips true on every reload after a normal
+          edit (toggling a checkbox, adding an item), which used to flash
+          this text in and out and shove the whole list up and down on every
+          click. The initial "nothing's arrived yet" case still shows it. */}
+          {items === null ? (
+            <p className="text-sm text-muted">Loading…</p>
+          ) : !hasAnyItems && sortedSections.length === 0 ? (
+            <EmptyState
+              icon={ShoppingCart}
+              title="Nothing on the list yet."
+              hint={'Add a section below, or add an item and it’ll land in "Other."'}
+            />
+          ) : null}
 
-      <div className="flex flex-col gap-4">
-        {sectionBuckets.map((bucket, bucketIndex) => {
-          const sectionItems = sortedItemsBySection.get(bucket.id) ?? []
-          const section = bucket.id ? sectionById.get(bucket.id) : null
-          const isEditingName = section != null && editingSectionId === section.id
-          return (
-            <div
-              key={bucket.id ?? 'unsectioned'}
-              className="-mx-2 rounded-card px-2 py-2 transition-colors hover:bg-surface-hover"
-            >
-              <div className="flex items-center gap-2">
-                {section && (
-                  <div className="flex shrink-0 flex-col">
-                    <button
-                      type="button"
-                      onClick={() => moveSection(section, -1)}
-                      disabled={bucketIndex === 0}
-                      className="text-faint hover:text-text disabled:opacity-30"
-                      aria-label="Move section up"
-                    >
-                      <ChevronUp size={12} strokeWidth={2} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveSection(section, 1)}
-                      disabled={bucketIndex === sortedSections.length - 1}
-                      className="text-faint hover:text-text disabled:opacity-30"
-                      aria-label="Move section down"
-                    >
-                      <ChevronDown size={12} strokeWidth={2} />
-                    </button>
-                  </div>
-                )}
-                {isEditingName && section ? (
-                  <input
-                    type="text"
-                    autoFocus
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') saveEditSection(section)
-                      if (e.key === 'Escape') cancelEditSection()
-                    }}
-                    className="min-w-0 flex-1 rounded-control border border-subtle bg-surface-2 px-2 py-1 text-sm font-semibold text-text outline-none focus:border-primary"
-                  />
-                ) : (
-                  <h3 className="flex-1 truncate text-sm font-semibold text-muted">
-                    {bucket.name}
-                  </h3>
-                )}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setAddingToSection(
-                      addingToSection === (bucket.id ?? 'unsectioned')
-                        ? null
-                        : (bucket.id ?? 'unsectioned'),
-                    )
-                  }
-                  title="Add item to this section"
-                  aria-label="Add item to this section"
-                  className="shrink-0 rounded-control p-1 text-faint transition-colors hover:bg-surface-hover hover:text-primary"
+          <div className="flex flex-col gap-4">
+            {sectionBuckets.map((bucket, bucketIndex) => {
+              const sectionItems = sortedItemsBySection.get(bucket.id) ?? []
+              const section = bucket.id ? sectionById.get(bucket.id) : null
+              const isEditingName = section != null && editingSectionId === section.id
+              return (
+                <div
+                  key={bucket.id ?? 'unsectioned'}
+                  className="-mx-2 rounded-card px-2 py-2 transition-colors hover:bg-surface-hover"
                 >
-                  <Plus size={14} strokeWidth={2.25} />
-                </button>
-                {section && (
-                  <>
-                    {isEditingName ? (
-                      <button
-                        type="button"
-                        onClick={() => saveEditSection(section)}
-                        title="Save name"
-                        aria-label="Save section name"
-                        className="shrink-0 rounded-control p-1 text-primary transition-colors hover:bg-primary-soft"
-                      >
-                        <Check size={14} strokeWidth={2.25} />
-                      </button>
+                  <div className="flex items-center gap-2">
+                    {section && (
+                      <div className="flex shrink-0 flex-col">
+                        <button
+                          type="button"
+                          onClick={() => moveSection(section, -1)}
+                          disabled={bucketIndex === 0}
+                          className="text-faint hover:text-text disabled:opacity-30"
+                          aria-label="Move section up"
+                        >
+                          <ChevronUp size={12} strokeWidth={2} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSection(section, 1)}
+                          disabled={bucketIndex === sortedSections.length - 1}
+                          className="text-faint hover:text-text disabled:opacity-30"
+                          aria-label="Move section down"
+                        >
+                          <ChevronDown size={12} strokeWidth={2} />
+                        </button>
+                      </div>
+                    )}
+                    {isEditingName && section ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveEditSection(section)
+                          if (e.key === 'Escape') cancelEditSection()
+                        }}
+                        className="min-w-0 flex-1 rounded-control border border-subtle bg-surface-2 px-2 py-1 text-sm font-semibold text-text outline-none focus:border-primary"
+                      />
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => startEditSection(section)}
-                        title="Edit name"
-                        aria-label="Edit section name"
-                        className="shrink-0 rounded-control p-1 text-faint transition-colors hover:bg-surface-hover hover:text-text"
-                      >
-                        <Pencil size={14} strokeWidth={1.75} />
-                      </button>
+                      <h3 className="flex-1 truncate text-sm font-semibold text-muted">
+                        {bucket.name}
+                      </h3>
                     )}
                     <button
                       type="button"
-                      onClick={() => deleteSection(section)}
-                      title="Delete section"
-                      aria-label="Delete section"
-                      className="shrink-0 rounded-control p-1 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                      onClick={() =>
+                        setAddingToSection(
+                          addingToSection === (bucket.id ?? 'unsectioned')
+                            ? null
+                            : (bucket.id ?? 'unsectioned'),
+                        )
+                      }
+                      title="Add item to this section"
+                      aria-label="Add item to this section"
+                      className="shrink-0 rounded-control p-1 text-faint transition-colors hover:bg-surface-hover hover:text-primary"
                     >
-                      <Trash2 size={14} strokeWidth={1.75} />
+                      <Plus size={14} strokeWidth={2.25} />
                     </button>
-                  </>
-                )}
-              </div>
-              <div className="mt-2 mb-3 border-b border-subtle" />
-
-              {addingToSection === (bucket.id ?? 'unsectioned') && (
-                <div className="mb-2">
-                  <FoodSearchInput
-                    value={null}
-                    onChange={(food) => food && addItem(food, bucket.id)}
-                  />
-                </div>
-              )}
-
-              {sectionItems.length > 0 && (
-                <ul className="flex flex-col gap-1.5">
-                  {sectionItems.map((item, itemIndex) => (
-                    <li
-                      key={item.id}
-                      className={`flex items-center gap-2 rounded-control border border-subtle bg-surface px-3 py-2.5 ${
-                        item.collected ? 'bg-primary-soft/40' : ''
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleCollected(item)}
-                        aria-label={item.collected ? 'Mark not collected' : 'Mark collected'}
-                        className={`flex size-5 shrink-0 items-center justify-center rounded-control border transition-colors ${
-                          item.collected
-                            ? 'border-primary bg-primary text-bg'
-                            : 'border-subtle-strong bg-surface-2'
-                        }`}
-                      >
-                        {item.collected && (
-                          <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
-                            <path
-                              d="M3 8l3.5 3.5L13 5"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
-                      </button>
-                      <span
-                        className={`flex-1 text-sm ${item.collected ? 'text-muted line-through' : 'text-text'}`}
-                      >
-                        {item.name}
-                      </span>
-                      {item.source === 'SUGGESTED' && (
-                        <div className="relative">
+                    {section && (
+                      <>
+                        {isEditingName ? (
                           <button
                             type="button"
-                            onClick={() =>
-                              setOpenReasonFor(openReasonFor === item.id ? null : item.id)
-                            }
-                            className="rounded-pill bg-primary-soft px-2 py-0.5 text-xs font-medium text-primary"
+                            onClick={() => saveEditSection(section)}
+                            title="Save name"
+                            aria-label="Save section name"
+                            className="shrink-0 rounded-control p-1 text-primary transition-colors hover:bg-primary-soft"
                           >
-                            Suggested
+                            <Check size={14} strokeWidth={2.25} />
                           </button>
-                          {openReasonFor === item.id && (
-                            <div className="absolute right-0 z-10 mt-1 w-56 rounded-card border border-subtle bg-surface-2 p-3 text-xs shadow-raised">
-                              <p className="mb-2 text-muted">
-                                {item.household_food_variant_id &&
-                                reasonByVariantId.has(item.household_food_variant_id)
-                                  ? `Suggested because: ${reasonByVariantId.get(item.household_food_variant_id)}`
-                                  : 'Suggested based on your stock levels.'}
-                              </p>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startEditSection(section)}
+                            title="Edit name"
+                            aria-label="Edit section name"
+                            className="shrink-0 rounded-control p-1 text-faint transition-colors hover:bg-surface-hover hover:text-text"
+                          >
+                            <Pencil size={14} strokeWidth={1.75} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => deleteSection(section)}
+                          title="Delete section"
+                          aria-label="Delete section"
+                          className="shrink-0 rounded-control p-1 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                        >
+                          <Trash2 size={14} strokeWidth={1.75} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="mt-2 mb-3 border-b border-subtle" />
+
+                  {addingToSection === (bucket.id ?? 'unsectioned') && (
+                    <div className="mb-2">
+                      <FoodSearchInput
+                        value={null}
+                        onChange={(food) => food && addItem(food, bucket.id)}
+                      />
+                    </div>
+                  )}
+
+                  {sectionItems.length > 0 && (
+                    <ul className="flex flex-col gap-1.5">
+                      {sectionItems.map((item, itemIndex) => (
+                        <li
+                          key={item.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => toggleCollected(item)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              toggleCollected(item)
+                            }
+                          }}
+                          aria-pressed={item.collected}
+                          aria-label={item.collected ? 'Mark not collected' : 'Mark collected'}
+                          className={`flex cursor-pointer items-center gap-2 rounded-control border border-subtle bg-surface px-3 py-2.5 ${
+                            item.collected ? 'bg-primary-soft/40' : ''
+                          }`}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`flex size-5 shrink-0 items-center justify-center rounded-control border transition-colors ${
+                              item.collected
+                                ? 'border-primary bg-primary text-bg'
+                                : 'border-subtle-strong bg-surface-2'
+                            }`}
+                          >
+                            {item.collected && (
+                              <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
+                                <path
+                                  d="M3 8l3.5 3.5L13 5"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            )}
+                          </span>
+                          <span
+                            className={`flex-1 text-sm ${item.collected ? 'text-muted line-through' : 'text-text'}`}
+                          >
+                            {item.name}
+                          </span>
+                          {item.source === 'SUGGESTED' && (
+                            <div className="relative" onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
-                                onClick={() => ignorePermanently(item)}
-                                className="w-full rounded-control border border-danger/30 px-2 py-1 text-left font-medium text-danger transition-colors hover:bg-danger-soft"
+                                onClick={() =>
+                                  setOpenReasonFor(openReasonFor === item.id ? null : item.id)
+                                }
+                                className="rounded-pill bg-primary-soft px-2 py-0.5 text-xs font-medium text-primary"
                               >
-                                Ignore permanently
+                                Suggested
                               </button>
+                              {openReasonFor === item.id && (
+                                <div className="absolute right-0 z-10 mt-1 w-56 rounded-card border border-subtle bg-surface-2 p-3 text-xs shadow-raised">
+                                  <p className="mb-2 text-muted">
+                                    {item.household_food_variant_id &&
+                                    reasonByVariantId.has(item.household_food_variant_id)
+                                      ? `Suggested because: ${reasonByVariantId.get(item.household_food_variant_id)}`
+                                      : 'Suggested based on your stock levels.'}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => ignorePermanently(item)}
+                                    className="w-full rounded-control border border-danger/30 px-2 py-1 text-left font-medium text-danger transition-colors hover:bg-danger-soft"
+                                  >
+                                    Ignore permanently
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => moveItem(item, -1)}
-                          disabled={itemIndex === 0}
-                          className="rounded-control p-1 text-faint transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-30"
-                          aria-label="Move item up"
-                        >
-                          <ChevronUp size={14} strokeWidth={2} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveItem(item, 1)}
-                          disabled={itemIndex === sectionItems.length - 1}
-                          className="rounded-control p-1 text-faint transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-30"
-                          aria-label="Move item down"
-                        >
-                          <ChevronDown size={14} strokeWidth={2} />
-                        </button>
-                        {sortedSections.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setMovingItem(item)}
-                            title="Move to a different section"
-                            className="rounded-control px-1.5 py-1 text-xs font-medium text-faint transition-colors hover:bg-surface-hover hover:text-text"
+                          <div
+                            className="flex items-center gap-0.5"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            Move
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          title="Remove"
-                          onClick={() => removeItem(item)}
-                          className="rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
-                        >
-                          <X size={16} strokeWidth={1.75} />
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )
-        })}
-
-        {addingSection ? (
-          <form
-            onSubmit={sectionForm.handleSubmit(addSection)}
-            className="flex items-start gap-2 rounded-card border border-dashed border-subtle p-3"
-          >
-            <input
-              type="text"
-              autoFocus
-              placeholder="Section name (e.g. Produce)"
-              className={inputClass}
-              {...sectionForm.register('name')}
-            />
-            <button
-              type="submit"
-              disabled={sectionForm.formState.isSubmitting}
-              className="shrink-0 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
-            >
-              Add
-            </button>
-            <button
-              type="button"
-              onClick={() => setAddingSection(false)}
-              className="shrink-0 rounded-control p-2 text-faint hover:text-text"
-              aria-label="Cancel"
-            >
-              <X size={16} strokeWidth={1.75} />
-            </button>
-          </form>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAddingSection(true)}
-            className="flex items-center justify-center gap-1.5 rounded-card border border-dashed border-subtle p-3 text-sm font-medium text-muted transition-colors hover:border-subtle-strong hover:text-text"
-          >
-            <Plus size={16} strokeWidth={2.25} />
-            Add section
-          </button>
-        )}
-      </div>
-
-      {(purchaseSessions ?? []).length > 0 && (
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-muted">Purchases</h3>
-          <ul className="flex flex-col gap-2">
-            {(purchaseSessions ?? []).map((s) => {
-              const isDraft = s.status !== 'FINALIZED'
-              return (
-                <li
-                  key={s.id}
-                  className="flex items-center gap-3 rounded-card border border-subtle bg-surface px-4 py-3 shadow-card"
-                >
-                  <button
-                    type="button"
-                    onClick={() => isDraft && setWizardSessionId(s.id)}
-                    disabled={!isDraft}
-                    className={`min-w-0 flex-1 text-left text-sm ${isDraft ? 'hover:underline' : ''}`}
-                  >
-                    <span className="font-medium">{isDraft ? 'Draft order' : 'Completed'}</span>
-                    <span className="ml-2 text-xs text-faint">
-                      {new Date(s.created_at).toLocaleDateString()}
-                    </span>
-                  </button>
-                  {isDraft && (
-                    <button
-                      type="button"
-                      onClick={() => deleteOrder(s.id)}
-                      aria-label="Delete order"
-                      title="Delete order"
-                      className="shrink-0 rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
-                    >
-                      <Trash2 size={15} strokeWidth={1.75} />
-                    </button>
+                            <button
+                              type="button"
+                              onClick={() => moveItem(item, -1)}
+                              disabled={itemIndex === 0}
+                              className="rounded-control p-1 text-faint transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-30"
+                              aria-label="Move item up"
+                            >
+                              <ChevronUp size={14} strokeWidth={2} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveItem(item, 1)}
+                              disabled={itemIndex === sectionItems.length - 1}
+                              className="rounded-control p-1 text-faint transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-30"
+                              aria-label="Move item down"
+                            >
+                              <ChevronDown size={14} strokeWidth={2} />
+                            </button>
+                            {sortedSections.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setMovingItem(item)}
+                                title="Move to a different section"
+                                className="rounded-control px-1.5 py-1 text-xs font-medium text-faint transition-colors hover:bg-surface-hover hover:text-text"
+                              >
+                                Move
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              title="Remove"
+                              onClick={() => removeItem(item)}
+                              className="rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                            >
+                              <X size={16} strokeWidth={1.75} />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </li>
+                </div>
               )
             })}
-          </ul>
-        </div>
+
+            {addingSection ? (
+              <form
+                onSubmit={sectionForm.handleSubmit(addSection)}
+                className="flex items-start gap-2 rounded-card border border-dashed border-subtle p-3"
+              >
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Section name (e.g. Produce)"
+                  className={inputClass}
+                  {...sectionForm.register('name')}
+                />
+                <button
+                  type="submit"
+                  disabled={sectionForm.formState.isSubmitting}
+                  className="shrink-0 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+                >
+                  Add
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddingSection(false)}
+                  className="shrink-0 rounded-control p-2 text-faint hover:text-text"
+                  aria-label="Cancel"
+                >
+                  <X size={16} strokeWidth={1.75} />
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingSection(true)}
+                className="flex items-center justify-center gap-1.5 rounded-card border border-dashed border-subtle p-3 text-sm font-medium text-muted transition-colors hover:border-subtle-strong hover:text-text"
+              >
+                <Plus size={16} strokeWidth={2.25} />
+                Add section
+              </button>
+            )}
+          </div>
+
+          {/* Sits below every section, like a checkout button -- it acts on
+          everything above it (whatever's currently checked off), so it
+          reads better as the last thing on the page than as a peer of
+          Clear List/Suggest List/Select All up in the header. */}
+          <button
+            type="button"
+            onClick={startOrder}
+            disabled={startingOrder || collectedCount === 0}
+            title={collectedCount === 0 ? 'Check off items as you shop first' : undefined}
+            className="flex items-center justify-center gap-1.5 rounded-control bg-primary px-2 py-2.5 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+          >
+            <ShoppingBag size={16} strokeWidth={2.25} />
+            {startingOrder
+              ? 'Starting…'
+              : `Record Selected${collectedCount > 0 ? ` (${collectedCount})` : ''}`}
+          </button>
+        </>
       )}
+
+      {tab === 'purchases' &&
+        ((purchaseSessions ?? []).length > 0 ? (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-muted">Purchases</h3>
+            <ul className="flex flex-col gap-2">
+              {(purchaseSessions ?? []).map((s) => {
+                const isDraft = s.status !== 'FINALIZED'
+                return (
+                  <li
+                    key={s.id}
+                    className="flex items-center gap-3 rounded-card border border-subtle bg-surface px-4 py-3 shadow-card"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => isDraft && setWizardSessionId(s.id)}
+                      disabled={!isDraft}
+                      className={`min-w-0 flex-1 text-left text-sm ${isDraft ? 'hover:underline' : ''}`}
+                    >
+                      <span className="font-medium">{isDraft ? 'Draft order' : 'Completed'}</span>
+                      <span className="ml-2 text-xs text-faint">
+                        {new Date(s.created_at).toLocaleDateString()}
+                      </span>
+                    </button>
+                    {isDraft && (
+                      <button
+                        type="button"
+                        onClick={() => deleteOrder(s.id)}
+                        aria-label="Delete order"
+                        title="Delete order"
+                        className="shrink-0 rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                      >
+                        <Trash2 size={15} strokeWidth={1.75} />
+                      </button>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : (
+          <EmptyState
+            icon={Receipt}
+            title="No purchases yet."
+            hint="Recorded orders will show up here."
+          />
+        ))}
 
       {wizardSessionId && (
         <PurchaseWizardModal

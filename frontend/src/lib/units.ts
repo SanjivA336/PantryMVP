@@ -96,6 +96,33 @@ export function guessSystem(unit: Unit): UnitSystem | null {
   return UNIT_SYSTEM[unit] ?? null
 }
 
+// Mirrors backend/app/services/units.py's _TO_BASE -- 1 of this unit,
+// expressed in its dimension's base unit (grams / milliliters / count).
+// Lets a same-dimension amount (a fraction of what's left, a named preset
+// like "a glass") be re-expressed in whatever unit the user currently has
+// selected, without ever silently switching that selection for them.
+const TO_BASE: Record<Unit, number> = {
+  g: 1,
+  kg: 1000,
+  oz: 28.3495,
+  lb: 453.592,
+  ml: 1,
+  l: 1000,
+  tsp: 4.92892,
+  tbsp: 14.7868,
+  fl_oz: 29.5735,
+  cup: 236.588,
+  pt: 473.176,
+  qt: 946.353,
+  gal: 3785.41,
+  count: 1,
+}
+
+export function convertAmount(amount: number, from: Unit, to: Unit): number {
+  if (from === to) return amount
+  return (amount * TO_BASE[from]) / TO_BASE[to]
+}
+
 export const DIMENSION_LABELS: Record<Dimension, string> = {
   WEIGHT: 'Weight',
   VOLUME: 'Volume',

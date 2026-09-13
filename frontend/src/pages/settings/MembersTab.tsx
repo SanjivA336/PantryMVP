@@ -124,7 +124,7 @@ export function MembersTab({ members: allMembers, loading, error: loadError, rel
                       title={
                         isRowOwner ? 'Transfer ownership before changing admin status' : undefined
                       }
-                      className="rounded-control border border-subtle px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                      className="w-28 shrink-0 rounded-control border border-subtle px-2 py-1 text-center text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                     >
                       {member.is_admin ? 'Revoke admin' : 'Make admin'}
                     </button>
@@ -135,7 +135,7 @@ export function MembersTab({ members: allMembers, loading, error: loadError, rel
                       onClick={() => leave(member)}
                       disabled={isRowOwner}
                       title={isRowOwner ? 'Transfer ownership before leaving' : undefined}
-                      className="rounded-control border border-subtle px-2 py-1 text-xs font-medium text-danger transition-colors hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                      className="w-20 shrink-0 rounded-control border border-subtle px-2 py-1 text-center text-xs font-medium text-danger transition-colors hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                     >
                       Leave
                     </button>
@@ -146,7 +146,7 @@ export function MembersTab({ members: allMembers, loading, error: loadError, rel
                       onClick={() => remove(member)}
                       disabled={isRowOwner}
                       title={isRowOwner ? 'Transfer ownership before removing them' : undefined}
-                      className="rounded-control border border-subtle px-2 py-1 text-xs font-medium text-danger transition-colors hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                      className="w-20 shrink-0 rounded-control border border-subtle px-2 py-1 text-center text-xs font-medium text-danger transition-colors hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                     >
                       Remove
                     </button>

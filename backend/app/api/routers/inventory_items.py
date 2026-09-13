@@ -70,7 +70,7 @@ def create_inventory_item(
     if not inventory_service.allowed_member_ids_are_valid(household_id, body.allowed_member_ids):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "allowed_member_ids must all be active members of this household",
+            "Everyone you pick has to be an active member of this household",
         )
     buyer_id = body.buyer_member_id or caller.id
     if body.buyer_member_id and not inventory_service.allowed_member_ids_are_valid(
@@ -78,12 +78,12 @@ def create_inventory_item(
     ):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "buyer_member_id must be an active member of this household",
+            "The buyer has to be an active member of this household",
         )
     try:
         item = inventory_service.create_manual(household_id, buyer_id, body)
     except inventory_service.FoodDefinitionNotFoundError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Food definition not found") from exc
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That food couldn't be found") from exc
 
     activity_service.record(
         household_id,
@@ -125,7 +125,7 @@ def update_inventory_item(
     ):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "allowed_member_ids must all be active members of this household",
+            "Everyone you pick has to be an active member of this household",
         )
     # Only fetched when a storage move is actually in the payload -- needed
     # for the "from" side of the ITEM_MOVED event, which the post-update
@@ -142,14 +142,14 @@ def update_inventory_item(
     except inventory_service.ItemFrozenError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "cost, total_quantity, and allowed_member_ids can no longer be edited directly "
-            "once this item's debt has been finalized -- use the correction endpoint instead",
+            "This item's cost has already been split and settled, so it can't be edited "
+            'directly anymore. Use "Report a mistake" to fix it instead.',
         ) from exc
     except inventory_service.UnitDimensionMismatchError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "preferred_unit can only switch between metric and customary within the same "
-            "kind of measurement, not change what kind of measurement this food uses",
+            "You can switch between metric and customary, but not change what kind of "
+            "measurement this food uses (e.g. weight to volume)",
         ) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
@@ -193,12 +193,13 @@ def correct_inventory_item(
     except inventory_service.ItemNotFrozenError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "This item's debt hasn't been finalized yet -- edit it directly instead",
+            "This item hasn't been settled yet, so there's nothing to correct. Edit it "
+            "directly instead.",
         ) from exc
     except inventory_service.ConcurrentModificationError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "This item was changed while you were correcting it -- reopen it and try again",
+            "This item changed while you were working on it. Reopen it and try again.",
         ) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
@@ -243,12 +244,12 @@ def correct_item_consumption(
     except inventory_service.ConsumptionEventNotFoundError as exc:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            "That usage entry doesn't exist on this item",
+            "That usage entry no longer exists",
         ) from exc
     except inventory_service.ConcurrentModificationError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "This item was changed while you were correcting it -- reopen it and try again",
+            "This item changed while you were working on it. Reopen it and try again.",
         ) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
@@ -290,12 +291,12 @@ def consume_inventory_item(
     except inventory_service.InsufficientQuantityError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Cannot use more than the item's remaining quantity",
+            "You can't use more than what's left",
         ) from exc
     except inventory_service.MemberNotAllowedError as exc:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            "You are not on this item's allowed-members list",
+            "You're not one of the people allowed to use this item",
         ) from exc
 
     # Record what the human actually entered, not the converted-to-item-unit

@@ -30,7 +30,7 @@ const FILTERS: { key: string; label: string; types: ActivityType[] }[] = [
   {
     key: 'items',
     label: 'Items',
-    types: ['ITEM_ADDED', 'ITEM_CONSUMED', 'ITEM_REMOVED', 'ITEM_MOVED'],
+    types: ['ITEM_ADDED', 'ITEM_CONSUMED', 'ITEM_REMOVED', 'ITEM_MOVED', 'USAGE_CORRECTED'],
   },
   {
     key: 'money',
@@ -90,16 +90,49 @@ function iconFor(event: ActivityEvent) {
   }
 }
 
-function describe(event: ActivityEvent): ReactNode {
+// A four-color severity scheme, independent of the icon shape above:
+//   green  (primary) -- something was gained or resolved: an item arrived,
+//                        someone joined, a debt got paid off.
+//   red    (danger)  -- something went away or got undone: an item left
+//                        inventory (for any reason -- used up counts the
+//                        same as thrown out, since either way it's gone),
+//                        a member left/was removed, a settlement reversed.
+//   amber  (warning) -- usage and corrections: nothing was fully gained or
+//                        lost, but a record changed (consumed some of an
+//                        item, a cost or usage figure got fixed).
+//   blue   (info)    -- pure relocation: an item moved shelves, no gain or
+//                        loss either way.
+function colorFor(event: ActivityEvent): string {
+  switch (event.type) {
+    case 'ITEM_ADDED':
+    case 'MEMBER_JOINED':
+    case 'SETTLEMENT_RECORDED':
+      return 'text-primary'
+    case 'ITEM_REMOVED':
+    case 'MEMBER_LEFT':
+    case 'SETTLEMENT_REVERSED':
+      return 'text-danger'
+    case 'ITEM_CONSUMED':
+    case 'COST_CORRECTED':
+    case 'USAGE_CORRECTED':
+      return 'text-warning'
+    case 'ITEM_MOVED':
+      return 'text-info'
+  }
+}
+
+// `subject` is pre-rendered by the caller -- either a plain bold string, or
+// (when this event has a still-resolvable item to point at) a link, so the
+// click target is exactly the item's name rather than the entire row.
+function describe(event: ActivityEvent, subject: ReactNode): ReactNode {
   const actor = event.actor_nickname ?? 'Someone'
-  const subject = event.subject_name ?? 'an item'
   const d = event.detail
 
   switch (event.type) {
     case 'ITEM_ADDED':
       return (
         <>
-          <b>{actor}</b> added <b>{subject}</b>
+          <b>{actor}</b> added {subject}
           {d.quantity ? ` · ${d.quantity} ${unitLabel(d.unit)}` : ''}
           {d.storage_location ? ` to ${d.storage_location}` : ''}
         </>
@@ -107,33 +140,32 @@ function describe(event: ActivityEvent): ReactNode {
     case 'ITEM_CONSUMED':
       return (
         <>
-          <b>{actor}</b> used {String(d.amount ?? '')} {unitLabel(d.unit)} of <b>{subject}</b>
+          <b>{actor}</b> used {String(d.amount ?? '')} {unitLabel(d.unit)} of {subject}
         </>
       )
     case 'ITEM_REMOVED':
       return (
         <>
-          <b>{subject}</b> {REMOVAL_VERB[String(d.reason)] ?? 'was removed'}
+          {subject} {REMOVAL_VERB[String(d.reason)] ?? 'was removed'}
         </>
       )
     case 'ITEM_MOVED':
       return (
         <>
-          <b>{actor}</b> moved <b>{subject}</b> from {String(d.from_location)} to{' '}
-          {String(d.to_location)}
+          <b>{actor}</b> moved {subject} from {String(d.from_location)} to {String(d.to_location)}
         </>
       )
     case 'COST_CORRECTED':
       return (
         <>
-          <b>{actor}</b> corrected <b>{subject}</b> cost: ${String(d.previous_cost)} → $
+          <b>{actor}</b> corrected {subject} cost: ${String(d.previous_cost)} → $
           {String(d.new_cost)}
         </>
       )
     case 'USAGE_CORRECTED':
       return (
         <>
-          <b>{actor}</b> corrected a usage entry on <b>{subject}</b>
+          <b>{actor}</b> corrected a usage entry on {subject}
         </>
       )
     case 'SETTLEMENT_RECORDED':
@@ -159,12 +191,10 @@ function describe(event: ActivityEvent): ReactNode {
     case 'MEMBER_LEFT':
       return d.removed_by_admin ? (
         <>
-          <b>{actor}</b> removed <b>{subject}</b>
+          <b>{actor}</b> removed {subject}
         </>
       ) : (
-        <>
-          <b>{subject}</b> left the household
-        </>
+        <>{subject} left the household</>
       )
   }
 }
@@ -271,31 +301,31 @@ export function ActivityPage() {
                 typeof event.detail.item_id === 'string'
                   ? `/households/${householdId}/inventory-items/${event.detail.item_id}`
                   : null
-              const body = (
-                <>
-                  <span className="mt-0.5 shrink-0 text-faint">
+              // Only the item's own name is a click target -- linking the
+              // whole row made it too easy to navigate away by accident
+              // when all you meant to do was scan the feed.
+              const subject = itemHref ? (
+                <Link
+                  to={itemHref}
+                  className="font-bold text-text hover:text-primary hover:underline"
+                >
+                  {event.subject_name ?? 'an item'}
+                </Link>
+              ) : (
+                <b>{event.subject_name ?? 'an item'}</b>
+              )
+              return (
+                <li
+                  key={event.id}
+                  className="flex items-start gap-2.5 rounded-card border border-subtle bg-surface px-3 py-2.5 shadow-card"
+                >
+                  <span className={`mt-0.5 shrink-0 ${colorFor(event)}`}>
                     <Icon size={16} strokeWidth={1.75} />
                   </span>
-                  <span className="min-w-0 flex-1 text-sm">{describe(event)}</span>
+                  <span className="min-w-0 flex-1 text-sm">{describe(event, subject)}</span>
                   <span className="shrink-0 text-xs text-faint">
                     {relativeTime(event.created_at)}
                   </span>
-                </>
-              )
-              return (
-                <li key={event.id}>
-                  {itemHref ? (
-                    <Link
-                      to={itemHref}
-                      className="flex items-start gap-2.5 rounded-card border border-subtle bg-surface px-3 py-2.5 shadow-card transition-colors hover:border-subtle-strong hover:bg-surface-hover"
-                    >
-                      {body}
-                    </Link>
-                  ) : (
-                    <div className="flex items-start gap-2.5 rounded-card border border-subtle bg-surface px-3 py-2.5 shadow-card">
-                      {body}
-                    </div>
-                  )}
                 </li>
               )
             })}

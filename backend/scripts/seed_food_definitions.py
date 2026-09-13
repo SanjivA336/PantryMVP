@@ -25,7 +25,6 @@ def main() -> None:
             "accounting_type_default": entry["accounting_type_default"],
             "shelf_life_days": entry.get("shelf_life_days"),
             "freezer_shelf_life_days": entry.get("freezer_shelf_life_days"),
-            "common_substitutions": entry.get("common_substitutions", []),
             "created_by_user_id": None,
             "is_verified": True,
             "usage_count": 0,

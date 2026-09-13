@@ -4,14 +4,12 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { TriangleAlert } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { FieldTooltip } from '../../components/FieldTooltip'
 import { Modal } from '../../components/Modal'
 import { useAuth } from '../../hooks/useAuth'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { UNIT_SYSTEM_EXAMPLES, UNIT_SYSTEM_LABELS } from '../../lib/units'
-import {
-  updateHouseholdSchema,
-  type UpdateHouseholdForm,
-} from '../households/schema'
+import { updateHouseholdSchema, type UpdateHouseholdForm } from '../households/schema'
 import type { Household, Member, UnitSystem } from '../../types/entities'
 
 const inputClass =
@@ -126,11 +124,35 @@ export function BurrowTab({ members }: Props) {
           {errors.name && <p className="mt-1.5 text-sm text-danger">{errors.name.message}</p>}
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-muted">
-            Address (optional)
-          </label>
+          <label className="mb-1.5 block text-sm font-medium text-muted">Address (optional)</label>
           <input type="text" className={inputClass} {...register('address')} />
         </div>
+
+        <div>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-muted">
+            Default measurement system
+            <FieldTooltip text="Used when adding a food this kitchen hasn't tracked before. Switching it for an individual food when you add or restock it overrides this default, and is remembered for next time." />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {(['METRIC', 'CUSTOMARY'] as UnitSystem[]).map((system) => (
+              <button
+                key={system}
+                type="button"
+                disabled={savingUnitSystem}
+                onClick={() => chooseUnitSystem(system)}
+                className={`rounded-control border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  household.preferred_unit_system === system
+                    ? 'border-primary bg-primary-soft text-primary'
+                    : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
+                }`}
+              >
+                {UNIT_SYSTEM_LABELS[system]}
+                <span className="ml-1.5 text-xs text-faint">({UNIT_SYSTEM_EXAMPLES[system]})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {actionError && <p className="text-sm text-danger">{actionError}</p>}
         <button
           type="submit"
@@ -140,35 +162,6 @@ export function BurrowTab({ members }: Props) {
           {isSubmitting ? 'Saving…' : 'Save changes'}
         </button>
       </form>
-
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-muted">
-          Default measurement system
-        </label>
-        <p className="mb-2 text-xs text-faint">
-          Used when adding a food this kitchen hasn't tracked before. Switching it for an
-          individual food when you add or restock it overrides this default, and is remembered
-          for next time.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(['METRIC', 'CUSTOMARY'] as UnitSystem[]).map((system) => (
-            <button
-              key={system}
-              type="button"
-              disabled={savingUnitSystem}
-              onClick={() => chooseUnitSystem(system)}
-              className={`rounded-control border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-                household.preferred_unit_system === system
-                  ? 'border-primary bg-primary-soft text-primary'
-                  : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
-              }`}
-            >
-              {UNIT_SYSTEM_LABELS[system]}
-              <span className="ml-1.5 text-xs text-faint">({UNIT_SYSTEM_EXAMPLES[system]})</span>
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="rounded-card border border-danger/30 bg-danger-soft p-4">
         <p className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-danger">
@@ -198,8 +191,8 @@ export function BurrowTab({ members }: Props) {
         >
           <p className="mb-3 text-sm text-muted">
             This permanently deletes <span className="font-medium text-text">{household.name}</span>
-            {' '}-- inventory, recipes, shopping list, and balance history for every member. Type
-            the household name to confirm.
+            , including its inventory, recipes, shopping list, and balance history for every member.
+            Type the household name to confirm.
           </p>
           <input
             type="text"

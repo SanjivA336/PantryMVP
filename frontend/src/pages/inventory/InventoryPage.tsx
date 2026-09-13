@@ -173,7 +173,7 @@ export function InventoryPage() {
   const storageForm = useForm<StorageLocationForm>({ resolver: zodResolver(storageLocationSchema) })
 
   const openAddStorage = () => {
-    storageForm.reset({ name: '', type: 'FRIDGE', description: '' })
+    storageForm.reset({ name: '', type: 'FRIDGE' })
     setStorageModal({ mode: 'add' })
   }
 
@@ -181,7 +181,6 @@ export function InventoryPage() {
     storageForm.reset({
       name: location.name,
       type: location.type,
-      description: location.description ?? '',
     })
     setStorageModal({ mode: 'edit', location })
   }
@@ -313,20 +312,25 @@ export function InventoryPage() {
 
   const renderItemCard = (item: InventoryItem) => {
     const expiry = item.expiry_date ? expiryText(item.expiry_date) : null
+    const itemHref = `/households/${householdId}/inventory-items/${item.id}`
     return (
       <li
         key={item.id}
-        className="flex flex-col gap-3 rounded-card border border-subtle bg-surface p-4 shadow-card"
+        role="button"
+        tabIndex={0}
+        onClick={() => navigate(itemHref)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            navigate(itemHref)
+          }
+        }}
+        className="flex cursor-pointer flex-col gap-3 rounded-card border border-subtle bg-surface p-4 shadow-card transition-colors hover:border-subtle-strong hover:bg-surface-hover"
       >
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <CategoryDot category={item.category} />
-            <Link
-              to={`/households/${householdId}/inventory-items/${item.id}`}
-              className="font-medium hover:underline"
-            >
-              {item.food_name}
-            </Link>
+            <span className="font-medium">{item.food_name}</span>
             {item.accounting_type !== 'PERSONAL' && (
               <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-xs text-muted">
                 {ACCOUNTING_TYPE_LABELS[item.accounting_type]}
@@ -344,7 +348,10 @@ export function InventoryPage() {
           )}
         </div>
 
-        <div className="mt-auto flex items-center justify-between gap-2 border-t border-subtle pt-3">
+        <div
+          className="mt-auto flex items-center justify-between gap-2 border-t border-subtle pt-3"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
             type="button"
             onClick={() => setUsingItem(item)}
@@ -520,7 +527,7 @@ export function InventoryPage() {
         <EmptyState
           icon={MapPin}
           title="No storage locations yet"
-          hint="Add a fridge, freezer, or pantry — items have to live somewhere."
+          hint="Add a fridge, freezer, or pantry. Items have to live somewhere."
           action={{ label: 'Add a storage location', onClick: openAddStorage }}
         />
       ) : !items || items.length === 0 ? (
@@ -663,12 +670,6 @@ export function InventoryPage() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-muted">
-                Description (optional)
-              </label>
-              <input type="text" className={inputClass} {...storageForm.register('description')} />
             </div>
             <button
               type="submit"

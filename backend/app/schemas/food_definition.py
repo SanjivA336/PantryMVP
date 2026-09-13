@@ -39,7 +39,6 @@ class FoodDefinition(BaseModel):
     accounting_type_default: AccountingType
     shelf_life_days: int | None
     freezer_shelf_life_days: int | None
-    common_substitutions: list[str]
     created_by_user_id: UUID | None
     is_verified: bool
     usage_count: int
@@ -55,4 +54,3 @@ class CreateFoodDefinitionRequest(BaseModel):
     accounting_type_default: AccountingType = AccountingType.SHARED
     shelf_life_days: int | None = Field(default=None, gt=0)
     freezer_shelf_life_days: int | None = Field(default=None, gt=0)
-    common_substitutions: list[str] = Field(default_factory=list)

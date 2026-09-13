@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowRight, History, PartyPopper, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { ArrowRight, PartyPopper, Plus, RotateCcw, Sparkles } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { EmptyState } from '../../components/EmptyState'
 import { Modal } from '../../components/Modal'
@@ -48,7 +48,7 @@ export function SettlementsSection({
   const name = (id: string) => nicknameById.get(id) ?? 'Unknown member'
 
   const [form, setForm] = useState<FormState | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
+  const [recommendedOpen, setRecommendedOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -122,15 +122,12 @@ export function SettlementsSection({
       .map((r) => ({ record: r, reversed: reversedIds.has(r.id) }))
   }, [settlementRecords])
 
-  const activeHistoryCount = history.filter((h) => !h.reversed).length
+  const recommendedCount = (settlements ?? []).length
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted">
-          The fewest transfers that would settle every balance -- not necessarily the same as any
-          single purchase on record.
-        </p>
+        <p className="text-sm text-muted">Every payment recorded between members, newest first.</p>
         <div className="flex shrink-0 gap-2">
           <button
             type="button"
@@ -142,13 +139,13 @@ export function SettlementsSection({
           </button>
           <button
             type="button"
-            onClick={() => setHistoryOpen(true)}
+            onClick={() => setRecommendedOpen(true)}
             className="flex items-center gap-1.5 rounded-control border border-subtle px-2 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
-            <History size={15} strokeWidth={1.75} />
-            Past settlements
-            {activeHistoryCount > 0 && (
-              <span className="rounded-pill bg-surface-2 px-1.5 text-xs">{activeHistoryCount}</span>
+            <Sparkles size={15} strokeWidth={1.75} />
+            Recommended settlements
+            {recommendedCount > 0 && (
+              <span className="rounded-pill bg-surface-2 px-1.5 text-xs">{recommendedCount}</span>
             )}
           </button>
         </div>
@@ -158,28 +155,44 @@ export function SettlementsSection({
 
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
-      ) : !settlements || settlements.length === 0 ? (
-        <EmptyState icon={PartyPopper} title="Everyone's settled up." />
+      ) : history.length === 0 ? (
+        <EmptyState icon={PartyPopper} title="No payments recorded yet." />
       ) : (
         <ul className="flex flex-col gap-2">
-          {settlements.map((settlement, i) => (
+          {history.map(({ record, reversed }) => (
             <li
-              key={i}
-              className="flex items-center gap-3 rounded-card border border-subtle bg-surface px-4 py-3 shadow-card"
+              key={record.id}
+              className="flex items-center gap-2 rounded-card border border-subtle bg-surface px-4 py-3 shadow-card"
             >
-              <span className="font-medium">{name(settlement.debtor_member_id)}</span>
-              <ArrowRight size={16} strokeWidth={2} className="shrink-0 text-faint" />
-              <span className="font-medium">{name(settlement.creditor_member_id)}</span>
-              <span className="ml-auto text-lg font-semibold text-primary">
-                ${Number(settlement.amount).toFixed(2)}
-              </span>
-              <button
-                type="button"
-                onClick={() => openPrefilledForm(settlement)}
-                className="shrink-0 rounded-control border border-subtle px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text"
-              >
-                Record
-              </button>
+              <div className={`min-w-0 flex-1 ${reversed ? 'opacity-50' : ''}`}>
+                <p className={reversed ? 'line-through' : ''}>
+                  <span className="font-medium">{name(record.payer_member_id)}</span>
+                  {' → '}
+                  <span className="font-medium">{name(record.payee_member_id)}</span>
+                  <span className="ml-2 font-semibold text-primary">
+                    ${Number(record.amount).toFixed(2)}
+                  </span>
+                </p>
+                <p className="text-xs text-faint">
+                  {formatDate(record.created_at)}
+                  {record.note && ` · ${record.note}`}
+                </p>
+              </div>
+              {reversed ? (
+                <span className="flex shrink-0 items-center gap-1 rounded-pill bg-surface-2 px-2 py-0.5 text-xs text-muted">
+                  <RotateCcw size={11} strokeWidth={2} />
+                  Reversed
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => reverseRecord(record.id)}
+                  aria-label="Reverse this payment"
+                  className="shrink-0 rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                >
+                  <RotateCcw size={15} strokeWidth={1.75} />
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -263,48 +276,38 @@ export function SettlementsSection({
         </Modal>
       )}
 
-      {historyOpen && (
-        <Modal title="Past settlements" onClose={() => setHistoryOpen(false)}>
+      {recommendedOpen && (
+        <Modal title="Recommended settlements" onClose={() => setRecommendedOpen(false)}>
+          <p className="mb-3 text-xs text-faint">
+            The fewest transfers that would settle every balance, not necessarily matching any
+            single purchase on record.
+          </p>
           {error && <p className="mb-2 text-sm text-danger">{error}</p>}
-          {history.length === 0 ? (
-            <p className="text-sm text-muted">No payments recorded yet.</p>
+          {!settlements || settlements.length === 0 ? (
+            <p className="text-sm text-muted">Everyone's settled up.</p>
           ) : (
             <ul className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto">
-              {history.map(({ record, reversed }) => (
+              {settlements.map((settlement, i) => (
                 <li
-                  key={record.id}
+                  key={i}
                   className="flex items-center gap-2 rounded-control border border-subtle bg-surface-2 px-3 py-2 text-sm"
                 >
-                  <div className={`min-w-0 flex-1 ${reversed ? 'opacity-50' : ''}`}>
-                    <p className={reversed ? 'line-through' : ''}>
-                      <span className="font-medium">{name(record.payer_member_id)}</span>
-                      {' → '}
-                      <span className="font-medium">{name(record.payee_member_id)}</span>
-                      <span className="ml-2 font-semibold text-primary">
-                        ${Number(record.amount).toFixed(2)}
-                      </span>
-                    </p>
-                    <p className="text-xs text-faint">
-                      {formatDate(record.created_at)}
-                      {record.note && ` · ${record.note}`}
-                    </p>
-                  </div>
-                  {reversed ? (
-                    <span className="flex shrink-0 items-center gap-1 rounded-pill bg-surface px-2 py-0.5 text-xs text-muted">
-                      <RotateCcw size={11} strokeWidth={2} />
-                      Reversed
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => reverseRecord(record.id)}
-                      aria-label="Reverse this payment"
-                      title="Reverse this payment"
-                      className="shrink-0 rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
-                    >
-                      <Trash2 size={15} strokeWidth={1.75} />
-                    </button>
-                  )}
+                  <span className="font-medium">{name(settlement.debtor_member_id)}</span>
+                  <ArrowRight size={14} strokeWidth={2} className="shrink-0 text-faint" />
+                  <span className="font-medium">{name(settlement.creditor_member_id)}</span>
+                  <span className="ml-auto font-semibold text-primary">
+                    ${Number(settlement.amount).toFixed(2)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecommendedOpen(false)
+                      openPrefilledForm(settlement)
+                    }}
+                    className="shrink-0 rounded-control border border-subtle px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text"
+                  >
+                    Record
+                  </button>
                 </li>
               ))}
             </ul>

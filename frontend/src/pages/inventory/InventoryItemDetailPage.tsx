@@ -1,19 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { FOOD_CATEGORY_LABELS } from '../../lib/foodCategories'
-import {
-  DIMENSION_LABELS,
-  UNIT_LABELS,
-  UNIT_SYSTEM_LABELS,
-  UNITS_BY_DIMENSION,
-  guessDimension,
-  guessSystem,
-  resolveUnit,
-} from '../../lib/units'
+import { DIMENSION_LABELS, UNIT_LABELS, UNITS_BY_DIMENSION, guessDimension } from '../../lib/units'
 import type {
   ConsumptionEvent,
   InventoryItem,
@@ -21,7 +13,6 @@ import type {
   PurchaseCorrection,
   StorageLocation,
   Unit,
-  UnitSystem,
 } from '../../types/entities'
 
 const inputClass =
@@ -46,6 +37,12 @@ export function InventoryItemDetailPage() {
   const [corrections, setCorrections] = useState<PurchaseCorrection[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [tab, setTab] = useState<'details' | 'history'>('details')
+
+  const sortedMembers = useMemo(
+    () => [...members].sort((a, b) => a.nickname.localeCompare(b.nickname)),
+    [members],
+  )
 
   useEffect(() => {
     if (!householdId) return
@@ -83,12 +80,6 @@ export function InventoryItemDetailPage() {
 
   const isFrozen = item.debt_frozen_at !== null
   const dimension = guessDimension(item.preferred_unit)
-  const currentSystem = guessSystem(item.preferred_unit)
-
-  const chooseUnitSystem = (system: UnitSystem) => {
-    if (system === currentSystem) return
-    void patch({ preferred_unit: resolveUnit(dimension, system) })
-  }
 
   const toggleMember = (memberId: string) => {
     const current = item.allowed_member_ids
@@ -120,165 +111,169 @@ export function InventoryItemDetailPage() {
 
       {actionError && <p className="text-sm text-danger">{actionError}</p>}
 
-      {/* Food type/dimension are never editable here -- only the metric/
-          customary system within whatever dimension the food already is. */}
-      {dimension !== 'COUNT' && (
-        <div>
-          <label className={fieldLabelClass}>Measurement system</label>
-          <div className="flex gap-2">
-            {(['METRIC', 'CUSTOMARY'] as UnitSystem[]).map((system) => (
-              <button
-                key={system}
-                type="button"
-                disabled={saving}
-                onClick={() => chooseUnitSystem(system)}
-                className={`rounded-control border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-                  currentSystem === system
-                    ? 'border-primary bg-primary-soft text-primary'
-                    : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
-                }`}
-              >
-                {UNIT_SYSTEM_LABELS[system]}
-              </button>
-            ))}
+      <div className="flex gap-2">
+        {(
+          [
+            { key: 'details', label: 'Details' },
+            { key: 'history', label: 'Usage history' },
+          ] as const
+        ).map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={`rounded-control border px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === key
+                ? 'border-primary bg-primary-soft text-primary'
+                : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'details' ? (
+        <>
+          <div>
+            <label className={fieldLabelClass}>Nickname</label>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder={item.food_type_name}
+              defaultValue={item.name_override ?? ''}
+              onBlur={(e) => {
+                const value = e.target.value.trim() || null
+                if (value !== item.name_override) void patch({ name_override: value })
+              }}
+            />
           </div>
-        </div>
-      )}
 
-      <CostAndQuantitySection
-        item={item}
-        householdId={householdId!}
-        itemId={itemId!}
-        onChanged={reload}
-      />
-
-      <div>
-        <label className={fieldLabelClass}>Who's using this?</label>
-        <div className="flex flex-wrap gap-2 rounded-control border border-transparent p-2">
-          {members.map((member) => {
-            const selected = item.allowed_member_ids.includes(member.id)
-            return (
-              <button
-                key={member.id}
-                type="button"
-                disabled={isFrozen || saving}
-                onClick={() => toggleMember(member.id)}
-                className={`flex items-center gap-1.5 rounded-control border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                  selected
-                    ? 'border-primary bg-primary-soft text-primary'
-                    : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
-                }`}
-              >
-                {selected && <Check size={14} strokeWidth={2.5} />}
-                {member.nickname}
-              </button>
-            )
-          })}
-        </div>
-        {isFrozen && (
-          <p className="mt-1.5 text-xs text-faint">
-            This item's cost has already been settled, so who it's split between is locked in.
-          </p>
-        )}
-      </div>
-
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <label className={fieldLabelClass}>Expiry date</label>
-          <input
-            type="date"
-            className={inputClass}
-            defaultValue={item.expiry_date ?? ''}
-            onBlur={(e) => {
-              const value = e.target.value || null
-              if (value !== item.expiry_date) void patch({ expiry_date: value })
-            }}
+          <CostAndQuantitySection
+            item={item}
+            householdId={householdId!}
+            itemId={itemId!}
+            dimension={dimension}
+            saving={saving}
+            onChanged={reload}
           />
-        </div>
-        <div className="flex-1">
-          <label className={fieldLabelClass}>Best-by date</label>
-          <input
-            type="date"
-            className={inputClass}
-            defaultValue={item.best_by_date ?? ''}
-            onBlur={(e) => {
-              const value = e.target.value || null
-              if (value !== item.best_by_date) void patch({ best_by_date: value })
-            }}
+
+          <div>
+            <label className={fieldLabelClass}>Storage location</label>
+            <select
+              className={inputClass}
+              value={item.storage_location_id}
+              onChange={(e) => void patch({ storage_location_id: e.target.value })}
+            >
+              {storageLocations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className={fieldLabelClass}>Expiry date</label>
+              <input
+                type="date"
+                className={inputClass}
+                defaultValue={item.expiry_date ?? ''}
+                onBlur={(e) => {
+                  const value = e.target.value || null
+                  if (value !== item.expiry_date) void patch({ expiry_date: value })
+                }}
+              />
+            </div>
+            <div className="flex-1">
+              <label className={fieldLabelClass}>Best-by date</label>
+              <input
+                type="date"
+                className={inputClass}
+                defaultValue={item.best_by_date ?? ''}
+                onBlur={(e) => {
+                  const value = e.target.value || null
+                  if (value !== item.best_by_date) void patch({ best_by_date: value })
+                }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={fieldLabelClass}>Who's using this?</label>
+            <div className="grid grid-cols-3 gap-2 rounded-control border border-transparent p-2">
+              {sortedMembers.map((member) => {
+                const selected = item.allowed_member_ids.includes(member.id)
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    disabled={isFrozen || saving}
+                    onClick={() => toggleMember(member.id)}
+                    className={`flex h-10 items-center justify-center rounded-control border px-2 py-2 text-center text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      selected
+                        ? 'border-primary bg-primary-soft text-primary'
+                        : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
+                    }`}
+                  >
+                    <span className="w-full truncate">{member.nickname}</span>
+                  </button>
+                )
+              })}
+            </div>
+            {isFrozen && (
+              <p className="mt-1.5 text-xs text-faint">
+                This item's cost has already been settled, so who it's split between is locked in.
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigate(`/households/${householdId}`)}
+            className="rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
+          >
+            Done
+          </button>
+        </>
+      ) : (
+        <>
+          <UsageSection
+            householdId={householdId!}
+            itemId={itemId!}
+            displayUnit={item.preferred_unit}
+            members={members}
+            onChanged={reload}
           />
-        </div>
-      </div>
 
-      <div>
-        <label className={fieldLabelClass}>Storage location</label>
-        <select
-          className={inputClass}
-          value={item.storage_location_id}
-          onChange={(e) => void patch({ storage_location_id: e.target.value })}
-        >
-          {storageLocations.map((loc) => (
-            <option key={loc.id} value={loc.id}>
-              {loc.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className={fieldLabelClass}>Nickname</label>
-        <input
-          type="text"
-          className={inputClass}
-          placeholder={item.food_type_name}
-          defaultValue={item.name_override ?? ''}
-          onBlur={(e) => {
-            const value = e.target.value.trim() || null
-            if (value !== item.name_override) void patch({ name_override: value })
-          }}
-        />
-      </div>
-
-      <UsageSection
-        householdId={householdId!}
-        itemId={itemId!}
-        displayUnit={item.preferred_unit}
-        members={members}
-        onChanged={reload}
-      />
-
-      {corrections.length > 0 && (
-        <div>
-          <label className={fieldLabelClass}>Correction history</label>
-          <ul className="flex flex-col gap-2">
-            {corrections.map((c) => (
-              <li
-                key={c.id}
-                className="rounded-control border border-subtle bg-surface-2 px-3 py-2 text-xs text-muted"
-              >
-                {c.new_cost !== null && (
-                  <p>
-                    Cost: {c.previous_cost} → {c.new_cost}
-                  </p>
-                )}
-                {c.new_total_quantity !== null && (
-                  <p>
-                    Amount: {c.previous_total_quantity} → {c.new_total_quantity}
-                  </p>
-                )}
-                {c.note && <p className="italic">"{c.note}"</p>}
-              </li>
-            ))}
-          </ul>
-        </div>
+          {corrections.length > 0 && (
+            <div>
+              <label className={fieldLabelClass}>Correction history</label>
+              <ul className="flex flex-col gap-2">
+                {corrections.map((c) => (
+                  <li
+                    key={c.id}
+                    className="rounded-control border border-subtle bg-surface-2 px-3 py-2 text-xs text-muted"
+                  >
+                    {c.new_cost !== null && (
+                      <p>
+                        Cost: {c.previous_cost} → {c.new_cost}
+                      </p>
+                    )}
+                    {c.new_total_quantity !== null && (
+                      <p>
+                        Amount: {c.previous_total_quantity} → {c.new_total_quantity}
+                      </p>
+                    )}
+                    {c.note && <p className="italic">"{c.note}"</p>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
       )}
-
-      <button
-        type="button"
-        onClick={() => navigate(`/households/${householdId}`)}
-        className="self-start text-sm text-muted hover:text-text hover:underline"
-      >
-        Done
-      </button>
     </div>
   )
 }
@@ -300,7 +295,6 @@ function UsageSection({
   const [fixing, setFixing] = useState<string | null>(null)
   const [amount, setAmount] = useState('')
   const [unit, setUnit] = useState<Unit>(displayUnit)
-  const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -322,7 +316,6 @@ function UsageSection({
     setFixing(event.id)
     setAmount(event.quantity_used)
     setUnit(event.unit)
-    setNote('')
   }
 
   const submitFix = async (eventId: string) => {
@@ -339,7 +332,6 @@ function UsageSection({
           corrects_event_id: eventId,
           actual_quantity: amount,
           unit,
-          note: note.trim() || null,
         },
       )
       setFixing(null)
@@ -412,13 +404,6 @@ function UsageSection({
                       ))}
                     </select>
                   </div>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Note (optional)"
-                  />
                   {error && <p className="text-sm text-danger">{error}</p>}
                   <div className="flex gap-2">
                     <button
@@ -451,11 +436,15 @@ function CostAndQuantitySection({
   item,
   householdId,
   itemId,
+  dimension,
+  saving,
   onChanged,
 }: {
   item: InventoryItem
   householdId: string
   itemId: string
+  dimension: ReturnType<typeof guessDimension>
+  saving: boolean
   onChanged: () => void
 }) {
   const isFrozen = item.debt_frozen_at !== null
@@ -466,7 +455,10 @@ function CostAndQuantitySection({
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const saveDirectEdit = async (field: 'cost' | 'total_quantity', value: string) => {
+  const saveDirectEdit = async (
+    field: 'cost' | 'total_quantity' | 'preferred_unit',
+    value: string,
+  ) => {
     setError(null)
     try {
       await apiClient.patch(`/api/households/${householdId}/inventory-items/${itemId}`, {
@@ -516,18 +508,32 @@ function CostAndQuantitySection({
           />
         </div>
         <div className="flex-1">
-          <label className={fieldLabelClass}>Amount ({UNIT_LABELS[item.preferred_unit]})</label>
-          <input
-            type="number"
-            step="any"
-            className={inputClass}
-            defaultValue={item.total_quantity}
-            onBlur={(e) => {
-              if (e.target.value && e.target.value !== item.total_quantity) {
-                void saveDirectEdit('total_quantity', e.target.value)
-              }
-            }}
-          />
+          <label className={fieldLabelClass}>Amount</label>
+          <div className="flex">
+            <input
+              type="number"
+              step="any"
+              className="w-full rounded-control rounded-r-none border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:z-10 focus:border-primary"
+              defaultValue={item.total_quantity}
+              onBlur={(e) => {
+                if (e.target.value && e.target.value !== item.total_quantity) {
+                  void saveDirectEdit('total_quantity', e.target.value)
+                }
+              }}
+            />
+            <select
+              disabled={saving}
+              className="w-24 shrink-0 rounded-control rounded-l-none border border-l-0 border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none focus:border-primary disabled:opacity-50"
+              value={item.preferred_unit}
+              onChange={(e) => void saveDirectEdit('preferred_unit', e.target.value)}
+            >
+              {UNITS_BY_DIMENSION[dimension].map((u) => (
+                <option key={u} value={u}>
+                  {UNIT_LABELS[u]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {error && <p className="text-sm text-danger">{error}</p>}
       </div>
@@ -549,7 +555,7 @@ function CostAndQuantitySection({
         </div>
       </div>
       <p className="mt-1.5 text-xs text-faint">
-        Already settled -- use a correction to fix a mistake rather than editing directly.
+        Already settled. Use a correction to fix a mistake rather than editing directly.
       </p>
 
       {!correcting ? (
@@ -586,7 +592,7 @@ function CostAndQuantitySection({
           </div>
           <textarea
             rows={2}
-            placeholder="Note (optional) -- e.g. typo'd the receipt"
+            placeholder="Note (optional), e.g. typo'd the receipt"
             className={inputClass}
             value={note}
             onChange={(e) => setNote(e.target.value)}

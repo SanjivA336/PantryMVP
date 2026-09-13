@@ -18,23 +18,33 @@ def get_current_user_id(authorization: str = Header(...)) -> UUID:
     the legacy HS256 shared-secret scheme, even though a JWT secret is still
     present in project settings for backward compatibility with older APIs.
     """
+    # Every failure below ends in the same user-facing text -- whatever
+    # actually went wrong with the token (missing, malformed, expired,
+    # signed by an unknown key, ...) means the same thing to whoever's
+    # looking at the screen: log in again. The specific reason is still the
+    # real HTTPException detail underneath for anyone reading server logs,
+    # just not something to show a user mid-JWT-internals.
+    session_expired = HTTPException(
+        status.HTTP_401_UNAUTHORIZED, "Your session isn't valid. Please log in again."
+    )
+
     if not authorization.startswith("Bearer "):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")
+        raise session_expired
 
     token = authorization.removeprefix("Bearer ")
 
     try:
         unverified_header = jwt.get_unverified_header(token)
     except JWTError as exc:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Malformed token: {exc}") from exc
+        raise session_expired from exc
 
     kid = unverified_header.get("kid")
     if not kid:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token missing kid header")
+        raise session_expired
 
     jwk = jwks_module.get_jwks_client().get_key(kid)
     if jwk is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unknown signing key")
+        raise session_expired
 
     try:
         payload = jwt.decode(
@@ -44,11 +54,11 @@ def get_current_user_id(authorization: str = Header(...)) -> UUID:
             audience="authenticated",
         )
     except JWTError as exc:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Invalid token: {exc}") from exc
+        raise session_expired from exc
 
     sub = payload.get("sub")
     if not sub:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token missing sub claim")
+        raise session_expired
 
     return UUID(sub)
 
@@ -68,13 +78,13 @@ def require_household_membership(
     """
     member = members_service.get_active_member(household_id, user_id)
     if member is None:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not a member of this household")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You don't have access to this household")
     return member
 
 
 def require_household_admin(member: Member = Depends(require_household_membership)) -> Member:
     if not member.is_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You need to be an admin to do that")
     return member
 
 
@@ -92,5 +102,7 @@ def is_developer(user_id: UUID) -> bool:
 
 def require_developer(user_id: UUID = Depends(get_current_user_id)) -> UUID:
     if not is_developer(user_id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Developer access required")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "This feature isn't available on your account"
+        )
     return user_id

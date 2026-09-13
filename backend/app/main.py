@@ -37,10 +37,20 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     # FastAPI's own request validation (missing/malformed body, headers, path
     # params) raises this before any route handler runs, bypassing the
-    # HTTPException handler above — without this, those responses would use
+    # HTTPException handler above -- without this, those responses would use
     # FastAPI's default {"detail": [...]} shape instead of our envelope.
     first_error = exc.errors()[0] if exc.errors() else {}
-    message = first_error.get("msg", "Invalid request")
+    detail = first_error.get("msg", "That didn't look right")
+    # `loc` is a (location, ..., field_name) tuple, e.g. ("body", "quantity")
+    # or ("path", "household_id") -- the field name alone, prefixed onto
+    # pydantic's own message, turns an unattributed "Input should be greater
+    # than 0" into "quantity: Input should be greater than 0", which is at
+    # least attributable to a field even where the raw message stays technical.
+    loc = first_error.get("loc", ())
+    field = next(
+        (str(part) for part in reversed(loc) if part not in ("body", "query", "path")), None
+    )
+    message = f"{field}: {detail}" if field else detail
     return JSONResponse(
         status_code=422,
         content=error_envelope("422", message).model_dump(mode="json"),

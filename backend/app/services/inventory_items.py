@@ -326,7 +326,7 @@ def discard(household_id: UUID, item_id: UUID, reason: RemovalReason) -> Invento
         .execute()
     )
     if not result.data:
-        raise ValueError("Item not found or not currently active")
+        raise ValueError("That item doesn't exist or has already been removed")
     # Discarding always leaves ACTIVE -- same "the item's story is over"
     # freeze point as consuming it to zero.
     accounting_service.freeze_item_debt(item_id)
@@ -537,6 +537,7 @@ def correct_item(
                     "debtor_member_id": str(member_id if delta_cost > 0 else buyer_id),
                     "amount": str(amount),
                     "reason": "ADJUSTMENT",
+                    "note": f"Cost correction on {current.food_name}",
                 }
                 for member_id, amount in shares.items()
                 if amount > 0
@@ -694,6 +695,7 @@ def _post_usage_correction_adjustments(
                 "debtor_member_id": str(member_id if diff > 0 else buyer_id),
                 "amount": str(abs(diff)),
                 "reason": "ADJUSTMENT",
+                "note": f"Usage correction on {item.food_name}",
             }
         )
     if entries:
@@ -757,14 +759,16 @@ def correct_consumption(
     actual_base = units_service.to_base(body.actual_quantity, unit)
     delta_base = actual_base - effective_base
     if delta_base == 0:
-        raise ValueError("The corrected amount matches what's already recorded")
+        raise ValueError("That's already the recorded amount. No correction needed.")
 
     # Σ usage moves by delta, so remaining moves by -delta.
     new_quantity_base = current_qty_base - delta_base
     if new_quantity_base < 0:
         raise ValueError("That would put more total usage on the item than it ever held")
     if new_quantity_base > current_total_base:
-        raise ValueError("That correction implies negative total usage")
+        raise ValueError(
+            "That correction would leave negative usage on record, which isn't possible"
+        )
 
     # Compare-and-swap on the item row before writing anything -- two
     # concurrent corrections would otherwise both recompute quantity and

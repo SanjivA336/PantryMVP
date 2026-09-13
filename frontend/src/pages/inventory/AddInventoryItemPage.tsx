@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, MapPin, X } from 'lucide-react'
+import { MapPin, X } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { EmptyState } from '../../components/EmptyState'
 import { FieldTooltip } from '../../components/FieldTooltip'
@@ -51,6 +51,7 @@ export function AddInventoryItemPage() {
   const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([])
   const [storageLoaded, setStorageLoaded] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
+  const [activeItems, setActiveItems] = useState<InventoryItem[]>([])
   const [serverError, setServerError] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
   const [buyerMemberId, setBuyerMemberId] = useState('')
@@ -105,8 +106,29 @@ export function AddInventoryItemPage() {
       const me = active.find((m) => m.user_id === user?.id)
       if (me) setBuyerMemberId(me.id)
     })
+    // Fetched once so the "currently stored in" note below the storage
+    // picker can look this food up client-side as soon as it's chosen,
+    // without a round trip per keystroke -- there's no existing endpoint
+    // that answers "which locations is food X currently sitting in" directly.
+    apiClient
+      .get<InventoryItem[]>(`/api/households/${householdId}/inventory-items?status=ACTIVE`)
+      .then(setActiveItems)
+      .catch(() => setActiveItems([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdId, setValue])
+
+  const sortedMembers = useMemo(
+    () => [...members].sort((a, b) => a.nickname.localeCompare(b.nickname)),
+    [members],
+  )
+
+  const storedInLocations = useMemo(() => {
+    if (!food) return []
+    const names = new Set(
+      activeItems.filter((i) => i.food_type_name === food.name).map((i) => i.storage_location_name),
+    )
+    return [...names].sort((a, b) => a.localeCompare(b))
+  }, [food, activeItems])
 
   useEffect(() => {
     if (!food) return
@@ -324,7 +346,7 @@ export function AddInventoryItemPage() {
         <EmptyState
           icon={MapPin}
           title="No storage locations yet"
-          hint="Add a fridge, freezer, or pantry first — an item has to go somewhere."
+          hint="Add a fridge, freezer, or pantry first. An item has to go somewhere."
           action={{ to: `/households/${householdId}`, label: 'Back to inventory' }}
         />
       </div>
@@ -385,7 +407,7 @@ export function AddInventoryItemPage() {
             <p className="mt-1.5 text-sm text-danger">{errors.quantity.message}</p>
           )}
           {food && (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-2">
               {(['WEIGHT', 'VOLUME', 'COUNT'] as Dimension[]).map((dim) => (
                 <button
                   key={dim}
@@ -403,7 +425,7 @@ export function AddInventoryItemPage() {
             </div>
           )}
           {food && dimension && dimension !== 'COUNT' && (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2">
               {(['METRIC', 'CUSTOMARY'] as UnitSystem[]).map((sys) => (
                 <button
                   key={sys}
@@ -434,6 +456,11 @@ export function AddInventoryItemPage() {
           </select>
           {errors.storage_location_id && (
             <p className="mt-1.5 text-sm text-danger">{errors.storage_location_id.message}</p>
+          )}
+          {food && storedInLocations.length > 0 && (
+            <p className="mt-1.5 text-xs text-faint">
+              Currently stored in: {storedInLocations.join(', ')}
+            </p>
           )}
         </div>
 
@@ -507,25 +534,24 @@ export function AddInventoryItemPage() {
         <div>
           <label className="mb-1.5 block text-sm font-medium text-muted">Who's using this?</label>
           <div
-            className={`flex flex-wrap gap-2 rounded-control border p-2 ${
+            className={`grid grid-cols-3 gap-2 rounded-control border p-2 ${
               !customized.allowed_member_ids && food ? 'border-primary' : 'border-transparent'
             }`}
           >
-            {members.map((member) => {
+            {sortedMembers.map((member) => {
               const selected = selectedMemberIds.includes(member.id)
               return (
                 <button
                   key={member.id}
                   type="button"
                   onClick={() => toggleMember(member.id)}
-                  className={`flex items-center gap-1.5 rounded-control border px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`flex h-10 items-center justify-center rounded-control border px-2 py-2 text-center text-sm font-medium transition-colors ${
                     selected
                       ? 'border-primary bg-primary-soft text-primary'
                       : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
                   }`}
                 >
-                  {selected && <Check size={14} strokeWidth={2.5} />}
-                  {member.nickname}
+                  <span className="w-full truncate">{member.nickname}</span>
                 </button>
               )
             })}
@@ -556,19 +582,12 @@ export function AddInventoryItemPage() {
           {errors.allowed_member_ids && (
             <p className="mt-1.5 text-sm text-danger">{errors.allowed_member_ids.message}</p>
           )}
-          {selectedMemberIds.length > 1 && (
-            <p className="mt-2 text-xs text-faint">
-              Split evenly by default. Anyone who ends up using more than their share pays for the
-              extra themselves, and everyone else's share shrinks to match -- no need to pick
-              anything up front.
-            </p>
-          )}
         </div>
 
         <div>
           <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-muted">
             Cost (optional)
-            <FieldTooltip text="Auto-filled from the last time you bought this exact food and quantity, if we've seen it before -- edit or clear it any time." />
+            <FieldTooltip text="Auto-filled from the last time you bought this exact food and quantity, if we've seen it before. Edit or clear it any time." />
           </label>
           <div className="flex items-center gap-1.5">
             <input
@@ -598,7 +617,7 @@ export function AddInventoryItemPage() {
 
         {serverError && <p className="text-sm text-danger">{serverError}</p>}
         {lastAdded && !serverError && (
-          <p className="text-sm text-primary">Added {lastAdded} — ready for the next item.</p>
+          <p className="text-sm text-primary">Added {lastAdded}. Ready for the next item.</p>
         )}
 
         <div className="flex gap-2">

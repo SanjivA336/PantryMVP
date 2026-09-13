@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { Modal } from '../../components/Modal'
-import { guessDimension, UNIT_LABELS, UNITS_BY_DIMENSION } from '../../lib/units'
+import { convertAmount, guessDimension, UNIT_LABELS, UNITS_BY_DIMENSION } from '../../lib/units'
 import type { Dimension, InventoryItem, Unit } from '../../types/entities'
 
 interface Props {
@@ -12,67 +12,95 @@ interface Props {
   onConsumed: () => void
 }
 
-// Rough real-world portions -> a concrete amount in a concrete unit. Picking
-// one fills the quantity + unit fields directly (both editable before
-// submit), so "a bowl" never pretends to be an exact measurement -- it's a
-// starting point. COUNT gets none of these: a count item is already counted.
+// Rough real-world portions -> a concrete amount, defined in whatever unit
+// reads most naturally for that portion. Picking one fills the "Amount
+// used" field, converted into whichever unit the user currently has
+// selected -- it's a starting point, not a claim that "a bowl" is an exact
+// measurement, and it never yanks the unit picker out from under someone
+// who already switched units. COUNT gets none of these: a count item is
+// already counted. Declared in no particular order; sorted by actual size
+// (smallest first) at render time so re-ordering this list never requires
+// re-ordering it by hand too.
 const NAMED_PRESETS: Record<
   Exclude<Dimension, 'COUNT'>,
   { label: string; unit: Unit; amount: number }[]
 > = {
   VOLUME: [
     { label: 'Splash', unit: 'ml', amount: 15 },
+    { label: 'Cup', unit: 'cup', amount: 1 },
     { label: 'Glass', unit: 'ml', amount: 250 },
     { label: 'Mug', unit: 'ml', amount: 350 },
     { label: 'Bowl', unit: 'ml', amount: 400 },
-    { label: 'Cup', unit: 'cup', amount: 1 },
   ],
+  // Deliberately just these two -- "slice" and "stick" describe a specific
+  // food's own packaging (bread, butter) rather than a rough amount that
+  // makes sense for any weighed food, so they don't belong in a generic list.
   WEIGHT: [
     { label: 'Pinch', unit: 'g', amount: 1 },
     { label: 'Handful', unit: 'g', amount: 30 },
-    { label: 'Slice', unit: 'g', amount: 30 },
-    { label: 'Stick', unit: 'g', amount: 113 },
   ],
 }
 
 const FRACTIONS: { label: string; divisor: number }[] = [
-  { label: 'All of it', divisor: 1 },
-  { label: 'Half', divisor: 2 },
-  { label: 'A third', divisor: 3 },
-  { label: 'A quarter', divisor: 4 },
+  { label: '¼', divisor: 4 },
+  { label: '⅓', divisor: 3 },
+  { label: '½', divisor: 2 },
+  { label: 'All', divisor: 1 },
 ]
 
 const presetButtonClass =
-  'rounded-control border border-subtle bg-surface-2 px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text'
+  'rounded-control border border-subtle bg-surface-2 px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text'
+
+function gridStyle(count: number) {
+  return { gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }
+}
 
 export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) {
   const dimension = guessDimension(item.preferred_unit)
   const remaining = Number(item.quantity)
   const total = Number(item.total_quantity)
-  const pct = total > 0 ? Math.max(0, Math.min(100, (remaining / total) * 100)) : 0
 
   const [amount, setAmount] = useState('')
   const [unit, setUnit] = useState<Unit>(item.preferred_unit)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // Everything the bar needs, in the *display* unit (whatever's currently
+  // selected) so the planned-use segment lines up with the number the user
+  // is actually looking at in the amount field.
+  const remainingInUnit = convertAmount(remaining, item.preferred_unit, unit)
+  const totalInUnit = convertAmount(total, item.preferred_unit, unit)
+  const planned = Math.max(0, Math.min(Number(amount) || 0, remainingInUnit))
+  const remainingPct = totalInUnit > 0 ? (remainingInUnit / totalInUnit) * 100 : 0
+  const plannedPct = totalInUnit > 0 ? (planned / totalInUnit) * 100 : 0
+
+  const namedPresets = dimension === 'COUNT' ? [] : NAMED_PRESETS[dimension]
+  const sortedNamedPresets = useMemo(
+    () =>
+      [...namedPresets].sort(
+        (a, b) => convertAmount(a.amount, a.unit, 'g') - convertAmount(b.amount, b.unit, 'g'),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dimension],
+  )
+
   const bump = (delta: number) => {
     const next = (Number(amount) || 0) + delta
     setAmount(next > 0 ? String(next) : '')
   }
 
-  // Fractions always work off what's left, in the item's own unit -- reset
-  // the unit selector to match so the number that lands means what it says.
+  // Fractions work off what's left, expressed in whichever unit is
+  // currently selected -- never forces the unit picker back to the item's
+  // own preferred unit just because a fraction was clicked.
   const applyFraction = (divisor: number) => {
-    let value = remaining / divisor
+    let value = remainingInUnit / divisor
     if (dimension === 'COUNT') value = Math.max(1, Math.round(value))
-    setUnit(item.preferred_unit)
     setAmount(String(Number(value.toFixed(3))))
   }
 
   const applyNamedPreset = (preset: { unit: Unit; amount: number }) => {
-    setUnit(preset.unit)
-    setAmount(String(preset.amount))
+    const value = convertAmount(preset.amount, preset.unit, unit)
+    setAmount(String(Number(value.toFixed(3))))
   }
 
   const submit = async () => {
@@ -108,8 +136,20 @@ export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) 
               {UNIT_LABELS[item.preferred_unit]}
             </span>
           </div>
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-pill bg-surface-2">
-            <div className="h-full rounded-pill bg-primary" style={{ width: `${pct}%` }} />
+          {/* Three-layer bar, all anchored to the left edge and stacked on
+              top of each other: the track itself (darkest) is the total;
+              green on top of it is what's currently left; blue on top of
+              that grows from zero as the amount field changes, showing how
+              much of the remaining green this use would take. */}
+          <div className="relative mt-1.5 h-2.5 w-full overflow-hidden rounded-pill bg-bg">
+            <div
+              className="absolute inset-y-0 left-0 rounded-pill bg-primary transition-all duration-200 ease-out"
+              style={{ width: `${Math.max(0, Math.min(100, remainingPct))}%` }}
+            />
+            <div
+              className="absolute inset-y-0 left-0 rounded-pill bg-info transition-all duration-200 ease-out"
+              style={{ width: `${Math.max(0, Math.min(100, plannedPct))}%` }}
+            />
           </div>
         </div>
 
@@ -163,7 +203,7 @@ export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) 
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
+        <div className="grid gap-1.5" style={gridStyle(FRACTIONS.length)}>
           {FRACTIONS.map((f) => (
             <button
               key={f.label}
@@ -176,11 +216,11 @@ export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) 
           ))}
         </div>
 
-        {dimension !== 'COUNT' && (
+        {sortedNamedPresets.length > 0 && (
           <div>
             <p className="mb-1.5 text-xs text-faint">About this much</p>
-            <div className="flex flex-wrap gap-1.5">
-              {NAMED_PRESETS[dimension].map((p) => (
+            <div className="grid gap-1.5" style={gridStyle(sortedNamedPresets.length)}>
+              {sortedNamedPresets.map((p) => (
                 <button
                   key={p.label}
                   type="button"
@@ -196,23 +236,14 @@ export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) 
 
         {error && <p className="text-sm text-danger">{error}</p>}
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={submit}
-            className="rounded-control bg-primary px-3 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
-          >
-            {submitting ? 'Saving…' : 'Use it'}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-control px-3 py-2 text-sm font-medium text-muted hover:bg-surface-hover"
-          >
-            Cancel
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={submit}
+          className="w-full rounded-control bg-primary px-3 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+        >
+          {submitting ? 'Saving…' : 'Use it'}
+        </button>
       </div>
     </Modal>
   )

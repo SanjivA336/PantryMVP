@@ -109,8 +109,8 @@ def transfer_ownership(
     if not target.is_admin:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Promote this member to admin first -- ownership can only transfer to an "
-            "existing admin, one rung at a time.",
+            "Promote this member to admin first. Ownership can only transfer to an "
+            "existing admin, one step at a time.",
         )
 
     updated = households_service.transfer_ownership(household_id, target.user_id)

@@ -77,7 +77,7 @@ def get_session(
 ) -> Envelope[PurchaseSessionWithItems]:
     session = purchase_session_service.get_by_id(household_id, session_id)
     if session is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase session not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That order couldn't be found")
     return ok(session)
 
 
@@ -90,7 +90,7 @@ def delete_session(
     try:
         purchase_session_service.delete_session(household_id, session_id)
     except purchase_session_service.SessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase session not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That order couldn't be found") from exc
     except purchase_session_service.InvalidSessionStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, "A finalized order can't be deleted") from exc
     return ok(None)
@@ -106,10 +106,10 @@ def process_session(
     try:
         session = purchase_session_service.process_session(household_id, session_id)
     except purchase_session_service.SessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase session not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That order couldn't be found") from exc
     except purchase_session_service.InvalidSessionStateError as exc:
         raise HTTPException(
-            status.HTTP_409_CONFLICT, f"Session is not in a processable state: {exc}"
+            status.HTTP_409_CONFLICT, "This receipt isn't ready to process yet"
         ) from exc
     return ok(session)
 
@@ -123,11 +123,9 @@ def add_item(
     try:
         item = purchase_session_service.add_blank_item(household_id, session_id)
     except purchase_session_service.SessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase session not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That order couldn't be found") from exc
     except purchase_session_service.InvalidSessionStateError as exc:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, f"Session items can't be edited in this state: {exc}"
-        ) from exc
+        raise HTTPException(status.HTTP_409_CONFLICT, "This order can't be edited anymore") from exc
     return ok(item)
 
 
@@ -142,13 +140,13 @@ def update_item(
     try:
         item = purchase_session_service.update_item(household_id, session_id, item_id, body)
     except purchase_session_service.SessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase session not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That order couldn't be found") from exc
     except purchase_session_service.ItemNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Line not found") from exc
-    except purchase_session_service.InvalidSessionStateError as exc:
         raise HTTPException(
-            status.HTTP_409_CONFLICT, f"Session items can't be edited in this state: {exc}"
+            status.HTTP_404_NOT_FOUND, "That item couldn't be found in this order"
         ) from exc
+    except purchase_session_service.InvalidSessionStateError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This order can't be edited anymore") from exc
     return ok(item)
 
 
@@ -162,11 +160,9 @@ def remove_item(
     try:
         purchase_session_service.remove_item(household_id, session_id, item_id)
     except purchase_session_service.SessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase session not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That order couldn't be found") from exc
     except purchase_session_service.InvalidSessionStateError as exc:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, f"Session items can't be edited in this state: {exc}"
-        ) from exc
+        raise HTTPException(status.HTTP_409_CONFLICT, "This order can't be edited anymore") from exc
     return ok(None)
 
 
@@ -179,10 +175,10 @@ def finalize_session(
     try:
         session = purchase_session_service.finalize(household_id, session_id, caller.id)
     except purchase_session_service.SessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase session not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That order couldn't be found") from exc
     except purchase_session_service.InvalidSessionStateError as exc:
         raise HTTPException(
-            status.HTTP_409_CONFLICT, f"Session is not ready to finalize: {exc}"
+            status.HTTP_409_CONFLICT, "This order isn't ready to finalize yet"
         ) from exc
     except purchase_session_service.FinalizeValidationError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc

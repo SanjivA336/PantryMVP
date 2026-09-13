@@ -1,16 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { BarChart3 } from 'lucide-react'
-import type {
-  LedgerBalance,
-  LedgerEntryDetail,
-  Member,
-  SettlementRecord,
-} from '../../types/entities'
+import { Modal } from '../../components/Modal'
+import type { LedgerEntryDetail, Member } from '../../types/entities'
 
 interface Props {
   entries: LedgerEntryDetail[] | null
-  balances: LedgerBalance[] | null
-  settlements: SettlementRecord[] | null
   members: Member[] | null
   loading: boolean
 }
@@ -130,32 +124,33 @@ function NetBalanceOverTimeChart({
   )
 }
 
-function TopFoodsChart({ entries }: { entries: LedgerEntryDetail[] }) {
-  const topFoods = useMemo(() => {
-    const totals = new Map<string, number>()
-    for (const entry of entries) {
-      if (!entry.food_name) continue
-      totals.set(entry.food_name, (totals.get(entry.food_name) ?? 0) + Number(entry.amount))
-    }
-    return [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
-  }, [entries])
-
-  if (topFoods.length === 0) return <EmptyChart label="No purchases on record yet." />
-
-  const maxTotal = topFoods[0][1]
+// Shared by both "top items" cards below -- a ranked bar list, capped to
+// `limit` rows when given (the card's own compact preview) or uncapped (the
+// "see all" modal each card opens into).
+function ItemBarList({
+  items,
+  formatValue,
+  limit,
+}: {
+  items: [string, number][]
+  formatValue: (n: number) => string
+  limit?: number
+}) {
+  const shown = limit ? items.slice(0, limit) : items
+  const maxValue = items[0]?.[1] ?? 0
 
   return (
     <div className="flex flex-col gap-2.5">
-      {topFoods.map(([name, total]) => (
+      {shown.map(([name, value]) => (
         <div key={name}>
           <div className="mb-1 flex items-center justify-between gap-2 text-xs">
             <span className="truncate text-muted">{name}</span>
-            <span className="shrink-0 font-medium text-text">${total.toFixed(2)}</span>
+            <span className="shrink-0 font-medium text-text">{formatValue(value)}</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-pill bg-surface-2">
             <div
               className="h-full rounded-pill bg-primary"
-              style={{ width: `${maxTotal ? (total / maxTotal) * 100 : 0}%` }}
+              style={{ width: `${maxValue ? (value / maxValue) * 100 : 0}%` }}
             />
           </div>
         </div>
@@ -164,82 +159,103 @@ function TopFoodsChart({ entries }: { entries: LedgerEntryDetail[] }) {
   )
 }
 
-function SettledDonutChart({
-  balances,
-  settlements,
-}: {
-  balances: LedgerBalance[]
-  settlements: SettlementRecord[]
-}) {
-  const { settledTotal, outstandingTotal } = useMemo(() => {
-    // Recorded payments, net of reversals: a reversal row carries the same
-    // amount as its original with reverses_settlement_id set, so the pair
-    // sums to zero.
-    const settled = settlements.reduce(
-      (sum, s) => sum + (s.reverses_settlement_id ? -Number(s.amount) : Number(s.amount)),
-      0,
-    )
-    // What's still owed right now, across every remaining pairwise balance.
-    const outstanding = balances.reduce((sum, b) => sum + Number(b.amount), 0)
-    return { settledTotal: settled, outstandingTotal: outstanding }
-  }, [balances, settlements])
+// One food's total spend across every PURCHASE/OVERAGE entry that resolved
+// to it -- entries are per-(debtor,creditor) shares, not per-purchase, so
+// this is total money that moved because of that food, not its sticker
+// price times how many times it was bought.
+function useTopItemsBySpend(entries: LedgerEntryDetail[]) {
+  return useMemo(() => {
+    const totals = new Map<string, number>()
+    for (const entry of entries) {
+      if (!entry.food_name) continue
+      totals.set(entry.food_name, (totals.get(entry.food_name) ?? 0) + Number(entry.amount))
+    }
+    return [...totals.entries()].sort((a, b) => b[1] - a[1])
+  }, [entries])
+}
 
-  const total = settledTotal + outstandingTotal
-  if (total === 0) return <EmptyChart label="No activity yet." />
+// Distinct purchase events per food, not entry count -- a single purchase
+// of a food shared by everyone in a 4-person household produces 3 PURCHASE
+// ledger entries (one per non-buyer), so counting entries directly would
+// make a household's size look like how often it buys something.
+function useTopItemsByFrequency(entries: LedgerEntryDetail[]) {
+  return useMemo(() => {
+    const purchaseIdsByFood = new Map<string, Set<string>>()
+    for (const entry of entries) {
+      if (entry.reason !== 'PURCHASE' || !entry.food_name || !entry.source_purchase_event_id)
+        continue
+      const set = purchaseIdsByFood.get(entry.food_name) ?? new Set<string>()
+      set.add(entry.source_purchase_event_id)
+      purchaseIdsByFood.set(entry.food_name, set)
+    }
+    return [...purchaseIdsByFood.entries()]
+      .map(([name, ids]) => [name, ids.size] as [string, number])
+      .sort((a, b) => b[1] - a[1])
+  }, [entries])
+}
 
-  const settledPct = settledTotal / total
-  const R = 40
-  const CX = 50
-  const CY = 50
-  const C = 2 * Math.PI * R
+function TopItemsBySpendCard({ entries }: { entries: LedgerEntryDetail[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const items = useTopItemsBySpend(entries)
+  const formatValue = (n: number) => `$${n.toFixed(2)}`
+
+  if (items.length === 0) return <EmptyChart label="No purchases on record yet." />
 
   return (
-    <div className="flex items-center gap-4">
-      <svg viewBox="0 0 100 100" className="size-28 shrink-0">
-        <circle cx={CX} cy={CY} r={R} fill="none" stroke="var(--color-warning)" strokeWidth={12} />
-        <circle
-          cx={CX}
-          cy={CY}
-          r={R}
-          fill="none"
-          stroke="var(--color-primary)"
-          strokeWidth={12}
-          strokeDasharray={`${C * settledPct} ${C}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${CX} ${CY})`}
-        />
-        <text
-          x={CX}
-          y={CY}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          className="fill-text text-[16px] font-semibold"
-        >
-          {Math.round(settledPct * 100)}%
-        </text>
-      </svg>
-      <div className="flex flex-col gap-1.5 text-xs">
-        <span className="flex items-center gap-1.5 text-muted">
-          <span className="size-2 shrink-0 rounded-full bg-primary" />
-          Settled: ${settledTotal.toFixed(2)}
-        </span>
-        <span className="flex items-center gap-1.5 text-muted">
-          <span className="size-2 shrink-0 rounded-full bg-warning" />
-          Outstanding: ${outstandingTotal.toFixed(2)}
-        </span>
-      </div>
-    </div>
+    <>
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="-m-1 rounded-control p-1 text-left transition-colors hover:bg-surface-hover"
+      >
+        <ItemBarList items={items} formatValue={formatValue} limit={5} />
+      </button>
+      {expanded && (
+        <Modal title="Top items by spend" onClose={() => setExpanded(false)}>
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <ItemBarList items={items} formatValue={formatValue} />
+          </div>
+        </Modal>
+      )}
+    </>
   )
 }
 
-export function BalancesDashboard({ entries, balances, settlements, members, loading }: Props) {
+function MostFrequentlyBoughtCard({ entries }: { entries: LedgerEntryDetail[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const items = useTopItemsByFrequency(entries)
+  const formatValue = (n: number) => (n === 1 ? '1 time' : `${n} times`)
+
+  if (items.length === 0) return <EmptyChart label="No purchases on record yet." />
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="-m-1 rounded-control p-1 text-left transition-colors hover:bg-surface-hover"
+      >
+        <ItemBarList items={items} formatValue={formatValue} limit={5} />
+      </button>
+      {expanded && (
+        <Modal title="Most frequently bought" onClose={() => setExpanded(false)}>
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <ItemBarList items={items} formatValue={formatValue} />
+          </div>
+        </Modal>
+      )}
+    </>
+  )
+}
+
+export function BalancesDashboard({ entries, members, loading }: Props) {
   if (loading) return <p className="text-sm text-muted">Loading…</p>
 
   if (!entries || entries.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-subtle p-10 text-center">
         <BarChart3 size={28} strokeWidth={1.5} className="text-faint" />
-        <p className="text-sm text-muted">Nothing to chart yet -- add a purchase to get started.</p>
+        <p className="text-sm text-muted">Nothing to chart yet. Add a purchase to get started.</p>
       </div>
     )
   }
@@ -253,12 +269,12 @@ export function BalancesDashboard({ entries, balances, settlements, members, loa
         <NetBalanceOverTimeChart entries={entries} members={activeMembers} />
       </div>
       <div className={CARD_CLASS}>
-        <h3 className="text-sm font-semibold text-muted">Top foods by spend</h3>
-        <TopFoodsChart entries={entries} />
+        <h3 className="text-sm font-semibold text-muted">Top items by spend</h3>
+        <TopItemsBySpendCard entries={entries} />
       </div>
       <div className={CARD_CLASS}>
-        <h3 className="text-sm font-semibold text-muted">Settled vs. outstanding</h3>
-        <SettledDonutChart balances={balances ?? []} settlements={settlements ?? []} />
+        <h3 className="text-sm font-semibold text-muted">Most frequently bought</h3>
+        <MostFrequentlyBoughtCard entries={entries} />
       </div>
     </div>
   )

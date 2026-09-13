@@ -62,7 +62,7 @@ def record_settlement(
     except settlements_service.MemberNotInHouseholdError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "payer and payee must both be members of this household",
+            "The payer and payee must both be members of this household",
         ) from exc
     return ok(record)
 

@@ -76,7 +76,6 @@ def _food(**overrides) -> FoodDefinition:
         accounting_type_default="SHARED",
         shelf_life_days=None,
         freezer_shelf_life_days=None,
-        common_substitutions=[],
         created_by_user_id=None,
         is_verified=True,
         usage_count=0,

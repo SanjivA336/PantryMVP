@@ -92,13 +92,7 @@ export function BalancesPage() {
 
       <section id="dashboard" className="scroll-mt-6">
         <h3 className="mb-3 text-sm font-semibold text-muted">Dashboard</h3>
-        <BalancesDashboard
-          entries={entries}
-          balances={balances}
-          settlements={settlementRecords}
-          members={members}
-          loading={entriesLoading || recordsLoading}
-        />
+        <BalancesDashboard entries={entries} members={members} loading={entriesLoading} />
       </section>
 
       <section id="settlements" className="scroll-mt-6">
