@@ -117,19 +117,11 @@ OCR-backed steps below are gated to a developer allowlist.
 - Supabase Realtime keeps household data live in sync across members
 - Dark, off-black/green themed UI; responsive layout (sidebar on desktop,
   bottom tab bar on mobile)
+- Installable as a PWA (manifest + service worker via `vite-plugin-pwa`):
+  the app shell (JS/CSS/HTML, precached) loads and renders fully offline;
+  API calls are never cached and always hit the network fresh
 
 ## What's left
-
-### Validate before real use (not build work)
-
-- **Run the `rls` + `integration` test suites** once against the linked
-  project (`uv run pytest -m rls -m integration`) — the default (mocked)
-  unit tests can't catch an RLS-policy or RPC-signature regression from
-  migrations 0027–0032.
-- **Manual walkthrough against a live DB.** None of the recent work
-  (canonical unit storage, the Use modal, recorded settlements, the
-  activity feed, consumption corrections, the purchase wizard) has been
-  exercised in a real browser.
 
 ### Deferred hardening (before any non-local rollout)
 
@@ -143,9 +135,6 @@ OCR-backed steps below are gated to a developer allowlist.
 
 ### Known-incomplete features
 
-- **Purchase wizard**: reduced field set (no shelf-life expiry autofill, "same
-  as last time" cost, or measurement-preference resolution — the standalone
-  Add Item page still has those); no submit confirmation; no mobile layout.
 - **Receipt review page** (`ReviewReceiptSessionPage`, developer-gated) got a
   mechanical rename onto the shared purchase-session model; its Confirm/Skip
   UX still assumes the old skip semantics and needs reworking.
