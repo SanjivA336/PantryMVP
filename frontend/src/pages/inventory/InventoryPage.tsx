@@ -642,7 +642,7 @@ export function InventoryPage() {
                   (locItems.length === 0 ? (
                     <p className="text-sm text-muted">Nothing here yet.</p>
                   ) : (
-                    <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <ul className="grid grid-cols-2 gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {locItems.map(renderItemCard)}
                     </ul>
                   ))}
@@ -651,7 +651,7 @@ export function InventoryPage() {
           })}
         </div>
       ) : (
-        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-2 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map(renderItemCard)}
         </ul>
       )}
