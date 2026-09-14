@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -133,60 +132,40 @@ def freeze_item_debt(item_id: UUID) -> None:
     and discard()) -- computes each non-buyer member's final share from
     whatever consumption_events actually happened, posts it as a real,
     permanent PURCHASE ledger entry, and marks the item frozen. Idempotent:
-    no-ops if debt_frozen_at is already set, so it's safe to call from
-    multiple status-changing code paths without double-billing.
+    no-ops if debt_frozen_at is already set (or the item's PERSONAL), so
+    it's safe to call from multiple status-changing code paths without
+    double-billing.
+
+    The read (roster + consumption) and the freeze claim both happen inside
+    claim_item_debt_freeze (migration 0039), under one row lock on the item
+    -- not as separate unlocked SELECTs followed by a compare-and-swap.
+    set_inventory_item_roster (migration 0030) takes that same lock, so a
+    roster edit that lands first is what gets priced here, and a freeze
+    that lands first makes that RPC's own "already frozen" check reject the
+    edit cleanly instead of the edit silently never reaching the ledger.
+    consume_inventory_item's UPDATE already takes this same lock implicitly,
+    so the usage side of this was already race-free.
     """
     client = get_service_client()
-    item = (
-        client.table("inventory_items")
-        .select(
-            "id, household_id, purchase_event_id, total_quantity, cost, "
-            "accounting_type, debt_frozen_at"
-        )
-        .eq("id", str(item_id))
-        .maybe_single()
-        .execute()
-    )
-    if not item or not item.data or item.data["debt_frozen_at"] is not None:
-        return
-    row = item.data
-    # PERSONAL items never touch the ledger at all -- nothing to freeze, and
-    # debt_frozen_at deliberately stays null for them forever, so they're
-    # always in the freely-editable bucket everywhere else that checks it.
-    if row["accounting_type"] == "PERSONAL":
+    result = client.rpc("claim_item_debt_freeze", {"p_item_id": str(item_id)}).execute()
+    claim = result.data
+    if not claim or claim["already_frozen"]:
         return
 
-    purchase_event = (
-        client.table("purchase_events")
-        .select("member_id")
-        .eq("id", row["purchase_event_id"])
-        .single()
-        .execute()
-    )
-    buyer_id = UUID(purchase_event.data["member_id"])
+    buyer_id = UUID(claim["buyer_id"])
+    member_ids = [UUID(m) for m in claim["member_ids"]]
 
-    allowed = (
-        client.table("inventory_item_allowed_members")
-        .select("member_id")
-        .eq("inventory_item_id", str(item_id))
-        .execute()
-    )
-    member_ids = [UUID(r["member_id"]) for r in allowed.data]
-
-    consumption = (
-        client.table("consumption_events")
-        .select("member_id, quantity_used")
-        .eq("inventory_item_id", str(item_id))
-        .execute()
-    )
     usage_by_member: dict[UUID, Decimal | None] = {}
-    for row_ in consumption.data:
+    for row_ in claim["consumption"]:
         member_id = UUID(row_["member_id"])
         used = Decimal(str(row_["quantity_used"]))
         usage_by_member[member_id] = (usage_by_member.get(member_id) or Decimal(0)) + used
 
     remaining_quantity, remaining_cost, insider_usage, outsider_shares = bill_outsider_usage(
-        Decimal(str(row["total_quantity"])), Decimal(str(row["cost"])), member_ids, usage_by_member
+        Decimal(str(claim["total_quantity"])),
+        Decimal(str(claim["cost"])),
+        member_ids,
+        usage_by_member,
     )
     shares = compute_item_shares(
         total_quantity=remaining_quantity,
@@ -198,32 +177,14 @@ def freeze_item_debt(item_id: UUID) -> None:
     for member_id, amount in outsider_shares.items():
         shares[member_id] = shares.get(member_id, Decimal(0)) + amount
 
-    # Claim the freeze with a compare-and-swap (only-if-still-null) update
-    # *before* posting anything -- consume() can end up calling this twice
-    # for the same item under real concurrency (two racing requests can each
-    # independently observe the post-RPC row as no-longer-ACTIVE, since that
-    # read happens outside the RPC's own row lock). Whoever's update actually
-    # matches a row won the race and is the only one who gets to post
-    # entries; the loser's update matches nothing and it backs off, the same
-    # pattern discard() already uses via its `.eq("status", "ACTIVE")` guard.
-    claim = (
-        client.table("inventory_items")
-        .update({"debt_frozen_at": datetime.now(UTC).isoformat()})
-        .eq("id", str(item_id))
-        .is_("debt_frozen_at", "null")
-        .execute()
-    )
-    if not claim.data:
-        return
-
     entries = [
         {
-            "household_id": row["household_id"],
+            "household_id": claim["household_id"],
             "creditor_member_id": str(buyer_id),
             "debtor_member_id": str(member_id),
             "amount": str(amount),
             "reason": LedgerEntryReason.PURCHASE.value,
-            "source_purchase_event_id": row["purchase_event_id"],
+            "source_purchase_event_id": claim["purchase_event_id"],
         }
         for member_id, amount in shares.items()
         if amount > 0

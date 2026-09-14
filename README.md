@@ -136,12 +136,15 @@ leaving localhost.
   AI-backed recipe import) stay behind `DeveloperGuard` / `require_developer`
   at both the frontend route and backend endpoint level — verified, not
   reachable by a non-developer account.
-- [ ] **Consumption correction on a frozen item**: `freeze_item_debt` reads
-  `consumption_events` + the member roster, *then* claims the freeze via a
-  compare-and-swap on `debt_frozen_at` — a roster edit (`set_inventory_item_
-  roster`) or a new consumption event that commits in between is priced
-  using the stale snapshot and never reaches the ledger. Narrow, not
-  corruption, but a real lost-edit window.
+- [x] **Consumption correction on a frozen item**: `freeze_item_debt` used
+  to read `consumption_events` + the member roster as plain unlocked
+  SELECTs, *then* claim the freeze via a compare-and-swap — a roster edit
+  landing in between was priced on the stale snapshot and never reached
+  the ledger. Fixed (migration 0039): the read and the claim now happen
+  inside one `claim_item_debt_freeze` function under the same row lock
+  `set_inventory_item_roster` already takes, so whichever side commits
+  first is what wins — a late roster edit either gets priced correctly or
+  is cleanly rejected as "already frozen," never silently lost.
 - [x] Mobile-width pass across the app (done separately from this list).
 
 ### Phase 2 — Security & compliance basics
