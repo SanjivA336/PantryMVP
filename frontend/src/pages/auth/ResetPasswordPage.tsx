@@ -3,9 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuth } from '../../hooks/useAuth'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import { newPasswordSchema, type NewPasswordForm } from './schema'
 
 export function ResetPasswordPage() {
+  usePageTitle('Reset Password')
   const { updatePassword } = useAuth()
   const navigate = useNavigate()
   const [serverError, setServerError] = useState<string | null>(null)

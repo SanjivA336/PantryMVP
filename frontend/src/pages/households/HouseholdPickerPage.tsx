@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { ChevronRight, Home, Plus } from 'lucide-react'
 import { apiClient } from '../../lib/apiClient'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import type { Household } from '../../types/entities'
 
 export function HouseholdPickerPage() {
+  usePageTitle('Your Households')
   const [households, setHouseholds] = useState<Household[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Set by the sidebar's "switch kitchens" button (see HouseholdShell) so a

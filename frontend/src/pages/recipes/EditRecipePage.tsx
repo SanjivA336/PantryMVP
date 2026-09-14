@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../lib/apiClient'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import type { RecipeDetail } from '../../types/entities'
 import { RecipeForm, type RecipeFormInitial, type RecipeSubmitBody } from './RecipeForm'
 
@@ -31,6 +32,7 @@ export function EditRecipePage() {
   } = useHouseholdResource<RecipeDetail>(
     householdId && recipeId ? `/api/households/${householdId}/recipes/${recipeId}` : null,
   )
+  usePageTitle(recipe ? `Edit ${recipe.name}` : 'Edit Recipe')
 
   const onSubmit = async (body: RecipeSubmitBody) => {
     await apiClient.patch<RecipeDetail>(`/api/households/${householdId}/recipes/${recipeId}`, body)

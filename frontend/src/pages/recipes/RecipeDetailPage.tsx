@@ -5,6 +5,7 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import { UNIT_LABELS } from '../../lib/units'
 import type { RecipeDetail, RecipeIngredient, SubstitutionSuggestion } from '../../types/entities'
 
@@ -103,6 +104,7 @@ export function RecipeDetailPage() {
   } = useHouseholdResource<RecipeDetail>(
     householdId && recipeId ? `/api/households/${householdId}/recipes/${recipeId}` : null,
   )
+  usePageTitle(recipe?.name)
   const [servings, setServings] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [substitutions, setSubstitutions] = useState<Record<string, SubstitutionState>>({})

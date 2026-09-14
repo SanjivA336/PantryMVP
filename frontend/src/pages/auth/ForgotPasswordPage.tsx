@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { usePageTitle } from '../../hooks/usePageTitle'
 
 // Password reset needs a real transactional-email provider to actually
 // deliver anything -- without one configured, Supabase's own default
@@ -9,6 +10,7 @@ import { Link } from 'react-router-dom'
 // resetPasswordForEmail (see hooks/useAuth) is left intact for when a
 // provider is wired up.
 export function ForgotPasswordPage() {
+  usePageTitle('Forgot Password')
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg p-4 text-text">
       <div className="w-full max-w-sm rounded-card border border-subtle bg-surface p-7 shadow-card">

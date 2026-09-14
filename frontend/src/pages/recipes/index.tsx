@@ -4,9 +4,11 @@ import { ChefHat, Clock, Plus, Sparkles, Wand2 } from 'lucide-react'
 import { EmptyState } from '../../components/EmptyState'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import type { Recipe } from '../../types/entities'
 
 export function RecipesPage() {
+  usePageTitle('Recipes')
   const { householdId } = useParams<{ householdId: string }>()
   const isDeveloper = useIsDeveloper()
   const {

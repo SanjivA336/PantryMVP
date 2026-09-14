@@ -22,6 +22,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { FoodSearchInput } from '../../components/FoodSearchInput'
 import { Modal } from '../../components/Modal'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
 import type {
   FoodDefinition,
@@ -44,6 +45,7 @@ const STOCK_REASON_LABEL: Record<string, string> = {
 }
 
 export function ShoppingListPage() {
+  usePageTitle('Shopping List')
   const { householdId } = useParams<{ householdId: string }>()
   const { data: sections, reload: reloadSections } = useHouseholdResource<ShoppingListSection[]>(
     householdId ? `/api/households/${householdId}/shopping-list/sections` : null,

@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { apiClient } from '../../lib/apiClient'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import type { Household } from '../../types/entities'
 import { createHouseholdSchema, type CreateHouseholdForm } from './schema'
 
 export function CreateHouseholdPage() {
+  usePageTitle('New Household')
   const navigate = useNavigate()
   const [serverError, setServerError] = useState<string | null>(null)
 

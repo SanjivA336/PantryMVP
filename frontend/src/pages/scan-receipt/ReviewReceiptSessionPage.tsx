@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Check, X } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import { FoodSearchInput } from '../../components/FoodSearchInput'
 import { DIMENSION_LABELS, UNITS_BY_DIMENSION, UNIT_LABELS } from '../../lib/units'
 import type {
@@ -31,6 +32,7 @@ const inputClass =
   'rounded-control border border-subtle bg-field px-2 py-1.5 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 export function ReviewReceiptSessionPage() {
+  usePageTitle('Review Receipt')
   const { householdId, sessionId } = useParams<{ householdId: string; sessionId: string }>()
   const navigate = useNavigate()
   const {

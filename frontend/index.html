@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- The ?v= query param is a manual cache-bust -- browsers (and now the
+         PWA service worker) cache favicons far more aggressively than
+         normal assets, so a plain path change after editing the file
+         content doesn't reliably force a refetch. Bump the number here
+         whenever the icon artwork actually changes. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Household pantry tracking: inventory, shopping lists, cost splitting, and recipes." />
     <meta name="theme-color" content="#0c0d0d" />

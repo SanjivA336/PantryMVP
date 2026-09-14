@@ -1,9 +1,11 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../lib/apiClient'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import type { RecipeDetail } from '../../types/entities'
 import { RecipeForm, type RecipeSubmitBody } from './RecipeForm'
 
 export function AddRecipePage() {
+  usePageTitle('New Recipe')
   const { householdId } = useParams<{ householdId: string }>()
   const navigate = useNavigate()
 

@@ -5,6 +5,7 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { EmptyState } from '../../components/EmptyState'
 import { uploadReceiptImage } from '../../lib/receiptStorage'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import type { CreateReceiptSessionResponse, PurchaseSession } from '../../types/entities'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -16,6 +17,7 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export function ScanReceiptPage() {
+  usePageTitle('Scan Receipt')
   const { householdId } = useParams<{ householdId: string }>()
   const navigate = useNavigate()
   const {

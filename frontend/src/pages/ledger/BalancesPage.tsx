@@ -4,6 +4,7 @@ import { Handshake, LayoutDashboard, Users } from 'lucide-react'
 import { ScrollSpy } from '../../components/ScrollSpy'
 import { useAuth } from '../../hooks/useAuth'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
 import type {
   LedgerBalance,
@@ -23,6 +24,7 @@ const SPY_SECTIONS = [
 ]
 
 export function BalancesPage() {
+  usePageTitle('Balances')
   const { householdId } = useParams<{ householdId: string }>()
   const { user } = useAuth()
 

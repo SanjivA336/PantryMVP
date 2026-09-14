@@ -5,6 +5,7 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
 import { UnitSelect } from '../../components/UnitSelect'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import { FOOD_CATEGORY_LABELS } from '../../lib/foodCategories'
 import { DIMENSION_LABELS, UNIT_LABELS, UNITS_BY_DIMENSION, guessDimension } from '../../lib/units'
 import type {
@@ -39,6 +40,7 @@ export function InventoryItemDetailPage() {
   } = useHouseholdResource<InventoryItem>(
     householdId && itemId ? `/api/households/${householdId}/inventory-items/${itemId}` : null,
   )
+  usePageTitle(item?.name_override || item?.food_name)
 
   const [members, setMembers] = useState<Member[]>([])
   const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([])

@@ -5,6 +5,7 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { Modal } from '../../components/Modal'
 import { useAuth } from '../../hooks/useAuth'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import type { Member } from '../../types/entities'
 
 const inputClass =
@@ -78,6 +79,7 @@ function BurrowSettingsCard({ householdId }: { householdId: string }) {
 }
 
 export function AccountPage() {
+  usePageTitle('Account')
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const { householdId } = useParams<{ householdId: string }>()

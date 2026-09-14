@@ -34,6 +34,7 @@ import {
   STORAGE_TYPES,
 } from '../../lib/storageTypes'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
 import { UNIT_LABELS } from '../../lib/units'
 import { EmptyState } from '../../components/EmptyState'
@@ -127,6 +128,7 @@ export function InventoryPage() {
       ? `/api/households/${householdId}/storage-locations/${storageLocationId}`
       : null,
   )
+  usePageTitle(storageLocationId ? (storageLocation?.name ?? 'Storage location') : 'Inventory')
   const { data: allStorageLocations, reload: reloadStorageLocations } = useHouseholdResource<
     StorageLocation[]
   >(householdId ? `/api/households/${householdId}/storage-locations` : null)

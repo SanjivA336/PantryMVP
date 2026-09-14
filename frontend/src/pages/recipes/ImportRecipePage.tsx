@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Upload } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import type { DraftRecipe, RecipeDetail } from '../../types/entities'
 import { draftRecipeToFormInitial } from './aiDraftAdapter'
 import { RecipeForm, type RecipeSubmitBody } from './RecipeForm'
@@ -16,6 +17,7 @@ const AI_TIMEOUT_MS = 130_000
 type Source = 'text' | 'url' | 'json'
 
 export function ImportRecipePage() {
+  usePageTitle('Import Recipe')
   const { householdId } = useParams<{ householdId: string }>()
   const navigate = useNavigate()
   const isDeveloper = useIsDeveloper()

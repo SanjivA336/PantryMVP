@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import { ActivityPage } from '../activity/ActivityPage'
 import type { Member } from '../../types/entities'
 import { BurrowTab } from './BurrowTab'
@@ -14,9 +15,16 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'activity', label: 'Activity' },
 ]
 
+const TAB_TITLES: Record<Tab, string> = {
+  burrow: 'Settings',
+  members: 'Members',
+  activity: 'Activity',
+}
+
 export function SettingsPage() {
   const { householdId } = useParams<{ householdId: string }>()
   const [tab, setTab] = useState<Tab>('burrow')
+  usePageTitle(TAB_TITLES[tab])
 
   // Fetched once here rather than separately in each tab -- since only one
   // tab is ever mounted at a time, switching tabs used to re-fetch the same

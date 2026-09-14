@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import type { DraftRecipe, InventoryItem, RecipeDetail } from '../../types/entities'
 import { draftRecipeToFormInitial } from './aiDraftAdapter'
 import { RecipeForm, type RecipeSubmitBody } from './RecipeForm'
@@ -46,6 +47,7 @@ const inputClass =
   'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 export function GenerateRecipePage() {
+  usePageTitle('Generate Recipe')
   const { householdId } = useParams<{ householdId: string }>()
   const navigate = useNavigate()
 
