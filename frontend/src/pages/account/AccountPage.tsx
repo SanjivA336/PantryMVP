@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { LogOut, TriangleAlert } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { Modal } from '../../components/Modal'
 import { useAuth } from '../../hooks/useAuth'
 import type { Member } from '../../types/entities'
@@ -24,8 +25,10 @@ function BurrowSettingsCard({ householdId }: { householdId: string }) {
     })
   }, [householdId, user?.id])
 
+  const canSave = !!me && !!nickname.trim() && nickname.trim() !== me.nickname
+
   const save = async () => {
-    if (!me || !nickname.trim() || nickname === me.nickname) return
+    if (!me || !canSave) return
     setError(null)
     setSaved(false)
     try {
@@ -50,13 +53,21 @@ function BurrowSettingsCard({ householdId }: { householdId: string }) {
         <input
           type="text"
           className={inputClass}
+          placeholder={me?.nickname}
           value={nickname}
           onChange={(e) => setNickname(e.target.value)}
-          onBlur={save}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') e.currentTarget.blur()
+            if (e.key === 'Enter') void save()
           }}
         />
+        <button
+          type="button"
+          disabled={!canSave}
+          onClick={() => void save()}
+          className="shrink-0 rounded-control bg-primary px-3 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+        >
+          Save
+        </button>
       </div>
       <p className="mt-1.5 text-xs text-faint">
         {saved ? 'Saved.' : "How other members see you here. Doesn't change your email or login."}
@@ -75,10 +86,18 @@ export function AccountPage() {
   const [confirmText, setConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   const handleSignOut = async () => {
-    await signOut()
-    navigate('/login')
+    setLoggingOut(true)
+    try {
+      await signOut()
+      navigate('/login')
+    } finally {
+      setLoggingOut(false)
+      setLogoutConfirmOpen(false)
+    }
   }
 
   const confirmDelete = async () => {
@@ -110,7 +129,7 @@ export function AccountPage() {
 
           <button
             type="button"
-            onClick={() => void handleSignOut()}
+            onClick={() => setLogoutConfirmOpen(true)}
             className="flex w-fit items-center gap-2 rounded-control border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger-soft"
           >
             <LogOut size={16} strokeWidth={1.75} />
@@ -137,6 +156,14 @@ export function AccountPage() {
           </div>
         </div>
       </div>
+
+      {logoutConfirmOpen && (
+        <LogoutConfirmModal
+          loggingOut={loggingOut}
+          onClose={() => setLogoutConfirmOpen(false)}
+          onConfirm={() => void handleSignOut()}
+        />
+      )}
 
       {deleteOpen && (
         <Modal

@@ -10,7 +10,12 @@ import type { Dimension, FoodCategory, FoodDefinition, Unit } from '../types/ent
 const DIMENSIONS: Dimension[] = ['WEIGHT', 'VOLUME', 'COUNT']
 
 interface Props {
-  value: FoodDefinition | null
+  // Callers that only have a partial food on hand (e.g. reconstructing a
+  // draft from a saved order line, which only ever cached id/name/category)
+  // can pass just that much -- this component only ever reads
+  // `.name`/`.category` off the current value; `onChange` still always
+  // delivers the full FoodDefinition, straight from a real API response.
+  value: (Pick<FoodDefinition, 'id' | 'name'> & Partial<Omit<FoodDefinition, 'id' | 'name'>>) | null
   onChange: (food: FoodDefinition | null) => void
 }
 
@@ -101,7 +106,7 @@ export const TypeSearchField = forwardRef<TypeSearchFieldHandle, Props>(function
   if (value) {
     return (
       <div className="flex items-center gap-2 rounded-control border border-subtle bg-surface-2 px-2 py-2">
-        <CategoryDot category={value.category} />
+        <CategoryDot category={value.category ?? null} />
         <span className="flex-1">{value.name}</span>
         <button
           type="button"

@@ -419,7 +419,7 @@ export function ShoppingListPage() {
           {(
             [
               { key: 'list', label: 'List' },
-              { key: 'purchases', label: 'Purchases' },
+              { key: 'purchases', label: 'Past orders' },
             ] as const
           ).map(({ key, label }) => (
             <button
@@ -788,7 +788,7 @@ export function ShoppingListPage() {
       {tab === 'purchases' &&
         ((purchaseSessions ?? []).length > 0 ? (
           <div>
-            <h3 className="mb-2 text-sm font-semibold text-muted">Purchases</h3>
+            <h3 className="mb-2 text-sm font-semibold text-muted">Past orders</h3>
             <ul className="flex flex-col gap-2">
               {(purchaseSessions ?? []).map((s) => {
                 const isDraft = s.status !== 'FINALIZED'
@@ -827,7 +827,7 @@ export function ShoppingListPage() {
         ) : (
           <EmptyState
             icon={Receipt}
-            title="No purchases yet."
+            title="No past orders yet."
             hint="Recorded orders will show up here."
           />
         ))}
@@ -843,6 +843,10 @@ export function ShoppingListPage() {
             reloadAll()
           }}
           onFinalized={() => {
+            setWizardSessionId(null)
+            reloadAll()
+          }}
+          onCancelled={() => {
             setWizardSessionId(null)
             reloadAll()
           }}

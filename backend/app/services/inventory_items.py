@@ -29,7 +29,8 @@ _TABLE = "inventory_items"
 # to show "Whole Milk" / "Garage Fridge" / who can use this.
 _ENRICHED_SELECT = (
     "*, household_food_variants(global_food_definitions(name, category)), "
-    "storage_locations(name), inventory_item_allowed_members(member_id)"
+    "storage_locations(name), inventory_item_allowed_members(member_id), "
+    "purchase_events(member_id)"
 )
 
 
@@ -89,6 +90,7 @@ def _flatten(row: dict) -> InventoryItem:
     variant = row.pop("household_food_variants", None) or {}
     storage = row.pop("storage_locations", None) or {}
     allowed = row.pop("inventory_item_allowed_members", None) or []
+    purchase_event = row.pop("purchase_events", None) or {}
     global_definition = variant.get("global_food_definitions") or {}
 
     # quantity / total_quantity are persisted in the dimension's base unit
@@ -110,6 +112,7 @@ def _flatten(row: dict) -> InventoryItem:
     row["category"] = global_definition.get("category")
     row["storage_location_name"] = storage.get("name") or "Unknown location"
     row["allowed_member_ids"] = [a["member_id"] for a in allowed]
+    row["buyer_member_id"] = purchase_event.get("member_id")
 
     return InventoryItem(**row)
 

@@ -40,6 +40,7 @@ def _item(household_id: uuid.UUID, **overrides) -> InventoryItem:
         name_override=None,
         storage_location_name="Test Fridge",
         allowed_member_ids=[],
+        buyer_member_id=uuid.uuid4(),
     )
     defaults.update(overrides)
     return InventoryItem(**defaults)

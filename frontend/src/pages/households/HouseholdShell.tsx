@@ -1,20 +1,19 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
-  Activity,
   ChefHat,
   Home,
   LogOut,
-  MoreHorizontal,
   Receipt,
   Scale,
   Settings,
   ShoppingCart,
   UserCircle,
-  X,
 } from 'lucide-react'
 import { apiClient } from '../../lib/apiClient'
 import { CopyButton } from '../../components/CopyButton'
+import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
+import { MobileShortcutMenu } from '../../components/MobileShortcutMenu'
 import { useAuth } from '../../hooks/useAuth'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import type { Household } from '../../types/entities'
@@ -42,18 +41,14 @@ function BurrowLogo({ className }: { className?: string }) {
   )
 }
 
+// Activity now lives inside Settings (see SettingsPage's third tab) rather
+// than as its own destination -- it's a look-back log, not a daily action,
+// so it doesn't need a permanent slot in the primary nav on either platform.
 const PRIMARY_NAV_ITEMS = [
   { to: '', label: 'Inventory', end: true, icon: Home },
   { to: 'shopping-list', label: 'Shopping List', icon: ShoppingCart },
   { to: 'balances', label: 'Balances', icon: Scale },
-  { to: 'activity', label: 'Activity', icon: Activity },
 ]
-
-// The mobile bottom bar only has room for a few tabs before "More" -- keep
-// it to the three most-used, and let Activity live under "More" (still a
-// full sidebar item on desktop).
-const MOBILE_BOTTOM_NAV_ITEMS = PRIMARY_NAV_ITEMS.slice(0, 3)
-const MOBILE_MORE_NAV_ITEMS = PRIMARY_NAV_ITEMS.slice(3)
 
 // Experimental (AI/OCR-backed, real inference cost) -- hidden from the nav
 // entirely unless useIsDeveloper() says otherwise. The backend enforces
@@ -67,13 +62,29 @@ const SECONDARY_NAV_ITEMS = [{ to: 'scan-receipt', label: 'Scan Receipt', icon: 
 // destination rather than one more of the household's daily tabs.
 const RECIPES_NAV_ITEMS = [{ to: 'recipes', label: 'Recipes', icon: ChefHat }]
 
+// With Activity moved into Settings, exactly 4 destinations are left
+// (Inventory, Shopping List, Balances, Recipes) -- a clean direct-tab bottom
+// bar with no "More" sheet or top-bar relocation needed for any of them.
+const MOBILE_BOTTOM_NAV_ITEMS = [...PRIMARY_NAV_ITEMS, ...RECIPES_NAV_ITEMS]
+
 export function HouseholdShell() {
   const { householdId } = useParams<{ householdId: string }>()
   const navigate = useNavigate()
   const { signOut } = useAuth()
   const isDeveloper = useIsDeveloper()
   const [household, setHousehold] = useState<Household | null>(null)
-  const [moreOpen, setMoreOpen] = useState(false)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  const handleSignOut = async () => {
+    setLoggingOut(true)
+    try {
+      await signOut()
+    } finally {
+      setLoggingOut(false)
+      setLogoutConfirmOpen(false)
+    }
+  }
 
   useEffect(() => {
     if (!householdId) return
@@ -217,10 +228,22 @@ export function HouseholdShell() {
           >
             <Settings size={18} strokeWidth={1.75} />
           </NavLink>
+          <NavLink
+            to="account"
+            aria-label="Account"
+            title="Account"
+            className={({ isActive }) =>
+              `rounded-control p-2 transition-colors ${
+                isActive ? 'text-primary' : 'text-muted hover:bg-surface-hover hover:text-text'
+              }`
+            }
+          >
+            <UserCircle size={18} strokeWidth={1.75} />
+          </NavLink>
           <button
             type="button"
-            onClick={() => void signOut()}
-            className="rounded-control p-2 text-muted hover:bg-surface-hover hover:text-text"
+            onClick={() => setLogoutConfirmOpen(true)}
+            className="rounded-control p-2 text-muted transition-colors hover:bg-danger-soft hover:text-danger"
             aria-label="Sign out"
           >
             <LogOut size={18} strokeWidth={1.75} />
@@ -228,64 +251,41 @@ export function HouseholdShell() {
         </div>
       </header>
 
+      {logoutConfirmOpen && (
+        <LogoutConfirmModal
+          loggingOut={loggingOut}
+          onClose={() => setLogoutConfirmOpen(false)}
+          onConfirm={() => void handleSignOut()}
+        />
+      )}
+
       <main className="flex-1 px-4 pb-24 pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
         <div className="mx-auto w-full max-w-5xl">
           <Outlet />
         </div>
       </main>
 
-      {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex items-stretch justify-around border-t border-subtle bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
-        {MOBILE_BOTTOM_NAV_ITEMS.map((item) => (
-          <BottomTabLink key={item.label} {...item} />
-        ))}
-        <button
-          type="button"
-          onClick={() => setMoreOpen(true)}
-          className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-muted"
-        >
-          <MoreHorizontal size={22} strokeWidth={1.75} />
-          More
-        </button>
-      </nav>
-
-      {/* Mobile "more" sheet */}
-      {moreOpen && (
-        <div className="fixed inset-0 z-30 md:hidden">
-          <button
-            type="button"
-            aria-label="Close menu"
-            onClick={() => setMoreOpen(false)}
-            className="absolute inset-0 bg-black/60"
-          />
-          <div className="absolute inset-x-0 bottom-0 rounded-t-card border-t border-subtle bg-surface-2 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-raised">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-semibold text-muted">More</p>
-              <button
-                type="button"
-                onClick={() => setMoreOpen(false)}
-                className="rounded-control p-1.5 text-muted hover:bg-surface-hover hover:text-text"
-                aria-label="Close"
-              >
-                <X size={18} strokeWidth={1.75} />
-              </button>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              {MOBILE_MORE_NAV_ITEMS.map((item) => (
-                <SidebarLink key={item.label} {...item} onClick={() => setMoreOpen(false)} />
-              ))}
-              {isDeveloper &&
-                SECONDARY_NAV_ITEMS.map((item) => (
-                  <SidebarLink key={item.label} {...item} onClick={() => setMoreOpen(false)} />
-                ))}
-              <hr className="my-2 border-t border-subtle" />
-              {RECIPES_NAV_ITEMS.map((item) => (
-                <SidebarLink key={item.label} {...item} onClick={() => setMoreOpen(false)} />
-              ))}
-            </div>
-          </div>
+      {/* Mobile bottom tab bar -- three real flex sections, not two tab
+          groups plus a separately-positioned floating FAB. The two tab
+          groups are each `flex-1`, so they always split the remaining width
+          exactly evenly regardless of label length, which puts the middle
+          slot dead center for free -- no separate "center it in the
+          viewport" math to keep in sync with the bar's own layout. */}
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-stretch border-t border-subtle bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+        <div className="flex flex-1">
+          {MOBILE_BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
+            <BottomTabLink key={item.label} {...item} />
+          ))}
         </div>
-      )}
+        <div className="relative flex w-16 shrink-0 items-center justify-center">
+          {householdId && <MobileShortcutMenu householdId={householdId} />}
+        </div>
+        <div className="flex flex-1">
+          {MOBILE_BOTTOM_NAV_ITEMS.slice(2).map((item) => (
+            <BottomTabLink key={item.label} {...item} />
+          ))}
+        </div>
+      </nav>
     </div>
   )
 }
@@ -324,12 +324,16 @@ function BottomTabLink({ to, label, end, icon: Icon }: NavItemProps) {
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium ${
-          isActive ? 'text-primary' : 'text-muted'
+        `flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors duration-150 ${
+          isActive ? 'text-primary' : 'text-muted hover:text-text'
         }`
       }
     >
-      <Icon size={22} strokeWidth={1.75} />
+      <Icon
+        size={22}
+        strokeWidth={1.75}
+        className="transition-transform duration-150 hover:scale-110"
+      />
       {label}
     </NavLink>
   )

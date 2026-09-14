@@ -59,6 +59,18 @@ def create_from_shopping_list(
     return ok(session)
 
 
+@router.post(
+    "/manual",
+    response_model=Envelope[PurchaseSessionWithItems],
+    status_code=status.HTTP_201_CREATED,
+)
+def create_manual_session(
+    household_id: UUID,
+    caller: Member = Depends(require_household_membership),
+) -> Envelope[PurchaseSessionWithItems]:
+    return ok(purchase_session_service.create_manual_session(household_id, caller.id))
+
+
 @router.get("", response_model=Envelope[list[PurchaseSession]])
 def list_sessions(
     household_id: UUID,

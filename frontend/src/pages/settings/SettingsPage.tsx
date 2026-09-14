@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
+import { ActivityPage } from '../activity/ActivityPage'
 import type { Member } from '../../types/entities'
 import { BurrowTab } from './BurrowTab'
 import { MembersTab } from './MembersTab'
 
-type Tab = 'burrow' | 'members'
+type Tab = 'burrow' | 'members' | 'activity'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'burrow', label: 'Burrow' },
   { key: 'members', label: 'Members' },
+  { key: 'activity', label: 'Activity' },
 ]
 
 export function SettingsPage() {
@@ -24,9 +26,7 @@ export function SettingsPage() {
     loading: membersLoading,
     error: membersError,
     reload: reloadMembers,
-  } = useHouseholdResource<Member[]>(
-    householdId ? `/api/households/${householdId}/members` : null,
-  )
+  } = useHouseholdResource<Member[]>(householdId ? `/api/households/${householdId}/members` : null)
 
   return (
     <div className="flex flex-col gap-5">
@@ -51,13 +51,15 @@ export function SettingsPage() {
 
       {tab === 'burrow' ? (
         <BurrowTab members={members} />
-      ) : (
+      ) : tab === 'members' ? (
         <MembersTab
           members={members}
           loading={membersLoading}
           error={membersError}
           reload={reloadMembers}
         />
+      ) : (
+        <ActivityPage />
       )}
     </div>
   )

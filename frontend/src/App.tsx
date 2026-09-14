@@ -13,9 +13,7 @@ import { HouseholdShell } from './pages/households/HouseholdShell'
 import { SettingsPage } from './pages/settings/SettingsPage'
 import { AccountPage } from './pages/account/AccountPage'
 import { InventoryPage } from './pages/inventory/InventoryPage'
-import { AddInventoryItemPage } from './pages/inventory/AddInventoryItemPage'
 import { InventoryItemDetailPage } from './pages/inventory/InventoryItemDetailPage'
-import { ActivityPage } from './pages/activity/ActivityPage'
 import { BalancesPage } from './pages/ledger/BalancesPage'
 import { ShoppingListPage } from './pages/shopping-list'
 import { RecipesPage } from './pages/recipes'
@@ -43,9 +41,7 @@ function App() {
             <Route path="/households/join" element={<JoinHouseholdPage />} />
             <Route path="/households/:householdId" element={<HouseholdShell />}>
               <Route index element={<InventoryPage />} />
-              <Route path="inventory/add" element={<AddInventoryItemPage />} />
               <Route path="inventory-items/:itemId" element={<InventoryItemDetailPage />} />
-              <Route path="activity" element={<ActivityPage />} />
               <Route path="balances" element={<BalancesPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="account" element={<AccountPage />} />

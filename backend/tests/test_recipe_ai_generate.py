@@ -45,6 +45,7 @@ def _item(food_name: str) -> InventoryItem:
         name_override=None,
         storage_location_name="Fridge",
         allowed_member_ids=[],
+        buyer_member_id=uuid.uuid4(),
     )
 
 

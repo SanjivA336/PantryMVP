@@ -266,11 +266,6 @@ export function ActivityPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-xl font-semibold">Activity</h2>
-        <p className="mt-1 text-sm text-muted">Everything that's happened in this household.</p>
-      </div>
-
       <div className="flex gap-1.5">
         {FILTERS.map((f) => (
           <button

@@ -9,6 +9,7 @@ from app.schemas.shopping_list import (
     ShoppingListItem,
     ShoppingListSection,
 )
+from app.schemas.warning import StockWarning
 from app.services import warnings as warnings_service
 
 _SECTIONS_TABLE = "shopping_list_sections"
@@ -205,19 +206,29 @@ def ignore_variant_permanently(household_id: UUID, household_food_variant_id: UU
     ).execute()
 
 
-def suggest_items(household_id: UUID, member_id: UUID) -> list[ShoppingListItem]:
-    """Proposes shopping-list items from the warnings layer's current stock
-    signals. Skips foods already ACTIVE on the list, foods permanently
-    ignored (shopping_list_ignored_variants), and foods dismissed (removed
-    as a SUGGESTED item) since their last purchase -- see the
+class SuggestionNotEligibleError(Exception):
+    """Raised by add_suggested_item when the given variant isn't (or isn't
+    still) an eligible suggestion -- e.g. someone already added it, or it was
+    ignored/dismissed between the caller loading its preview list and
+    tapping an entry on it."""
+
+
+def _suggest_candidates(household_id: UUID) -> dict[UUID, StockWarning]:
+    """The actual eligibility computation behind suggest_items -- which
+    stock-warning foods are worth proposing, after skipping foods already
+    ACTIVE on the list, foods permanently ignored
+    (shopping_list_ignored_variants), and foods dismissed (removed as a
+    SUGGESTED item) since their last purchase -- see the
     household_food_variant_id / reference_purchased_at comparison below,
-    which is how a later restock makes a food eligible to be suggested
-    again after being dismissed once.
+    which is how a later restock makes a food eligible to be suggested again
+    after being dismissed once. Pulled out on its own so both the bulk
+    "add everything" action and a one-at-a-time picklist can share the exact
+    same eligibility rules instead of drifting apart.
     """
     warnings = warnings_service.compute_warnings(household_id)
     candidates = {w.household_food_variant_id: w for w in warnings.stock_warnings}
     if not candidates:
-        return []
+        return {}
 
     client = get_service_client()
     ignored = (
@@ -248,14 +259,66 @@ def suggest_items(household_id: UUID, member_id: UUID) -> list[ShoppingListItem]
             if variant_id not in latest_removed_at or removed_at > latest_removed_at[variant_id]:
                 latest_removed_at[variant_id] = removed_at
 
-    sort_order = _next_item_sort_order(client, str(household_id), None)
-    to_insert = []
+    eligible = {}
     for variant_id, warning in candidates.items():
         if variant_id in active_variant_ids or variant_id in ignored_variant_ids:
             continue
         dismissed_at = latest_removed_at.get(variant_id)
         if dismissed_at and dismissed_at >= warning.reference_purchased_at:
             continue
+        eligible[variant_id] = warning
+    return eligible
+
+
+def preview_suggestions(household_id: UUID) -> list[StockWarning]:
+    """Read-only counterpart to suggest_items -- the same eligible-candidate
+    list, without inserting anything. Used by the quick shortcut menu's
+    picklist, where tapping one candidate adds just that one (add_suggested_item)."""
+    return list(_suggest_candidates(household_id).values())
+
+
+def add_suggested_item(
+    household_id: UUID, member_id: UUID, household_food_variant_id: UUID
+) -> ShoppingListItem:
+    """The single-item counterpart to suggest_items' bulk add -- re-validates
+    the variant is still an eligible candidate right before inserting (the
+    caller's preview list can go stale: someone else could have added or
+    dismissed it in the meantime)."""
+    eligible = _suggest_candidates(household_id)
+    warning = eligible.get(household_food_variant_id)
+    if warning is None:
+        raise SuggestionNotEligibleError
+
+    client = get_service_client()
+    sort_order = _next_item_sort_order(client, str(household_id), None)
+    result = (
+        client.table(_ITEMS_TABLE)
+        .insert(
+            {
+                "household_id": str(household_id),
+                "household_food_variant_id": str(household_food_variant_id),
+                "name": warning.food_name,
+                "source": "SUGGESTED",
+                "added_by_member_id": str(member_id),
+                "sort_order": sort_order,
+            }
+        )
+        .execute()
+    )
+    return ShoppingListItem(**result.data[0])
+
+
+def suggest_items(household_id: UUID, member_id: UUID) -> list[ShoppingListItem]:
+    """Proposes -- and immediately adds -- every eligible stock-warning food
+    at once. See _suggest_candidates for the eligibility rules themselves."""
+    eligible = _suggest_candidates(household_id)
+    if not eligible:
+        return []
+
+    client = get_service_client()
+    sort_order = _next_item_sort_order(client, str(household_id), None)
+    to_insert = []
+    for variant_id, warning in eligible.items():
         to_insert.append(
             {
                 "household_id": str(household_id),
@@ -267,9 +330,6 @@ def suggest_items(household_id: UUID, member_id: UUID) -> list[ShoppingListItem]
             }
         )
         sort_order += 1
-
-    if not to_insert:
-        return []
 
     result = client.table(_ITEMS_TABLE).insert(to_insert).execute()
     return [ShoppingListItem(**row) for row in result.data]

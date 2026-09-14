@@ -20,6 +20,7 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
 import { Modal } from '../../components/Modal'
 import { WarningCounts } from '../../components/WarningCounts'
+import { useAddItemWizard } from '../../hooks/useAddItemWizard'
 import { useAuth } from '../../hooks/useAuth'
 import {
   FOOD_CATEGORIES,
@@ -148,6 +149,7 @@ export function InventoryPage() {
     reloadStorageLocations()
   }, [reload, reloadWarnings, reloadStorageLocations])
   useRealtimeSubscription('inventory_items', householdId ?? null, reloadAll)
+  const addItemWizard = useAddItemWizard(householdId, reloadAll)
   const [actionError, setActionError] = useState<string | null>(null)
   const [usingItem, setUsingItem] = useState<InventoryItem | null>(null)
   const [search, setSearch] = useState('')
@@ -430,11 +432,7 @@ export function InventoryPage() {
           />
           <button
             type="button"
-            onClick={() =>
-              storageLocationId
-                ? navigate(`/households/${householdId}/inventory/add`)
-                : setAddPickerOpen(true)
-            }
+            onClick={() => (storageLocationId ? addItemWizard.open() : setAddPickerOpen(true))}
             className="flex items-center gap-1.5 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
           >
             <Plus size={16} strokeWidth={2.25} />
@@ -580,10 +578,7 @@ export function InventoryPage() {
           title={storageLocationId ? 'Nothing stored here yet.' : 'Nothing in inventory yet.'}
           action={{
             label: 'Add an item',
-            onClick: () =>
-              storageLocationId
-                ? navigate(`/households/${householdId}/inventory/add`)
-                : setAddPickerOpen(true),
+            onClick: () => (storageLocationId ? addItemWizard.open() : setAddPickerOpen(true)),
           }}
         />
       ) : filtered.length === 0 ? (
@@ -662,14 +657,17 @@ export function InventoryPage() {
       {addPickerOpen && (
         <Modal title="Add" onClose={() => setAddPickerOpen(false)}>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Link
-              to={`/households/${householdId}/inventory/add`}
-              onClick={() => setAddPickerOpen(false)}
+            <button
+              type="button"
+              onClick={() => {
+                setAddPickerOpen(false)
+                addItemWizard.open()
+              }}
               className={addChoiceClass}
             >
               <Package size={24} strokeWidth={1.5} />
               Item
-            </Link>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -738,6 +736,13 @@ export function InventoryPage() {
           onClose={() => setUsingItem(null)}
           onConsumed={reloadAll}
         />
+      )}
+
+      {addItemWizard.modal}
+      {addItemWizard.error && (
+        <Modal title="Can't add an item yet" onClose={addItemWizard.dismissError}>
+          <p className="text-sm text-muted">{addItemWizard.error}</p>
+        </Modal>
       )}
     </div>
   )

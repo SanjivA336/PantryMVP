@@ -14,6 +14,7 @@ from app.schemas.shopping_list import (
     UpdateShoppingListItemRequest,
     UpdateShoppingListSectionRequest,
 )
+from app.schemas.warning import StockWarning
 from app.services import shopping_list as shopping_list_service
 
 router = APIRouter(prefix="/households/{household_id}/shopping-list", tags=["shopping-list"])
@@ -143,3 +144,29 @@ def suggest_items(
     caller: Member = Depends(require_household_membership),
 ) -> Envelope[list[ShoppingListItem]]:
     return ok(shopping_list_service.suggest_items(household_id, caller.id))
+
+
+@router.get("/suggest", response_model=Envelope[list[StockWarning]])
+def preview_suggestions(
+    household_id: UUID,
+    _member: Member = Depends(require_household_membership),
+) -> Envelope[list[StockWarning]]:
+    return ok(shopping_list_service.preview_suggestions(household_id))
+
+
+@router.post("/suggest/{household_food_variant_id}", response_model=Envelope[ShoppingListItem])
+def add_suggested_item(
+    household_id: UUID,
+    household_food_variant_id: UUID,
+    caller: Member = Depends(require_household_membership),
+) -> Envelope[ShoppingListItem]:
+    try:
+        item = shopping_list_service.add_suggested_item(
+            household_id, caller.id, household_food_variant_id
+        )
+    except shopping_list_service.SuggestionNotEligibleError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "That's not something we'd suggest anymore -- it may already be on your list.",
+        ) from exc
+    return ok(item)

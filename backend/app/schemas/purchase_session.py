@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -12,6 +12,10 @@ from app.schemas.units import Unit
 class PurchaseSessionSource(StrEnum):
     RECEIPT_SCAN = "RECEIPT_SCAN"
     SHOPPING_LIST = "SHOPPING_LIST"
+    # Opened directly (the "Add item" entry point) -- no shopping-list items
+    # behind it, no receipt to OCR, just a session that starts with one
+    # blank line ready to fill in. See create_manual_session.
+    MANUAL = "MANUAL"
 
 
 class PurchaseSessionStatus(StrEnum):
@@ -64,6 +68,11 @@ class PurchaseSessionItem(BaseModel):
     quantity: Decimal | None
     preferred_unit: Unit | None
     cost: Decimal | None
+    expiry_date: date | None
+    best_by_date: date | None
+    # A per-line label, mirroring InventoryItem.name_override -- carried
+    # straight through to the real item's own name_override on finalize.
+    name_override: str | None
     accounting_type: AccountingType | None
     allowed_member_ids: list[UUID]
     # Per-line buyer (the wizard's sticky-buyer flow). Null -> finalize
@@ -122,6 +131,9 @@ class UpdatePurchaseSessionItemRequest(BaseModel):
     quantity: Decimal | None = Field(default=None, gt=0)
     preferred_unit: Unit | None = None
     cost: Decimal | None = Field(default=None, ge=0)
+    expiry_date: date | None = None
+    best_by_date: date | None = None
+    name_override: str | None = Field(default=None, max_length=200)
     accounting_type: AccountingType | None = None
     allowed_member_ids: list[UUID] | None = None
     buyer_member_id: UUID | None = None

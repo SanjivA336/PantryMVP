@@ -138,6 +138,9 @@ export interface InventoryItem {
   category: FoodCategory | null
   storage_location_name: string
   allowed_member_ids: string[]
+  // Set once at creation, never editable afterward -- who's on the hook as
+  // creditor for this item's cost.
+  buyer_member_id: string
 }
 
 export interface PurchaseCorrection {
@@ -364,7 +367,7 @@ export interface SubstitutionSuggestion {
   note: string | null
 }
 
-export type PurchaseSessionSource = 'RECEIPT_SCAN' | 'SHOPPING_LIST'
+export type PurchaseSessionSource = 'RECEIPT_SCAN' | 'SHOPPING_LIST' | 'MANUAL'
 export type PurchaseSessionStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'FINALIZED'
 export type PurchaseSessionItemStatus = 'PENDING' | 'COMPLETE' | 'IMPORTED'
 
@@ -400,6 +403,9 @@ export interface PurchaseSessionItem {
   quantity: string | null
   preferred_unit: Unit | null
   cost: string | null
+  expiry_date: string | null
+  best_by_date: string | null
+  name_override: string | null
   accounting_type: AccountingType | null
   allowed_member_ids: string[]
   buyer_member_id: string | null

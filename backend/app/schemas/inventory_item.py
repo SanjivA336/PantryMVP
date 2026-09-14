@@ -118,6 +118,10 @@ class InventoryItem(BaseModel):
     # inventory_item_allowed_members). Editable directly while the item's
     # debt is still live; see UpdateInventoryItemRequest.
     allowed_member_ids: list[UUID]
+    # Who's on the hook as creditor for this item's cost -- set once at
+    # creation (purchase_events.member_id) and never editable afterward,
+    # regardless of freeze state. Shown read-only in the UI.
+    buyer_member_id: UUID
 
 
 class CreateInventoryItemRequest(BaseModel):

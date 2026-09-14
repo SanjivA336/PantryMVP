@@ -41,6 +41,7 @@ def _item(**overrides) -> InventoryItem:
         category=None,
         storage_location_name="Pantry",
         allowed_member_ids=[],
+        buyer_member_id=uuid.uuid4(),
     )
     defaults.update(overrides)
     return InventoryItem(**defaults)

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
+import { UnitSelect } from '../../components/UnitSelect'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { FOOD_CATEGORY_LABELS } from '../../lib/foodCategories'
 import { DIMENSION_LABELS, UNIT_LABELS, UNITS_BY_DIMENSION, guessDimension } from '../../lib/units'
@@ -17,6 +18,13 @@ import type {
 
 const inputClass =
   'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
+
+// A field that's shown (never hidden) but locked -- once an item's debt is
+// frozen, cost/quantity/unit need a correction instead of a plain edit, and
+// buyer is never editable at all. Greyed out rather than removed so its
+// existence and current value both stay visible.
+const disabledInputClass =
+  'w-full cursor-not-allowed rounded-control border border-subtle bg-surface px-2 py-2 text-sm text-muted opacity-70 outline-none'
 
 const fieldLabelClass = 'mb-1.5 block text-sm font-medium text-muted'
 
@@ -178,8 +186,40 @@ export function InventoryItemDetailPage() {
             itemId={itemId!}
             dimension={dimension}
             saving={saving}
+            buyerNickname={
+              members.find((m) => m.id === item.buyer_member_id)?.nickname ?? 'Unknown'
+            }
             onChanged={reload}
           />
+
+          <div>
+            <label className={fieldLabelClass}>Who's using this?</label>
+            <div className="grid grid-cols-3 gap-2 rounded-control border border-transparent p-2">
+              {sortedMembers.map((member) => {
+                const selected = item.allowed_member_ids.includes(member.id)
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    disabled={isFrozen || saving}
+                    onClick={() => toggleMember(member.id)}
+                    className={`flex h-10 items-center justify-center rounded-control border px-2 py-2 text-center text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      selected
+                        ? 'border-primary bg-primary-soft text-primary'
+                        : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
+                    }`}
+                  >
+                    <span className="w-full truncate">{member.nickname}</span>
+                  </button>
+                )
+              })}
+            </div>
+            {isFrozen && (
+              <p className="mt-1.5 text-xs text-faint">
+                This item's cost has already been settled, so who it's split between is locked in.
+              </p>
+            )}
+          </div>
 
           <div>
             <label className={fieldLabelClass}>Storage location</label>
@@ -221,35 +261,6 @@ export function InventoryItemDetailPage() {
                 }}
               />
             </div>
-          </div>
-
-          <div>
-            <label className={fieldLabelClass}>Who's using this?</label>
-            <div className="grid grid-cols-3 gap-2 rounded-control border border-transparent p-2">
-              {sortedMembers.map((member) => {
-                const selected = item.allowed_member_ids.includes(member.id)
-                return (
-                  <button
-                    key={member.id}
-                    type="button"
-                    disabled={isFrozen || saving}
-                    onClick={() => toggleMember(member.id)}
-                    className={`flex h-10 items-center justify-center rounded-control border px-2 py-2 text-center text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                      selected
-                        ? 'border-primary bg-primary-soft text-primary'
-                        : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
-                    }`}
-                  >
-                    <span className="w-full truncate">{member.nickname}</span>
-                  </button>
-                )
-              })}
-            </div>
-            {isFrozen && (
-              <p className="mt-1.5 text-xs text-faint">
-                This item's cost has already been settled, so who it's split between is locked in.
-              </p>
-            )}
           </div>
 
           <button
@@ -498,6 +509,7 @@ function CostAndQuantitySection({
   itemId,
   dimension,
   saving,
+  buyerNickname,
   onChanged,
 }: {
   item: InventoryItem
@@ -505,6 +517,7 @@ function CostAndQuantitySection({
   itemId: string
   dimension: ReturnType<typeof guessDimension>
   saving: boolean
+  buyerNickname: string
   onChanged: () => void
 }) {
   const isFrozen = item.debt_frozen_at !== null
@@ -550,15 +563,48 @@ function CostAndQuantitySection({
     }
   }
 
-  if (!isFrozen) {
-    return (
+  // Cost/quantity/unit are only editable while the item is still live --
+  // once frozen, real ledger_entries exist and a correction is the only
+  // path (below). Shown either way, just disabled once frozen, so the
+  // field's existence (and its value) is never hidden, only locked.
+  return (
+    <>
+      <div className="flex gap-3">
+        <div className="flex-1">
+          <label className={fieldLabelClass}>Quantity</label>
+          <input
+            type="number"
+            step="any"
+            disabled={isFrozen}
+            className={isFrozen ? disabledInputClass : inputClass}
+            defaultValue={item.total_quantity}
+            onBlur={(e) => {
+              if (e.target.value && e.target.value !== item.total_quantity) {
+                void saveDirectEdit('total_quantity', e.target.value)
+              }
+            }}
+          />
+        </div>
+        <div className="w-32">
+          <label className={fieldLabelClass}>Unit</label>
+          <UnitSelect
+            disabled={isFrozen || saving}
+            dimensions={[dimension]}
+            className={isFrozen ? disabledInputClass : inputClass}
+            value={item.preferred_unit}
+            onChange={(unit) => void saveDirectEdit('preferred_unit', unit)}
+          />
+        </div>
+      </div>
+
       <div className="flex gap-3">
         <div className="flex-1">
           <label className={fieldLabelClass}>Cost</label>
           <input
             type="number"
             step="0.01"
-            className={inputClass}
+            disabled={isFrozen}
+            className={isFrozen ? disabledInputClass : inputClass}
             defaultValue={item.cost}
             onBlur={(e) => {
               if (e.target.value && e.target.value !== item.cost) {
@@ -568,115 +614,87 @@ function CostAndQuantitySection({
           />
         </div>
         <div className="flex-1">
-          <label className={fieldLabelClass}>Amount</label>
-          <div className="flex">
-            <input
-              type="number"
-              step="any"
-              className="w-full rounded-control rounded-r-none border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:z-10 focus:border-primary"
-              defaultValue={item.total_quantity}
-              onBlur={(e) => {
-                if (e.target.value && e.target.value !== item.total_quantity) {
-                  void saveDirectEdit('total_quantity', e.target.value)
-                }
-              }}
-            />
-            <select
-              disabled={saving}
-              className="w-24 shrink-0 rounded-control rounded-l-none border border-l-0 border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none focus:border-primary disabled:opacity-50"
-              value={item.preferred_unit}
-              onChange={(e) => void saveDirectEdit('preferred_unit', e.target.value)}
-            >
-              {UNITS_BY_DIMENSION[dimension].map((u) => (
-                <option key={u} value={u}>
-                  {UNIT_LABELS[u]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
-      </div>
-    )
-  }
-
-  return (
-    <div>
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <label className={fieldLabelClass}>Cost</label>
-          <p className="text-text">${item.cost}</p>
-        </div>
-        <div className="flex-1">
-          <label className={fieldLabelClass}>Amount</label>
-          <p className="text-text">
-            {item.total_quantity} {UNIT_LABELS[item.preferred_unit]}
-          </p>
-        </div>
-      </div>
-      <p className="mt-1.5 text-xs text-faint">
-        Already settled. Use a correction to fix a mistake rather than editing directly.
-      </p>
-
-      {!correcting ? (
-        <button
-          type="button"
-          onClick={() => setCorrecting(true)}
-          className="mt-2 text-sm font-medium text-primary hover:underline"
-        >
-          Report a mistake
-        </button>
-      ) : (
-        <div className="mt-3 flex flex-col gap-2 rounded-card border border-subtle bg-surface p-3">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className={fieldLabelClass}>Actual cost</label>
-              <input
-                type="number"
-                step="0.01"
-                className={inputClass}
-                value={newCost}
-                onChange={(e) => setNewCost(e.target.value)}
-              />
-            </div>
-            <div className="flex-1">
-              <label className={fieldLabelClass}>Actual amount</label>
-              <input
-                type="number"
-                step="any"
-                className={inputClass}
-                value={newQuantity}
-                onChange={(e) => setNewQuantity(e.target.value)}
-              />
-            </div>
-          </div>
-          <textarea
-            rows={2}
-            placeholder="Note (optional), e.g. typo'd the receipt"
-            className={inputClass}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
+          <label className={fieldLabelClass}>Buyer</label>
+          <input
+            type="text"
+            disabled
+            readOnly
+            title="Set when this item was bought -- never editable afterward"
+            value={buyerNickname}
+            className={disabledInputClass}
           />
-          {error && <p className="text-sm text-danger">{error}</p>}
-          <div className="flex gap-2">
+        </div>
+      </div>
+
+      {error && !correcting && <p className="text-sm text-danger">{error}</p>}
+
+      {isFrozen && (
+        <div>
+          <p className="mt-1.5 text-xs text-faint">
+            Already settled. Use a correction to fix a mistake rather than editing directly.
+          </p>
+
+          {!correcting ? (
             <button
               type="button"
-              disabled={submitting}
-              onClick={submitCorrection}
-              className="rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+              onClick={() => setCorrecting(true)}
+              className="mt-2 text-sm font-medium text-primary hover:underline"
             >
-              {submitting ? 'Saving…' : 'Save correction'}
+              Report a mistake
             </button>
-            <button
-              type="button"
-              onClick={() => setCorrecting(false)}
-              className="rounded-control px-2 py-2 text-sm font-medium text-muted hover:bg-surface-hover"
-            >
-              Cancel
-            </button>
-          </div>
+          ) : (
+            <div className="mt-3 flex flex-col gap-2 rounded-card border border-subtle bg-surface p-3">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className={fieldLabelClass}>Actual cost</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className={inputClass}
+                    value={newCost}
+                    onChange={(e) => setNewCost(e.target.value)}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className={fieldLabelClass}>Actual amount</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className={inputClass}
+                    value={newQuantity}
+                    onChange={(e) => setNewQuantity(e.target.value)}
+                  />
+                </div>
+              </div>
+              <textarea
+                rows={2}
+                placeholder="Note (optional), e.g. typo'd the receipt"
+                className={inputClass}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              {error && <p className="text-sm text-danger">{error}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={submitCorrection}
+                  className="rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+                >
+                  {submitting ? 'Saving…' : 'Save correction'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCorrecting(false)}
+                  className="rounded-control px-2 py-2 text-sm font-medium text-muted hover:bg-surface-hover"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </>
   )
 }

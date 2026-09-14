@@ -168,10 +168,53 @@ def create_from_shopping_list(household_id: UUID, member_id: UUID) -> PurchaseSe
     return get_by_id(household_id, session_id)  # type: ignore[return-value]
 
 
+# =========================================================================
+# MANUAL entry point ("Add item")
+# =========================================================================
+
+
+def create_manual_session(household_id: UUID, member_id: UUID) -> PurchaseSessionWithItems:
+    """Start a purchase session directly, with nothing behind it -- the
+    "Add item" entry point. Seeded with one blank line (the same shape
+    add_blank_item appends for "add item to order") so opening the wizard
+    on a freshly created session drops straight into a fillable form
+    instead of an empty "pick a line" state.
+    """
+    client = get_service_client()
+    session_id = uuid4()
+    client.table(_SESSIONS_TABLE).insert(
+        {
+            "id": str(session_id),
+            "household_id": str(household_id),
+            "created_by_member_id": str(member_id),
+            "source": "MANUAL",
+            "status": "PENDING",
+        }
+    ).execute()
+    client.table(_ITEMS_TABLE).insert(
+        {
+            "session_id": str(session_id),
+            "position": 0,
+            "raw_line_text": "",
+        }
+    ).execute()
+    return get_by_id(household_id, session_id)  # type: ignore[return-value]
+
+
 def delete_session(household_id: UUID, session_id: UUID) -> None:
-    """Delete a not-yet-finalized session (and its lines, via cascade). A
-    FINALIZED session created real inventory items and can't be unwound
-    here -- correct or discard those items individually instead."""
+    """Discard a not-yet-finalized session outright -- used both for
+    abandoning a stale draft (the Past Orders tab) and for an explicit
+    "cancel this order" from the wizard itself; either way the intent is the
+    same, so there's one code path. A FINALIZED session created real
+    inventory items and can't be unwound here -- correct or discard those
+    items individually instead.
+
+    Any line that came off the shopping list (create_from_shopping_list
+    removes those items from the list up front, see its own docstring) gets
+    restored there rather than silently disappearing -- cancelling the
+    review isn't the same thing as deciding you don't want to buy it after
+    all, and a line with no shopping_list_item_id (receipt scan, or added ad
+    hoc in the wizard) just has nothing to restore."""
     client = get_service_client()
     existing = (
         client.table(_SESSIONS_TABLE)
@@ -185,6 +228,20 @@ def delete_session(household_id: UUID, session_id: UUID) -> None:
         raise SessionNotFoundError
     if existing.data["status"] == "FINALIZED":
         raise InvalidSessionStateError("FINALIZED")
+
+    items = (
+        client.table(_ITEMS_TABLE)
+        .select("shopping_list_item_id")
+        .eq("session_id", str(session_id))
+        .execute()
+    ).data
+    shopping_list_item_ids = [
+        row["shopping_list_item_id"] for row in items if row["shopping_list_item_id"]
+    ]
+    if shopping_list_item_ids:
+        client.table(_SHOPPING_ITEMS_TABLE).update({"status": "ACTIVE", "removed_at": None}).eq(
+            "household_id", str(household_id)
+        ).in_("id", shopping_list_item_ids).execute()
 
     client.table(_SESSIONS_TABLE).delete().eq("household_id", str(household_id)).eq(
         "id", str(session_id)
@@ -389,6 +446,7 @@ def process_session(household_id: UUID, session_id: UUID) -> PurchaseSessionWith
 _EDITABLE_STATUS = {
     "RECEIPT_SCAN": PurchaseSessionStatus.COMPLETED,
     "SHOPPING_LIST": PurchaseSessionStatus.PENDING,
+    "MANUAL": PurchaseSessionStatus.PENDING,
 }
 
 
@@ -529,6 +587,9 @@ def finalize(
             quantity=item.quantity,
             preferred_unit=item.preferred_unit,
             cost=item.cost or Decimal(0),
+            expiry_date=item.expiry_date,
+            best_by_date=item.best_by_date,
+            name_override=item.name_override,
             allowed_member_ids=item.allowed_member_ids,
             accounting_type=(
                 item.accounting_type or accounting_types.get(item.global_food_definition_id)
