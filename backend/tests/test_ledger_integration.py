@@ -165,7 +165,7 @@ async def _discard(
 ) -> httpx.Response:
     return await api_client.delete(
         f"/api/households/{household['household_id']}/inventory-items/{item_id}",
-        params={"reason": "DISCARDED"},
+        params={"reason": "EXPIRED"},
         headers=household["headers"][member_index],
     )
 
@@ -467,7 +467,7 @@ async def test_concurrent_discard_freezes_exactly_once(api_client, provision) ->
         _discard(api_client, household, item["id"]),
     )
     statuses = sorted(r.status_code for r in results)
-    # Exactly one wins the atomic ACTIVE->DISCARDED transition; the other
+    # Exactly one wins the atomic ACTIVE->EXPIRED transition; the other
     # finds nothing left to discard.
     assert statuses == [200, 404], [r.text for r in results]
 

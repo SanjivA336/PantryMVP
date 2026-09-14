@@ -252,7 +252,7 @@ async def test_discard_then_cannot_discard_again(api_client, household) -> None:
 
     second = await api_client.delete(
         f"/api/households/{household['household_id']}/inventory-items/{item_id}",
-        params={"reason": "LOST"},
+        params={"reason": "EMPTY"},
         headers=headers,
     )
     assert second.status_code == 404
