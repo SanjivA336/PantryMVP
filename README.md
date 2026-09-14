@@ -123,41 +123,86 @@ OCR-backed steps below are gated to a developer allowlist.
 
 ## What's left
 
-### Security & hardening (before any non-local rollout)
+Ordered by when it should happen, not just grouped by topic. AI/OCR
+features (recipe generation, receipt scanning, AI recipe import) are
+deliberately left out of this list entirely — they stay behind the
+developer gate through v1. Hosting stays local (both frontend and
+backend, on-machine) through Phase 5; only Phase 6 involves anything
+leaving localhost.
 
-- **CORS** is pinned to `localhost:5173/5174` in `backend/app/main.py` — the
-  deployed frontend origin has to be added or every request fails.
-- **Self-service password reset is disabled** (no email provider) — needs an
-  SMTP provider wired up; also blocks email verification.
-- No **Terms of Service / Privacy Policy**, no **CSV/data export**, no **API
-  rate limiting**, no **error tracking**.
-- **Dev and prod share one Supabase project** — a second (prod) project
-  needs its own migrations pushed and its own `.env` secrets; nothing here
-  splits environments automatically.
+### Phase 1 — Correctness & polish (local)
 
-### Deployment (nothing here exists yet)
+- [x] Confirm the AI/OCR routes (`recipes/generate`, `scan-receipt*`, and
+  AI-backed recipe import) stay behind `DeveloperGuard` / `require_developer`
+  at both the frontend route and backend endpoint level — verified, not
+  reachable by a non-developer account.
+- [ ] **Consumption correction on a frozen item**: `freeze_item_debt` reads
+  `consumption_events` + the member roster, *then* claims the freeze via a
+  compare-and-swap on `debt_frozen_at` — a roster edit (`set_inventory_item_
+  roster`) or a new consumption event that commits in between is priced
+  using the stale snapshot and never reaches the ledger. Narrow, not
+  corruption, but a real lost-edit window.
+- [x] Mobile-width pass across the app (done separately from this list).
 
-- **No hosting chosen or configured** for either half: the backend is a
-  plain FastAPI/uvicorn app (needs a host that can run a long-lived
-  process, not just static files) and the frontend builds to static
-  assets (`npm run build`) that need a static host/CDN.
-- **No CI** — no GitHub Actions or equivalent; `pytest`, `tsc`, and `oxlint`
-  currently only ever run locally, on request.
-- **No custom domain / DNS**, and the CORS + Supabase-project items above
-  both block a real deploy regardless of where it's hosted.
-- Once hosted, re-run the `rls` + `integration` suites against **that**
-  environment's Supabase project specifically — passing against the dev
-  project doesn't guarantee the prod one's migrations are applied the same
-  way.
+### Phase 2 — Security & compliance basics
 
-### Known-incomplete features
+- [ ] Wire up an SMTP provider (Resend, Postmark, SES, …) so self-service
+  password reset and email verification work — currently blocked at the UI
+  layer specifically because no provider is configured.
+- [ ] Write a Terms of Service + Privacy Policy (even a minimal one).
+- [ ] Add basic API rate limiting.
+- [ ] Add error tracking (Sentry or similar).
+- [ ] Decide on a support/contact channel (even just an email address).
+- [ ] *(Optional, not blocking)* CSV/data export.
 
-- **Receipt review page** (`ReviewReceiptSessionPage`, developer-gated) got a
-  mechanical rename onto the shared purchase-session model; its Confirm/Skip
-  UX still assumes the old skip semantics and needs reworking.
-- **Consumption correction on a frozen item** posts compensating ADJUSTMENT
-  entries, but a roster/usage edit committing in the exact window a freeze
-  is computing can still be a lost edit (narrow; not corruption).
+### Phase 3 — Prod environment split (still local)
+
+- [ ] Create a separate prod Supabase project (distinct from the one used
+  for development) and push all migrations to it.
+- [ ] Decide the env var / secrets story for switching between dev and prod
+  configs cleanly (e.g. a documented `.env.production`).
+- [ ] Re-run the `rls` + `integration` suites against the new prod project
+  specifically — passing against dev doesn't prove prod's migrations
+  behave the same.
+- [ ] Decide what happens to existing test data ("Test Zone" etc.) — prod
+  should start clean.
+- [ ] Confirm Supabase's backup/point-in-time recovery is enabled on the
+  prod project before real data exists.
+
+### Phase 4 — CI (still local hosting, just automation)
+
+- [ ] GitHub Actions workflow: backend `pytest` (unit-marked), frontend
+  `tsc` + `oxlint`, on every push/PR.
+- [ ] Add a build check (`npm run build`) to the same workflow.
+
+### Phase 5 — Deployment prep (decide & configure, don't cut over yet)
+
+- [ ] Choose a backend host (needs a long-running process — Railway,
+  Fly.io, Render, a VPS, …).
+- [ ] Choose a frontend static host/CDN (Vercel, Netlify, Cloudflare
+  Pages, …).
+- [ ] Decide on a domain name and where DNS will live, if wanted.
+- [ ] Add the real deployed frontend origin to CORS in
+  `backend/app/main.py` (currently pinned to `localhost:5173/5174`) ahead
+  of time.
+- [ ] Write down the actual deploy steps (build command, required env
+  vars, migration step) so cutover day is a checklist.
+
+### Phase 6 — Cutover (the only phase that leaves localhost)
+
+- [ ] Deploy the backend, pointed at the prod Supabase project.
+- [ ] Deploy the frontend build, pointed at the deployed backend.
+- [ ] Point the domain at the new deployment, if applicable.
+- [ ] Full manual smoke test against the real production URL (signup →
+  household → inventory → shopping list → balances) — not localhost.
+- [ ] Invite real users. That's v1.
+
+### Deferred past v1 (developer-gated; not required for launch)
+
+- **Receipt review page** (`ReviewReceiptSessionPage`) got a mechanical
+  rename onto the shared purchase-session model; its Confirm/Skip UX still
+  assumes the old skip semantics and needs reworking — bundled with the
+  rest of AI/OCR, not needed until that's turned on for real users.
 
 ### Longer-term
 
