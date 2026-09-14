@@ -16,7 +16,7 @@ import type {
 } from '../../types/entities'
 
 const inputClass =
-  'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+  'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 const fieldLabelClass = 'mb-1.5 block text-sm font-medium text-muted'
 
@@ -38,6 +38,8 @@ export function InventoryItemDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'details' | 'history'>('details')
+  const [confirmingVoid, setConfirmingVoid] = useState(false)
+  const [voiding, setVoiding] = useState(false)
 
   const sortedMembers = useMemo(
     () => [...members].sort((a, b) => a.nickname.localeCompare(b.nickname)),
@@ -72,6 +74,27 @@ export function InventoryItemDetailPage() {
       setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // A distinct reason from Discarded/Expired/Lost/Empty: this purchase
+  // shouldn't count as a real transaction at all, for whatever reason (a
+  // duplicate add, a typo, someone else took it), not something that
+  // happened to real stock. If nothing's been used from the item yet, the
+  // backend hard-deletes it outright instead of just flipping its status --
+  // see the RemovalReason docstring. Either way this only works pre-freeze,
+  // same constraint the server already enforces for every removal reason.
+  const voidItem = async () => {
+    setActionError(null)
+    setVoiding(true)
+    try {
+      await apiClient.delete(
+        `/api/households/${householdId}/inventory-items/${itemId}?reason=VOIDED`,
+      )
+      navigate(`/households/${householdId}`)
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
+      setVoiding(false)
     }
   }
 
@@ -236,6 +259,43 @@ export function InventoryItemDetailPage() {
           >
             Done
           </button>
+
+          {!isFrozen &&
+            (confirmingVoid ? (
+              <div className="rounded-control border border-danger/30 bg-danger-soft p-3">
+                <p className="mb-2 text-xs text-muted">
+                  Void this when {item.food_name} shouldn't count for some reason other than running
+                  out, going bad, or getting lost, like a duplicate entry or someone else taking it.
+                  If nothing's been used from it yet, this removes it completely. Otherwise it's
+                  kept and marked voided in the activity feed.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={voiding}
+                    onClick={() => void voidItem()}
+                    className="rounded-control bg-danger px-2 py-1.5 text-xs font-semibold text-bg transition-colors hover:bg-danger/90 disabled:opacity-50"
+                  >
+                    {voiding ? 'Voiding…' : 'Yes, void it'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingVoid(false)}
+                    className="rounded-control px-2 py-1.5 text-xs font-medium text-muted hover:bg-surface-hover"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmingVoid(true)}
+                className="rounded-control bg-danger px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-danger/90"
+              >
+                Void this item
+              </button>
+            ))}
         </>
       ) : (
         <>
@@ -393,7 +453,7 @@ function UsageSection({
                       placeholder="Actual amount used"
                     />
                     <select
-                      className="w-24 rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none focus:border-primary"
+                      className="w-24 rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none focus:border-primary"
                       value={unit}
                       onChange={(e) => setUnit(e.target.value as Unit)}
                     >
@@ -513,7 +573,7 @@ function CostAndQuantitySection({
             <input
               type="number"
               step="any"
-              className="w-full rounded-control rounded-r-none border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:z-10 focus:border-primary"
+              className="w-full rounded-control rounded-r-none border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:z-10 focus:border-primary"
               defaultValue={item.total_quantity}
               onBlur={(e) => {
                 if (e.target.value && e.target.value !== item.total_quantity) {
@@ -523,7 +583,7 @@ function CostAndQuantitySection({
             />
             <select
               disabled={saving}
-              className="w-24 shrink-0 rounded-control rounded-l-none border border-l-0 border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none focus:border-primary disabled:opacity-50"
+              className="w-24 shrink-0 rounded-control rounded-l-none border border-l-0 border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none focus:border-primary disabled:opacity-50"
               value={item.preferred_unit}
               onChange={(e) => void saveDirectEdit('preferred_unit', e.target.value)}
             >

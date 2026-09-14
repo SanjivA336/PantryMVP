@@ -1,15 +1,53 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { Modal } from '../../components/Modal'
 import { convertAmount, guessDimension, UNIT_LABELS, UNITS_BY_DIMENSION } from '../../lib/units'
-import type { Dimension, InventoryItem, Unit } from '../../types/entities'
+import type { ConsumptionEvent, Dimension, InventoryItem, Unit } from '../../types/entities'
 
 interface Props {
   item: InventoryItem
   householdId: string
+  // Undefined only while the caller's own member list is still loading --
+  // the "Your share" bar just stays hidden until it resolves, same as if
+  // this weren't a shared item at all.
+  myMemberId: string | undefined
   onClose: () => void
   onConsumed: () => void
+}
+
+// The track (darkest) is the bar's own total; green on top is what's left
+// within that total; blue on top of that grows from zero as the planned
+// amount changes, showing how much of the green this use would take.
+// Shared by the item-wide bar and the personal-allotment bar below it --
+// same visual language, different totals.
+function UsageBar({
+  totalInUnit,
+  remainingInUnit,
+  plannedInUnit,
+  overAllotment = false,
+}: {
+  totalInUnit: number
+  remainingInUnit: number
+  plannedInUnit: number
+  overAllotment?: boolean
+}) {
+  const remainingPct = totalInUnit > 0 ? (remainingInUnit / totalInUnit) * 100 : 0
+  const plannedPct = totalInUnit > 0 ? (plannedInUnit / totalInUnit) * 100 : 0
+  return (
+    <div className="relative mt-1.5 h-2.5 w-full overflow-hidden rounded-pill bg-bg">
+      <div
+        className="absolute inset-y-0 left-0 rounded-pill bg-primary transition-all duration-200 ease-out"
+        style={{ width: `${Math.max(0, Math.min(100, remainingPct))}%` }}
+      />
+      <div
+        className={`absolute inset-y-0 left-0 rounded-pill transition-all duration-200 ease-out ${
+          overAllotment ? 'bg-danger' : 'bg-info'
+        }`}
+        style={{ width: `${Math.max(0, Math.min(100, plannedPct))}%` }}
+      />
+    </div>
+  )
 }
 
 // Rough real-world portions -> a concrete amount, defined in whatever unit
@@ -55,7 +93,7 @@ function gridStyle(count: number) {
   return { gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }
 }
 
-export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) {
+export function UseItemModal({ item, householdId, myMemberId, onClose, onConsumed }: Props) {
   const dimension = guessDimension(item.preferred_unit)
   const remaining = Number(item.quantity)
   const total = Number(item.total_quantity)
@@ -64,6 +102,36 @@ export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) 
   const [unit, setUnit] = useState<Unit>(item.preferred_unit)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [myUsedSoFar, setMyUsedSoFar] = useState(0)
+
+  // Only meaningful when the item is actually split between more than one
+  // person *and* the current user is one of the people it's split between --
+  // someone outside allowed_member_ids has no formal allotment to show a
+  // bar for (they're billed directly for exactly what they use instead, see
+  // accounting_service.bill_outsider_usage), and a solo (PERSONAL) item's
+  // "share" is just the whole thing, so a second identical bar under the
+  // first would be noise either way.
+  const notYours = !!myMemberId && !item.allowed_member_ids.includes(myMemberId)
+  const showAllotment = item.allowed_member_ids.length > 1 && !!myMemberId && !notYours
+  useEffect(() => {
+    if (!showAllotment) return
+    apiClient
+      .get<ConsumptionEvent[]>(
+        `/api/households/${householdId}/inventory-items/${item.id}/consumption`,
+      )
+      .then((events) => {
+        // USAGE and CORRECTION rows both carry a signed quantity_used
+        // already in the item's display unit -- summing everything
+        // attributed to this member is the same net-usage math
+        // compute_item_shares does server-side.
+        const used = events
+          .filter((e) => e.member_id === myMemberId)
+          .reduce((sum, e) => sum + Number(e.quantity_used), 0)
+        setMyUsedSoFar(used)
+      })
+      .catch(() => setMyUsedSoFar(0))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAllotment, householdId, item.id, myMemberId])
 
   // Everything the bar needs, in the *display* unit (whatever's currently
   // selected) so the planned-use segment lines up with the number the user
@@ -71,8 +139,21 @@ export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) 
   const remainingInUnit = convertAmount(remaining, item.preferred_unit, unit)
   const totalInUnit = convertAmount(total, item.preferred_unit, unit)
   const planned = Math.max(0, Math.min(Number(amount) || 0, remainingInUnit))
-  const remainingPct = totalInUnit > 0 ? (remainingInUnit / totalInUnit) * 100 : 0
-  const plannedPct = totalInUnit > 0 ? (planned / totalInUnit) * 100 : 0
+
+  // An equal split of the item's *original* total, not what's left of it --
+  // the same allotment everyone else's share is measured against too.
+  // Capped at what's physically left on the item: other members' usage
+  // (documented or not) can eat into an equal split without this member
+  // having used anything themselves, and showing "3 left" against a jar
+  // that only has 1 left in it reads as broken rather than as a share.
+  // This is a display-only cap -- it doesn't rebalance anyone else's
+  // number, it just keeps this one from claiming more than physically
+  // exists.
+  const myShareBase = total / item.allowed_member_ids.length
+  const myRemainingBase = Math.min(remaining, Math.max(0, myShareBase - myUsedSoFar))
+  const myShareInUnit = convertAmount(myShareBase, item.preferred_unit, unit)
+  const myRemainingInUnit = convertAmount(myRemainingBase, item.preferred_unit, unit)
+  const overAllotment = planned > myRemainingInUnit + 1e-9
 
   const namedPresets = dimension === 'COUNT' ? [] : NAMED_PRESETS[dimension]
   const sortedNamedPresets = useMemo(
@@ -128,30 +209,51 @@ export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) 
   return (
     <Modal title={`Use ${item.food_name}`} onClose={onClose}>
       <div className="flex flex-col gap-4">
+        {notYours && (
+          <p className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+            This isn't part of your share -- using some bills you directly for exactly what you
+            take.
+          </p>
+        )}
+
         <div>
           <div className="flex items-baseline justify-between text-sm">
             <span className="text-muted">Remaining</span>
             <span className="font-medium">
-              {Number(remaining.toFixed(3))} of {Number(total.toFixed(3))}{' '}
-              {UNIT_LABELS[item.preferred_unit]}
+              {Number(remainingInUnit.toFixed(3))} of {Number(totalInUnit.toFixed(3))}{' '}
+              {UNIT_LABELS[unit]}
             </span>
           </div>
-          {/* Three-layer bar, all anchored to the left edge and stacked on
-              top of each other: the track itself (darkest) is the total;
-              green on top of it is what's currently left; blue on top of
-              that grows from zero as the amount field changes, showing how
-              much of the remaining green this use would take. */}
-          <div className="relative mt-1.5 h-2.5 w-full overflow-hidden rounded-pill bg-bg">
-            <div
-              className="absolute inset-y-0 left-0 rounded-pill bg-primary transition-all duration-200 ease-out"
-              style={{ width: `${Math.max(0, Math.min(100, remainingPct))}%` }}
-            />
-            <div
-              className="absolute inset-y-0 left-0 rounded-pill bg-info transition-all duration-200 ease-out"
-              style={{ width: `${Math.max(0, Math.min(100, plannedPct))}%` }}
-            />
-          </div>
+          <UsageBar
+            totalInUnit={totalInUnit}
+            remainingInUnit={remainingInUnit}
+            plannedInUnit={planned}
+          />
         </div>
+
+        {showAllotment && (
+          <div>
+            <div className="flex items-baseline justify-between text-sm">
+              <span className="text-muted">Your share</span>
+              <span className="font-medium">
+                {Number(myRemainingInUnit.toFixed(3))} of {Number(myShareInUnit.toFixed(3))}{' '}
+                {UNIT_LABELS[unit]}
+              </span>
+            </div>
+            <UsageBar
+              totalInUnit={myShareInUnit}
+              remainingInUnit={myRemainingInUnit}
+              plannedInUnit={planned}
+              overAllotment={overAllotment}
+            />
+            {overAllotment && (
+              <p className="mt-1.5 text-xs text-danger">
+                This goes over your equal share -- the extra gets billed to you specifically instead
+                of split evenly.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex items-end gap-2">
           <div className="flex-1">
@@ -170,7 +272,7 @@ export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) 
                 step="any"
                 min="0"
                 autoFocus
-                className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-center text-sm text-text outline-none focus:border-primary"
+                className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-center text-sm text-text shadow-field outline-none focus:border-primary"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 onKeyDown={(e) => {
@@ -190,7 +292,7 @@ export function UseItemModal({ item, householdId, onClose, onConsumed }: Props) 
           <div className="w-24">
             <label className="mb-1.5 block text-sm font-medium text-muted">Unit</label>
             <select
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none focus:border-primary"
               value={unit}
               onChange={(e) => setUnit(e.target.value as Unit)}
             >

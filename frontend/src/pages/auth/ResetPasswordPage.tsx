@@ -26,9 +26,7 @@ export function ResetPasswordPage() {
       // same way as any other failed update -- point back at requesting a
       // fresh one rather than trying to distinguish the cause.
       setServerError(
-        err instanceof Error
-          ? err.message
-          : 'This reset link is invalid or has expired.',
+        err instanceof Error ? err.message : 'This reset link is invalid or has expired.',
       )
     }
   }
@@ -43,7 +41,7 @@ export function ResetPasswordPage() {
             <label className="mb-1.5 block text-sm font-medium text-muted">New password</label>
             <input
               type="password"
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
               {...register('password')}
             />
             {errors.password && (
@@ -51,12 +49,10 @@ export function ResetPasswordPage() {
             )}
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-muted">
-              Confirm password
-            </label>
+            <label className="mb-1.5 block text-sm font-medium text-muted">Confirm password</label>
             <input
               type="password"
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
               {...register('confirmPassword')}
             />
             {errors.confirmPassword && (
@@ -66,7 +62,10 @@ export function ResetPasswordPage() {
           {serverError && (
             <div className="text-sm text-danger">
               <p>{serverError}</p>
-              <Link to="/forgot-password" className="font-medium text-primary hover:text-primary-hover">
+              <Link
+                to="/forgot-password"
+                className="font-medium text-primary hover:text-primary-hover"
+              >
                 Request a new link
               </Link>
             </div>

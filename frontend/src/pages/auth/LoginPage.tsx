@@ -36,7 +36,7 @@ export function LoginPage() {
             <label className="mb-1.5 block text-sm font-medium text-muted">Email</label>
             <input
               type="email"
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
               {...register('email')}
             />
             {errors.email && <p className="mt-1.5 text-sm text-danger">{errors.email.message}</p>}
@@ -45,7 +45,7 @@ export function LoginPage() {
             <label className="mb-1.5 block text-sm font-medium text-muted">Password</label>
             <input
               type="password"
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
               {...register('password')}
             />
             {errors.password && (

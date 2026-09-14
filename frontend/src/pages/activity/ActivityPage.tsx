@@ -42,9 +42,11 @@ const FILTERS: { key: string; label: string; types: ActivityType[] }[] = [
 
 const REMOVAL_VERB: Record<string, string> = {
   USED_UP: 'was used up',
+  EMPTY: 'was already empty',
   DISCARDED: 'was thrown out',
   EXPIRED: 'was marked expired',
   LOST: 'was marked lost',
+  VOIDED: 'was voided',
 }
 
 function unitLabel(raw: unknown): string {

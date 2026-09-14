@@ -96,8 +96,15 @@ export interface MeasurementPreference {
   unit: Unit
 }
 
-export type InventoryItemStatus = 'ACTIVE' | 'EMPTY' | 'DISCARDED' | 'EXPIRED' | 'LOST'
-export type RemovalReason = 'DISCARDED' | 'EXPIRED' | 'LOST'
+// DISCARDED/LOST are no longer choosable RemovalReason values (see that
+// type below) but stay valid statuses here for reading rows written
+// before that change.
+export type InventoryItemStatus = 'ACTIVE' | 'EMPTY' | 'DISCARDED' | 'EXPIRED' | 'LOST' | 'VOIDED'
+// Trimmed from five to three: DISCARDED and LOST were mechanically
+// identical to EMPTY (and to each other) with no functional difference
+// anywhere downstream, just more near-synonymous options than the
+// distinction was worth.
+export type RemovalReason = 'EMPTY' | 'EXPIRED' | 'VOIDED'
 
 export interface InventoryItem {
   id: string
@@ -197,8 +204,8 @@ export interface SettlementRecord {
 }
 
 // Mirrors backend/app/schemas/activity.py's ActivityType. ITEM_REMOVED
-// covers all four endings via detail.reason (USED_UP / DISCARDED /
-// EXPIRED / LOST).
+// covers every ending via detail.reason (USED_UP / EMPTY / DISCARDED /
+// EXPIRED / LOST / VOIDED).
 export type ActivityType =
   | 'ITEM_ADDED'
   | 'ITEM_CONSUMED'

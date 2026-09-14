@@ -121,7 +121,7 @@ export const TypeSearchField = forwardRef<TypeSearchFieldHandle, Props>(function
           ref={inputRef}
           type="text"
           placeholder="Search for a food (e.g. milk)"
-          className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+          className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -159,7 +159,7 @@ export const TypeSearchField = forwardRef<TypeSearchFieldHandle, Props>(function
             <div>
               <label className="mb-1.5 block text-sm font-medium text-muted">Unit</label>
               <select
-                className="w-full rounded-control border border-subtle bg-surface px-2 py-2 text-sm text-text"
+                className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field"
                 value={newUnit}
                 onChange={(e) => setNewUnit(e.target.value as Unit)}
               >
@@ -177,7 +177,7 @@ export const TypeSearchField = forwardRef<TypeSearchFieldHandle, Props>(function
             <div>
               <label className="mb-1.5 block text-sm font-medium text-muted">Category</label>
               <select
-                className="w-full rounded-control border border-subtle bg-surface px-2 py-2 text-sm text-text"
+                className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field"
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value as FoodCategory)}
               >

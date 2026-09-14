@@ -37,10 +37,6 @@ class InsufficientQuantityError(Exception):
     pass
 
 
-class MemberNotAllowedError(Exception):
-    pass
-
-
 class FoodDefinitionNotFoundError(Exception):
     pass
 
@@ -194,7 +190,7 @@ def create_manual(
         rpc_result.data[0]["id"] if isinstance(rpc_result.data, list) else rpc_result.data["id"]
     )
     # The RPC returns a bare inventory_items row (no embedding support for
-    # composite-returning functions) — re-fetch enriched for a uniform shape.
+    # composite-returning functions) -- re-fetch enriched for a uniform shape.
     item = get_by_id(household_id, UUID(new_item_id))
     assert item is not None
     _remember_measurement_choice(item.household_food_variant_id, body.preferred_unit)
@@ -300,8 +296,6 @@ def consume(
     except APIError as exc:
         if "INSUFFICIENT_QUANTITY" in str(exc):
             raise InsufficientQuantityError from exc
-        if "MEMBER_NOT_ALLOWED" in str(exc):
-            raise MemberNotAllowedError from exc
         raise
     item = get_by_id(household_id, item_id)
     assert item is not None
@@ -316,6 +310,9 @@ def consume(
 
 
 def discard(household_id: UUID, item_id: UUID, reason: RemovalReason) -> InventoryItem:
+    if reason == RemovalReason.VOIDED:
+        return _void(household_id, item_id)
+
     client = get_service_client()
     result = (
         client.table(_TABLE)
@@ -331,6 +328,60 @@ def discard(household_id: UUID, item_id: UUID, reason: RemovalReason) -> Invento
     # freeze point as consuming it to zero.
     accounting_service.freeze_item_debt(item_id)
     return get_by_id(household_id, item_id)  # type: ignore[return-value]
+
+
+def _void(household_id: UUID, item_id: UUID) -> InventoryItem:
+    """VOIDED covers "this shouldn't count as a real transaction" for any
+    reason (a duplicate add, a typo, given away before anyone touched it) --
+    as opposed to something that happened to real stock, which is what the
+    other four reasons are for. When nothing's actually been logged against
+    it yet (no consumption_events row), there's no real usage history to
+    protect, so this hard-deletes the item and its own purchase_event row
+    instead of leaving a permanent status-flip ghost behind. The moment any
+    usage exists at all, it falls back to the same status-flip every other
+    reason uses -- consumption_events has no delete path (immutable by
+    design, see migration 0024's RLS comment), so a voided item with real
+    usage against it stays exactly as retrievable as a discarded one.
+    """
+    client = get_service_client()
+    item = get_by_id(household_id, item_id)
+    if item is None or item.status != "ACTIVE":
+        raise ValueError("That item doesn't exist or has already been removed")
+
+    usage = (
+        client.table("consumption_events")
+        .select("id", count="exact")
+        .eq("inventory_item_id", str(item_id))
+        .execute()
+    )
+    if (usage.count or 0) > 0:
+        result = (
+            client.table(_TABLE)
+            .update({"status": "VOIDED"})
+            .eq("household_id", str(household_id))
+            .eq("id", str(item_id))
+            .eq("status", "ACTIVE")
+            .execute()
+        )
+        if not result.data:
+            raise ValueError("That item doesn't exist or has already been removed")
+        accounting_service.freeze_item_debt(item_id)
+        return get_by_id(household_id, item_id)  # type: ignore[return-value]
+
+    # No usage at all -- safe to remove outright.
+    # inventory_item_allowed_members cascades automatically; the item's own
+    # purchase_event is 1:1 (every create_manual_inventory_item call inserts
+    # a fresh one, never shared across items) so it's safe to take with it.
+    client.table(_TABLE).delete().eq("household_id", str(household_id)).eq("id", str(item_id)).eq(
+        "status", "ACTIVE"
+    ).execute()
+    client.table("purchase_events").delete().eq("id", str(item.purchase_event_id)).execute()
+
+    # The row is gone, but the caller (and the activity-feed record right
+    # after it) still expects an InventoryItem back -- return the
+    # last-known snapshot, stamped VOIDED, rather than changing the
+    # response contract for this one reason.
+    return item.model_copy(update={"status": "VOIDED"})
 
 
 def update_item(
@@ -664,23 +715,39 @@ def _post_usage_correction_adjustments(
     old_usage[corrected_member_id] = old_usage.get(corrected_member_id, Decimal(0)) - delta_base
 
     cost = Decimal(str(item.cost))
+
+    # Usage can now include members outside allowed_member_ids (migration
+    # 0036) -- pull their slice out at unit_cost the same way freeze_item_debt
+    # does, both before and after the correction, so correcting an outsider's
+    # logged amount actually moves their billed amount instead of silently
+    # doing nothing (compute_item_shares only ever knows about member_ids).
+    old_remaining_qty, old_remaining_cost, old_insider_usage, old_outsider_shares = (
+        accounting_service.bill_outsider_usage(total_base, cost, member_ids, dict(old_usage))
+    )
+    new_remaining_qty, new_remaining_cost, new_insider_usage, new_outsider_shares = (
+        accounting_service.bill_outsider_usage(total_base, cost, member_ids, dict(new_usage))
+    )
     old_shares = accounting_service.compute_item_shares(
-        total_quantity=total_base,
-        total_cost=cost,
+        total_quantity=old_remaining_qty,
+        total_cost=old_remaining_cost,
         member_ids=member_ids,
         buyer_id=buyer_id,
-        usage_by_member=dict(old_usage),
+        usage_by_member=old_insider_usage,
     )
+    for member_id, amount in old_outsider_shares.items():
+        old_shares[member_id] = old_shares.get(member_id, Decimal(0)) + amount
     new_shares = accounting_service.compute_item_shares(
-        total_quantity=total_base,
-        total_cost=cost,
+        total_quantity=new_remaining_qty,
+        total_cost=new_remaining_cost,
         member_ids=member_ids,
         buyer_id=buyer_id,
-        usage_by_member=dict(new_usage),
+        usage_by_member=new_insider_usage,
     )
+    for member_id, amount in new_outsider_shares.items():
+        new_shares[member_id] = new_shares.get(member_id, Decimal(0)) + amount
 
     entries = []
-    for member_id in member_ids:
+    for member_id in set(old_shares) | set(new_shares):
         if member_id == buyer_id:
             continue
         diff = new_shares.get(member_id, Decimal(0)) - old_shares.get(member_id, Decimal(0))

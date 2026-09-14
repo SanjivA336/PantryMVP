@@ -4,14 +4,13 @@ import {
   CalendarX,
   ChevronDown,
   ChevronRight,
-  HelpCircle,
   LayoutGrid,
   MapPin,
   Package,
+  PackageX,
   Pencil,
   Plus,
   Rows3,
-  Trash2,
   UtensilsCrossed,
 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -39,10 +38,10 @@ import { UNIT_LABELS } from '../../lib/units'
 import { EmptyState } from '../../components/EmptyState'
 import { UseItemModal } from './UseItemModal'
 import type {
-  AccountingType,
   FoodCategory,
   HouseholdWarnings,
   InventoryItem,
+  Member,
   RemovalReason,
   StorageLocation,
   StorageLocationType,
@@ -50,13 +49,21 @@ import type {
 import { storageLocationSchema, type StorageLocationForm } from '../storage/schema'
 import { WarningsButton } from './WarningsButton'
 
-const ACCOUNTING_TYPE_LABELS: Record<AccountingType, string> = {
-  PERSONAL: 'Personal',
-  SHARED: 'Shared',
-}
+// Just the two reasons that come up often enough to earn their own button.
+// DISCARDED and LOST still work as API-level reasons (nothing stops a
+// future UI from offering them again), they just don't have a dedicated
+// control here -- to the backend all removal reasons are identical (a
+// status change with no consumption_events row, so whatever's left splits
+// equally across the item's allowed members rather than being billed to
+// whoever clicked the button); the only real difference is which word shows
+// up afterward, on the item and in the activity feed.
+const REMOVAL_REASONS: { reason: RemovalReason; label: string; icon: typeof Package }[] = [
+  { reason: 'EXPIRED', label: 'Mark expired', icon: CalendarX },
+  { reason: 'EMPTY', label: 'Mark empty', icon: PackageX },
+]
 
 const inputClass =
-  'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+  'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 const addChoiceClass =
   'flex flex-1 flex-col items-center justify-center gap-2 rounded-card border border-dashed border-subtle p-6 text-sm font-medium text-muted transition-colors hover:border-subtle-strong hover:text-text'
@@ -125,6 +132,13 @@ export function InventoryPage() {
   const { data: warnings, reload: reloadWarnings } = useHouseholdResource<HouseholdWarnings>(
     householdId ? `/api/households/${householdId}/warnings` : null,
   )
+  const { data: members } = useHouseholdResource<Member[]>(
+    householdId ? `/api/households/${householdId}/members` : null,
+  )
+  const myMemberId = useMemo(
+    () => members?.find((m) => m.user_id === user?.id)?.id,
+    [members, user?.id],
+  )
   // Another member consuming/adding/discarding an item on their own device
   // shows up here without a manual refresh -- one channel driving both
   // resources, rather than opening a second subscription to the same table.
@@ -139,6 +153,12 @@ export function InventoryPage() {
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<FoodCategory | ''>('')
   const [storageTypeFilter, setStorageTypeFilter] = useState<StorageLocationType | ''>('')
+  // Which filter's dropdown is open, if any -- icon-only triggers (no text
+  // label to show the current choice) both need somewhere to reveal the
+  // full option list, so they share one popover pattern instead of a
+  // native <select> now that they're too narrow to also show their
+  // selected option's text.
+  const [openFilter, setOpenFilter] = useState<'category' | 'storage' | null>(null)
   const [addPickerOpen, setAddPickerOpen] = useState(false)
   const [storageModal, setStorageModal] = useState<
     { mode: 'add' } | { mode: 'edit'; location: StorageLocation } | null
@@ -331,9 +351,15 @@ export function InventoryPage() {
           <div className="flex flex-wrap items-center gap-2">
             <CategoryDot category={item.category} />
             <span className="font-medium">{item.food_name}</span>
-            {item.accounting_type !== 'PERSONAL' && (
-              <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-xs text-muted">
-                {ACCOUNTING_TYPE_LABELS[item.accounting_type]}
+            {/* Inverse-only: most items are shared with everyone by
+                default, so flagging that plainly stated fact on every
+                single card would be noise. The one thing worth a flag is
+                the exception -- and even then, "not yours" describes
+                whose share this counts against, not a hard rule; the
+                actual owner can still say "go ahead and have some." */}
+            {myMemberId && !item.allowed_member_ids.includes(myMemberId) && (
+              <span className="rounded-pill bg-warning-soft px-2 py-0.5 text-xs text-warning">
+                Not yours
               </span>
             )}
           </div>
@@ -360,30 +386,18 @@ export function InventoryPage() {
             Use
           </button>
           <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              title="Mark expired"
-              onClick={() => discard(item, 'EXPIRED')}
-              className="rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
-            >
-              <CalendarX size={16} strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              title="Mark lost"
-              onClick={() => discard(item, 'LOST')}
-              className="rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
-            >
-              <HelpCircle size={16} strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              title="Discard"
-              onClick={() => discard(item, 'DISCARDED')}
-              className="rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
-            >
-              <Trash2 size={16} strokeWidth={1.75} />
-            </button>
+            {REMOVAL_REASONS.map(({ reason, label, icon: Icon }) => (
+              <button
+                key={reason}
+                type="button"
+                title={label}
+                aria-label={label}
+                onClick={() => void discard(item, reason)}
+                className="rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+              >
+                <Icon size={16} strokeWidth={1.75} />
+              </button>
+            ))}
           </div>
         </div>
       </li>
@@ -430,89 +444,119 @@ export function InventoryPage() {
       </div>
 
       <div className="sticky top-0 z-10 -mx-4 -mt-1 bg-bg px-4 pb-3 pt-1 md:-mx-8 md:px-8">
-        <div className="flex flex-col gap-2 rounded-card border border-subtle bg-surface p-2 shadow-card sm:flex-row sm:items-center">
+        <div className="flex items-center gap-2 rounded-card border border-subtle bg-surface p-2 shadow-card">
           <input
             type="text"
             placeholder="Search inventory…"
-            className="min-w-0 flex-3 rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+            className="min-w-0 flex-1 rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <div className="relative flex-1">
-            <UtensilsCrossed
-              size={15}
-              strokeWidth={1.75}
-              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-faint"
-            />
-            <select
-              className={`w-full rounded-control border bg-surface-2 py-2 pl-7 pr-2 text-sm text-text outline-none focus:border-primary ${
+
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setOpenFilter(openFilter === 'category' ? null : 'category')}
+              title="Filter by food type"
+              aria-label="Filter by food type"
+              className={`rounded-control border p-2 shadow-field transition-colors ${
                 categoryFilter ? FOOD_CATEGORY_BORDER_CLASSES[categoryFilter] : 'border-subtle'
-              }`}
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value as FoodCategory | '')}
+              } bg-field text-text hover:bg-surface-hover`}
             >
-              <option value="">All food types</option>
-              {FOOD_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {FOOD_CATEGORY_LABELS[category]}
-                </option>
-              ))}
-            </select>
+              <UtensilsCrossed size={16} strokeWidth={1.75} />
+            </button>
+            {openFilter === 'category' && (
+              <div className="absolute right-0 z-20 mt-1 max-h-72 w-48 overflow-y-auto rounded-card border border-subtle bg-surface-2 py-1 shadow-raised">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategoryFilter('')
+                    setOpenFilter(null)
+                  }}
+                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${!categoryFilter ? 'font-medium text-primary' : 'text-muted'}`}
+                >
+                  All food types
+                </button>
+                {FOOD_CATEGORIES.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => {
+                      setCategoryFilter(category)
+                      setOpenFilter(null)
+                    }}
+                    className={`block w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${categoryFilter === category ? 'font-medium text-primary' : 'text-muted'}`}
+                  >
+                    {FOOD_CATEGORY_LABELS[category]}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+
           {!storageLocationId && (
-            <div className="relative flex-1">
-              <MapPin
-                size={15}
-                strokeWidth={1.75}
-                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-faint"
-              />
-              <select
-                className={`w-full rounded-control border bg-surface-2 py-2 pl-7 pr-2 text-sm text-text outline-none focus:border-primary ${
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setOpenFilter(openFilter === 'storage' ? null : 'storage')}
+                title="Filter by storage type"
+                aria-label="Filter by storage type"
+                className={`rounded-control border p-2 shadow-field transition-colors ${
                   storageTypeFilter
                     ? STORAGE_TYPE_BORDER_CLASSES[storageTypeFilter]
                     : 'border-subtle'
-                }`}
-                value={storageTypeFilter}
-                onChange={(e) => setStorageTypeFilter(e.target.value as StorageLocationType | '')}
+                } bg-field text-text hover:bg-surface-hover`}
               >
-                <option value="">All storage types</option>
-                {STORAGE_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {STORAGE_TYPE_LABELS[type]}
-                  </option>
-                ))}
-              </select>
+                <MapPin size={16} strokeWidth={1.75} />
+              </button>
+              {openFilter === 'storage' && (
+                <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-card border border-subtle bg-surface-2 py-1 shadow-raised">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStorageTypeFilter('')
+                      setOpenFilter(null)
+                    }}
+                    className={`block w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${!storageTypeFilter ? 'font-medium text-primary' : 'text-muted'}`}
+                  >
+                    All storage types
+                  </button>
+                  {STORAGE_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => {
+                        setStorageTypeFilter(type)
+                        setOpenFilter(null)
+                      }}
+                      className={`block w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${storageTypeFilter === type ? 'font-medium text-primary' : 'text-muted'}`}
+                    >
+                      {STORAGE_TYPE_LABELS[type]}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+
           {!storageLocationId && (
-            <div className="flex shrink-0 items-center gap-0.5 rounded-control border border-subtle bg-surface-2 p-0.5">
-              <button
-                type="button"
-                onClick={() => changeView('flat')}
-                title="Flat grid"
-                aria-label="Flat grid view"
-                aria-pressed={view === 'flat'}
-                className={`rounded-control p-1.5 transition-colors ${
-                  view === 'flat' ? 'bg-primary-soft text-primary' : 'text-faint hover:text-text'
-                }`}
-              >
+            <button
+              type="button"
+              onClick={() => changeView(view === 'flat' ? 'sectional' : 'flat')}
+              title={
+                view === 'flat' ? 'Switch to grouped-by-storage view' : 'Switch to flat grid view'
+              }
+              aria-label={
+                view === 'flat' ? 'Switch to grouped-by-storage view' : 'Switch to flat grid view'
+              }
+              className="shrink-0 rounded-control border border-subtle bg-field p-2 text-text shadow-field transition-colors hover:bg-surface-hover"
+            >
+              {view === 'flat' ? (
                 <LayoutGrid size={16} strokeWidth={1.75} />
-              </button>
-              <button
-                type="button"
-                onClick={() => changeView('sectional')}
-                title="Grouped by storage"
-                aria-label="Grouped by storage view"
-                aria-pressed={view === 'sectional'}
-                className={`rounded-control p-1.5 transition-colors ${
-                  view === 'sectional'
-                    ? 'bg-primary-soft text-primary'
-                    : 'text-faint hover:text-text'
-                }`}
-              >
+              ) : (
                 <Rows3 size={16} strokeWidth={1.75} />
-              </button>
-            </div>
+              )}
+            </button>
           )}
         </div>
       </div>
@@ -690,6 +734,7 @@ export function InventoryPage() {
         <UseItemModal
           item={usingItem}
           householdId={householdId!}
+          myMemberId={myMemberId}
           onClose={() => setUsingItem(null)}
           onConsumed={reloadAll}
         />

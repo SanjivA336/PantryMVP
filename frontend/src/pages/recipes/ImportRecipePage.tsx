@@ -83,8 +83,8 @@ export function ImportRecipePage() {
       <div className="mx-auto max-w-2xl">
         <h2 className="mb-1 text-xl font-semibold">Review imported recipe</h2>
         <p className="mb-4 text-sm text-muted">
-          Check the AI's work below, especially quantities and units, then pick a real food for
-          each ingredient before saving.
+          Check the AI's work below, especially quantities and units, then pick a real food for each
+          ingredient before saving.
         </p>
         <RecipeForm
           initial={draftRecipeToFormInitial(draft)}
@@ -141,7 +141,7 @@ export function ImportRecipePage() {
         <textarea
           rows={10}
           placeholder="Paste the full recipe text here…"
-          className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+          className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -149,15 +149,15 @@ export function ImportRecipePage() {
         <input
           type="url"
           placeholder="https://example.com/some-recipe"
-          className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+          className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
       ) : (
         <div>
           <p className="mb-2 text-sm text-muted">
-            Import a .json file someone exported from their own recipe box (see the Export
-            button on any recipe's page).
+            Import a .json file someone exported from their own recipe box (see the Export button on
+            any recipe's page).
           </p>
           <input
             ref={fileInputRef}

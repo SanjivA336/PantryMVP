@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import type { Member } from '../../types/entities'
 
 const inputClass =
-  'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+  'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 function BurrowSettingsCard({ householdId }: { householdId: string }) {
   const { user } = useAuth()

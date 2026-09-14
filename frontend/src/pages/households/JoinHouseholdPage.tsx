@@ -38,7 +38,7 @@ export function JoinHouseholdPage() {
               type="text"
               placeholder="ABCD2345"
               maxLength={8}
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm uppercase tracking-widest text-text outline-none placeholder:text-faint placeholder:normal-case placeholder:tracking-normal focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm uppercase tracking-widest text-text shadow-field outline-none placeholder:text-faint placeholder:normal-case placeholder:tracking-normal focus:border-primary"
               {...register('join_code')}
             />
             {errors.join_code && (
@@ -50,7 +50,7 @@ export function JoinHouseholdPage() {
             <input
               type="text"
               placeholder="Alex"
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
               {...register('nickname')}
             />
             {errors.nickname && (

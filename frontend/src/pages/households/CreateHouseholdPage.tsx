@@ -37,7 +37,7 @@ export function CreateHouseholdPage() {
             <input
               type="text"
               placeholder="3BR Apartment on Main St"
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
               {...register('name')}
             />
             {errors.name && <p className="mt-1.5 text-sm text-danger">{errors.name.message}</p>}
@@ -48,7 +48,7 @@ export function CreateHouseholdPage() {
             </label>
             <input
               type="text"
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
               {...register('address')}
             />
           </div>
@@ -57,7 +57,7 @@ export function CreateHouseholdPage() {
             <input
               type="text"
               placeholder="Alex"
-              className="w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary"
+              className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
               {...register('nickname')}
             />
             {errors.nickname && (

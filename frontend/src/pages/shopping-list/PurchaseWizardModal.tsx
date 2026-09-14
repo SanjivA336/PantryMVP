@@ -33,7 +33,7 @@ interface Draft {
 }
 
 const inputClass =
-  'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+  'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 function draftFromItem(
   item: PurchaseSessionItem,
@@ -335,7 +335,7 @@ export function PurchaseWizardModal({
                         value={draft.unit}
                         onChange={(e) => setDraft({ ...draft, unit: e.target.value as Unit })}
                       >
-                        <option value="">—</option>
+                        <option value="">Unit…</option>
                         {unitOptions.map((u) => (
                           <option key={u} value={u}>
                             {UNIT_LABELS[u]}
@@ -383,7 +383,7 @@ export function PurchaseWizardModal({
                       value={draft.storageLocationId}
                       onChange={(e) => setDraft({ ...draft, storageLocationId: e.target.value })}
                     >
-                      <option value="">—</option>
+                      <option value="">Storage…</option>
                       {storageLocations.map((loc) => (
                         <option key={loc.id} value={loc.id}>
                           {loc.name}

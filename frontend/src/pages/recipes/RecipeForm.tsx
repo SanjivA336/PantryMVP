@@ -68,7 +68,7 @@ const emptyIngredientRow = (): IngredientRow => ({ food: null, quantity: '', uni
 // utilities by CSS declaration order (not class-string order), so pairing
 // "w-20" with a "w-full"-bearing constant silently lets w-full win.
 const fieldClass =
-  'rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+  'rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 const inputClass = `w-full ${fieldClass}`
 
 interface Props {

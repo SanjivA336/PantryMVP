@@ -322,19 +322,19 @@ async def test_consume_rejects_a_cross_dimension_unit(client, fake_members, fake
     assert fake_inventory[item.id].quantity == Decimal("1000")
 
 
-async def test_consume_by_disallowed_member_is_rejected(
-    client, fake_members, fake_inventory, monkeypatch
+async def test_consume_by_member_outside_allowed_list_still_succeeds(
+    client, fake_members, fake_inventory
 ) -> None:
+    # allowed_member_ids only decides how the item's cost is split, not who's
+    # permitted to log usage -- migration 0036 dropped that gate, since the
+    # buyer can always say "sure, go ahead" to someone off the list and still
+    # wants it logged. Billing for usage outside the list is handled
+    # separately in accounting_service.bill_outsider_usage.
     household_id = uuid.uuid4()
     user_id = uuid.uuid4()
     fake_members.seed(make_member(household_id, user_id))
-    item = _item(household_id, quantity=Decimal("5"))
+    item = _item(household_id, quantity=Decimal("5"), allowed_member_ids=[uuid.uuid4()])
     fake_inventory[item.id] = item
-
-    def consume(household_id, member_id, item_id, quantity_used):
-        raise inventory_service.MemberNotAllowedError
-
-    monkeypatch.setattr("app.services.inventory_items.consume", consume)
 
     response = await client.post(
         f"/api/households/{household_id}/inventory-items/{item.id}/consume",
@@ -342,7 +342,8 @@ async def test_consume_by_disallowed_member_is_rejected(
         headers=auth_header(user_id),
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json()["data"]["quantity"] == "3"
 
 
 async def test_discard_nonactive_item_returns_404(client, fake_members, fake_inventory) -> None:
@@ -354,7 +355,7 @@ async def test_discard_nonactive_item_returns_404(client, fake_members, fake_inv
 
     response = await client.delete(
         f"/api/households/{household_id}/inventory-items/{item.id}",
-        params={"reason": "DISCARDED"},
+        params={"reason": "EXPIRED"},
         headers=auth_header(user_id),
     )
 

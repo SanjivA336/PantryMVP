@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { TriangleAlert } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { CopyButton } from '../../components/CopyButton'
 import { FieldTooltip } from '../../components/FieldTooltip'
 import { Modal } from '../../components/Modal'
 import { useAuth } from '../../hooks/useAuth'
@@ -13,7 +14,7 @@ import { updateHouseholdSchema, type UpdateHouseholdForm } from '../households/s
 import type { Household, Member, UnitSystem } from '../../types/entities'
 
 const inputClass =
-  'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+  'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 interface Props {
   members: Member[] | null
@@ -104,6 +105,15 @@ export function BurrowTab({ members }: Props) {
           <p className="text-text">{household.address || 'Not set'}</p>
         </div>
         <div>
+          <p className="mb-1.5 text-sm font-medium text-muted">Join code</p>
+          <div className="flex items-center gap-2">
+            <p className="rounded-control border border-subtle bg-field px-2 py-2 font-mono text-sm tracking-widest text-text shadow-field">
+              {household.join_code}
+            </p>
+            <CopyButton value={household.join_code} label="Copy join code" size={16} />
+          </div>
+        </div>
+        <div>
           <p className="text-sm font-medium text-muted">Default measurement system</p>
           <p className="text-text">
             {UNIT_SYSTEM_LABELS[household.preferred_unit_system]} (
@@ -126,6 +136,16 @@ export function BurrowTab({ members }: Props) {
         <div>
           <label className="mb-1.5 block text-sm font-medium text-muted">Address (optional)</label>
           <input type="text" className={inputClass} {...register('address')} />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-muted">Join code</label>
+          <div className="flex items-center gap-2">
+            <p className="rounded-control border border-subtle bg-field px-2 py-2 font-mono text-sm tracking-widest text-text shadow-field">
+              {household.join_code}
+            </p>
+            <CopyButton value={household.join_code} label="Copy join code" size={16} />
+          </div>
         </div>
 
         <div>

@@ -28,7 +28,7 @@ interface ItemEdit {
 }
 
 const inputClass =
-  'rounded-control border border-subtle bg-surface-2 px-2 py-1.5 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+  'rounded-control border border-subtle bg-field px-2 py-1.5 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 export function ReviewReceiptSessionPage() {
   const { householdId, sessionId } = useParams<{ householdId: string; sessionId: string }>()

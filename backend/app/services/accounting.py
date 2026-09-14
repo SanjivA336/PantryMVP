@@ -56,8 +56,7 @@ def compute_item_shares(
         over_this_round = [
             member_id
             for member_id in pool
-            if usage_by_member.get(member_id) is not None
-            and usage_by_member[member_id] > allotment  # type: ignore[operator]
+            if usage_by_member.get(member_id) is not None and usage_by_member[member_id] > allotment  # type: ignore[operator]
         ]
         if not over_this_round:
             for member_id in pool:
@@ -76,6 +75,57 @@ def compute_item_shares(
         for member_id in member_ids
         if member_id != buyer_id
     }
+
+
+def bill_outsider_usage(
+    total_quantity: Decimal,
+    total_cost: Decimal,
+    member_ids: list[UUID],
+    usage_by_member: dict[UUID, Decimal | None],
+) -> tuple[Decimal, Decimal, dict[UUID, Decimal | None], dict[UUID, Decimal]]:
+    """Usage logged by someone outside the item's allowed_member_ids (a
+    one-off "sure, go ahead" that still got recorded -- see migration 0036,
+    which dropped the hard block on this) is billed at cost for exactly
+    what they used, the same way anyone's overage already is: they never
+    had a formal allotment to measure against, so the whole amount counts
+    as over.
+
+    Pulled out *before* compute_item_shares runs, rather than taught to
+    that function directly, so compute_item_shares never has to know
+    anyone outside member_ids exists: each outsider's usage and its
+    matching slice of quantity/cost are removed from the pool up front, at
+    the item's own unit_cost, and the real allowed members split what's
+    left exactly as if the outsider's usage had simply never happened to
+    the physical item.
+
+    Returns (remaining_quantity, remaining_cost, insider_usage_by_member,
+    outsider_shares) -- pass the first three straight into
+    compute_item_shares, then merge outsider_shares into its result.
+    """
+    if total_quantity <= 0:
+        return total_quantity, total_cost, usage_by_member, {}
+
+    unit_cost = total_cost / total_quantity
+    member_id_set = set(member_ids)
+    insider_usage: dict[UUID, Decimal | None] = {}
+    outsider_shares: dict[UUID, Decimal] = {}
+    outsider_quantity = Decimal(0)
+
+    for member_id, used in usage_by_member.items():
+        if member_id in member_id_set:
+            insider_usage[member_id] = used
+            continue
+        if not used or used <= 0:
+            continue
+        outsider_quantity += used
+        outsider_shares[member_id] = outsider_shares.get(member_id, Decimal(0)) + used * unit_cost
+
+    return (
+        total_quantity - outsider_quantity,
+        total_cost - outsider_quantity * unit_cost,
+        insider_usage,
+        outsider_shares,
+    )
 
 
 def freeze_item_debt(item_id: UUID) -> None:
@@ -135,13 +185,18 @@ def freeze_item_debt(item_id: UUID) -> None:
         used = Decimal(str(row_["quantity_used"]))
         usage_by_member[member_id] = (usage_by_member.get(member_id) or Decimal(0)) + used
 
+    remaining_quantity, remaining_cost, insider_usage, outsider_shares = bill_outsider_usage(
+        Decimal(str(row["total_quantity"])), Decimal(str(row["cost"])), member_ids, usage_by_member
+    )
     shares = compute_item_shares(
-        total_quantity=Decimal(str(row["total_quantity"])),
-        total_cost=Decimal(str(row["cost"])),
+        total_quantity=remaining_quantity,
+        total_cost=remaining_cost,
         member_ids=member_ids,
         buyer_id=buyer_id,
-        usage_by_member=usage_by_member,
+        usage_by_member=insider_usage,
     )
+    for member_id, amount in outsider_shares.items():
+        shares[member_id] = shares.get(member_id, Decimal(0)) + amount
 
     # Claim the freeze with a compare-and-swap (only-if-still-null) update
     # *before* posting anything -- consume() can end up calling this twice

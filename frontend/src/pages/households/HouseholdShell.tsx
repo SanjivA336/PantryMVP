@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
   Activity,
-  Check,
   ChefHat,
-  Copy,
   Home,
   LogOut,
   MoreHorizontal,
@@ -16,6 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { apiClient } from '../../lib/apiClient'
+import { CopyButton } from '../../components/CopyButton'
 import { useAuth } from '../../hooks/useAuth'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import type { Household } from '../../types/entities'
@@ -124,7 +123,7 @@ export function HouseholdShell() {
                   <p className="font-mono text-xs tracking-wide text-faint">
                     {household.join_code}
                   </p>
-                  <CopyCodeButton code={household.join_code} />
+                  <CopyButton value={household.join_code} label="Copy join code" />
                 </div>
               )}
             </div>
@@ -177,17 +176,34 @@ export function HouseholdShell() {
       </aside>
 
       {/* Mobile top bar */}
-      <header className="flex items-center justify-between border-b border-subtle bg-surface px-4 py-3 md:hidden">
-        <div>
-          <p className="truncate text-sm font-semibold">{household?.name ?? 'Burrow'}</p>
-          {household && (
-            <div className="mt-0.5 flex items-center gap-1">
-              <p className="font-mono text-[11px] tracking-wide text-faint">
-                {household.join_code}
-              </p>
-              <CopyCodeButton code={household.join_code} />
-            </div>
-          )}
+      <header className="flex items-center justify-between gap-2 border-b border-subtle bg-surface px-4 py-3 md:hidden">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate('/', { state: { forcePicker: true } })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              navigate('/', { state: { forcePicker: true } })
+            }
+          }}
+          title="Switch kitchens"
+          className="group -m-1 flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-control p-1 transition-colors hover:bg-surface-hover"
+        >
+          <BurrowLogo className="h-7 w-7 shrink-0 text-text transition-colors group-hover:text-primary" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold transition-colors group-hover:text-primary">
+              {household?.name ?? 'Burrow'}
+            </p>
+            {household && (
+              <div className="mt-0.5 flex items-center gap-1">
+                <p className="font-mono text-[11px] tracking-wide text-faint">
+                  {household.join_code}
+                </p>
+                <CopyButton value={household.join_code} label="Copy join code" />
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <NavLink
@@ -271,39 +287,6 @@ export function HouseholdShell() {
         </div>
       )}
     </div>
-  )
-}
-
-function CopyCodeButton({ code }: { code: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Clipboard API can be unavailable (e.g. insecure context) -- a
-      // silent no-op is fine for this low-stakes convenience action.
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        // The sidebar's desktop header wraps this in a clickable "switch
-        // kitchens" region -- without this, copying the code would also
-        // navigate away.
-        e.stopPropagation()
-        void copy()
-      }}
-      title="Copy join code"
-      aria-label="Copy join code"
-      className="rounded-control p-0.5 text-faint transition-colors hover:bg-surface-hover hover:text-text"
-    >
-      {copied ? <Check size={12} strokeWidth={2.25} /> : <Copy size={12} strokeWidth={1.75} />}
-    </button>
   )
 }
 

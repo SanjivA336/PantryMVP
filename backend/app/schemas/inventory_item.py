@@ -12,19 +12,61 @@ from app.schemas.units import Unit
 class InventoryItemStatus(StrEnum):
     ACTIVE = "ACTIVE"
     EMPTY = "EMPTY"
+    # DISCARDED and LOST are no longer reachable from RemovalReason below
+    # (see its docstring) -- kept here, and left in the Postgres enum,
+    # purely so existing rows written before that change (and the Postgres
+    # enum type itself, which can't cleanly drop a value) keep reading back
+    # correctly. Never written by any code path anymore.
     DISCARDED = "DISCARDED"
     EXPIRED = "EXPIRED"
     LOST = "LOST"
+    # A distinct terminal status from EMPTY/EXPIRED: this item's *purchase*
+    # shouldn't count as a real transaction at all, for whatever reason (a
+    # duplicate add, a typo, given away, taken by someone else before
+    # anyone touched it) -- as opposed to something happening to real
+    # stock. See RemovalReason.VOIDED / services/inventory_items.py's
+    # _void for why this sometimes ends in an actual row deletion and
+    # sometimes doesn't.
+    VOIDED = "VOIDED"
 
 
 class RemovalReason(StrEnum):
-    """Manual removal reasons — excludes ACTIVE/EMPTY, which are never a
-    user-selected "why are you removing this" answer (EMPTY is automatic,
-    ACTIVE isn't a removal at all)."""
+    """Manual removal reasons -- excludes ACTIVE, which isn't a removal at
+    all. Trimmed to just these three: EMPTY and EXPIRED cover the two
+    "something happened to real stock" cases that actually come up often
+    enough to be worth their own labels; DISCARDED and LOST used to be
+    separate options but were mechanically identical to each other and to
+    EMPTY (a same status-flip, no consumption_events row written) with no
+    functional difference anywhere downstream -- just more near-synonymous
+    buttons than the distinction was worth. They're still valid
+    InventoryItemStatus values for reading old rows, just not choosable
+    for a new removal.
 
-    DISCARDED = "DISCARDED"
+    EMPTY is distinct from the automatic EMPTY the consume_inventory_item
+    DB trigger sets when a logged use brings quantity to zero: this one is
+    for "I found it already empty," with no specific use to attribute to
+    anyone. Both EMPTY and EXPIRED land on their matching status and go
+    through the same discard() freeze-and-done path -- no
+    consumption_events row is written either way, so the item's remaining
+    share (if any) splits equally across its allowed members rather than
+    being billed to whoever clicked the button.
+
+    VOIDED is for "this shouldn't count as a real transaction," for any
+    reason -- not just a data-entry mistake. Unlike EMPTY/EXPIRED, it's
+    not always just a status flip: if nothing has been logged against the
+    item yet (no consumption_events row), _void hard-deletes it and its own
+    purchase_event outright, since there's no real usage history to
+    protect. The moment any usage exists, it falls back to the same
+    status-flip the other reasons use -- consumption_events has no
+    update/delete policy and its FK to inventory_items is ON DELETE
+    RESTRICT (immutable by design, same as ledger_entries/purchase_events),
+    so an item with any usage logged can't be hard-deleted without either
+    violating that immutability or silently discarding a real usage record.
+    """
+
+    EMPTY = "EMPTY"
     EXPIRED = "EXPIRED"
-    LOST = "LOST"
+    VOIDED = "VOIDED"
 
 
 class InventoryItem(BaseModel):
@@ -54,12 +96,12 @@ class InventoryItem(BaseModel):
     created_at: datetime
     updated_at: datetime
     # A label on this specific physical item (e.g. "HEB milk" vs "Costco
-    # milk" for two jugs that are both Whole Milk underneath) — distinct
+    # milk" for two jugs that are both Whole Milk underneath) -- distinct
     # from food_name below, which is what actually displays (this item's
     # own override if set, else the food's name).
     name_override: str | None
-    # Resolved via joins in the service layer — never stored directly on this
-    # table — so the UI can show "Whole Milk" / "Garage Fridge" without a
+    # Resolved via joins in the service layer -- never stored directly on this
+    # table -- so the UI can show "Whole Milk" / "Garage Fridge" without a
     # separate round-trip per item.
     food_name: str
     # The underlying food definition's own name, always -- unlike food_name,
@@ -88,7 +130,7 @@ class CreateInventoryItemRequest(BaseModel):
     best_by_date: date | None = None
     allowed_member_ids: list[UUID] = Field(min_length=1)
     # Optional: falls back to the chosen food definition's accounting_type_default
-    # when omitted (resolved in the service layer, not the RPC — this is a
+    # when omitted (resolved in the service layer, not the RPC -- this is a
     # product-level fallback decision, not a database invariant).
     accounting_type: AccountingType | None = None
     # A per-item label (see InventoryItem.name_override) -- not the food's

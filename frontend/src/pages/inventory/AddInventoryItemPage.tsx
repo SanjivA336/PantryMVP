@@ -26,14 +26,14 @@ import {
 } from './schema'
 
 const inputClass =
-  'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+  'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 // Same field, but with a swappable border color -- used for fields that can
 // show the "autofilled and not yet edited" indicator (a thin burrow-green
 // border, cleared the instant the user edits the field, even back to the
 // same value it already had).
 const fieldClass = (autofilled: boolean) =>
-  `w-full rounded-control border ${autofilled ? 'border-primary' : 'border-subtle'} bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary`
+  `w-full rounded-control border ${autofilled ? 'border-primary' : 'border-subtle'} bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary`
 
 function todayPlusDays(days: number): string {
   const d = new Date()
@@ -393,7 +393,7 @@ export function AddInventoryItemPage() {
               type="number"
               step="any"
               placeholder="Amount"
-              className="w-full rounded-control rounded-r-none border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:z-10 focus:border-primary"
+              className="w-full rounded-control rounded-r-none border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:z-10 focus:border-primary"
               {...register('quantity')}
             />
             <input

@@ -19,6 +19,14 @@
   --color-surface-2: #1d201f;
   --color-surface-hover: #222524;
 
+  /* Form control fill -- matches the page background exactly (not a
+     separate, darker shade); --shadow-field's inset shadow is what actually
+     reads as "recessed," so a field always looks sunken relative to
+     whatever it's sitting on (a page, a card, a modal) without needing its
+     own distinct fill color. */
+  --color-field: var(--color-bg);
+  --shadow-field: inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+
   /* Borders -- hairline, low-contrast on purpose */
   --color-subtle: #272a29;
   --color-subtle-strong: #343937;

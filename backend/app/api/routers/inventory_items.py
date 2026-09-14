@@ -293,11 +293,6 @@ def consume_inventory_item(
             status.HTTP_400_BAD_REQUEST,
             "You can't use more than what's left",
         ) from exc
-    except inventory_service.MemberNotAllowedError as exc:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            "You're not one of the people allowed to use this item",
-        ) from exc
 
     # Record what the human actually entered, not the converted-to-item-unit
     # value -- "used 1 cup" reads better than "used 236.588 ml".
@@ -330,10 +325,10 @@ def consume_inventory_item(
 def discard_inventory_item(
     household_id: UUID,
     item_id: UUID,
-    reason: RemovalReason = Query(default=RemovalReason.DISCARDED),
+    reason: RemovalReason = Query(default=RemovalReason.EMPTY),
     member: Member = Depends(require_household_membership),
 ) -> Envelope[InventoryItem]:
-    # A query param, not a request body — DELETE-with-a-body is against HTTP
+    # A query param, not a request body -- DELETE-with-a-body is against HTTP
     # convention (some proxies/CDNs silently strip it), and httpx's own test
     # client doesn't support it on .delete() either.
     try:

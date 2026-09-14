@@ -36,7 +36,7 @@ import { addShoppingListSectionSchema, type AddShoppingListSectionForm } from '.
 import { PurchaseWizardModal } from './PurchaseWizardModal'
 
 const inputClass =
-  'w-full rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none placeholder:text-faint focus:border-primary'
+  'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
 
 const STOCK_REASON_LABEL: Record<string, string> = {
   OUT_OF_STOCK: 'Out of stock',
@@ -534,7 +534,7 @@ export function ShoppingListPage() {
                           if (e.key === 'Enter') saveEditSection(section)
                           if (e.key === 'Escape') cancelEditSection()
                         }}
-                        className="min-w-0 flex-1 rounded-control border border-subtle bg-surface-2 px-2 py-1 text-sm font-semibold text-text outline-none focus:border-primary"
+                        className="min-w-0 flex-1 rounded-control border border-subtle bg-field px-2 py-1 text-sm font-semibold text-text shadow-field outline-none focus:border-primary"
                       />
                     ) : (
                       <h3 className="flex-1 truncate text-sm font-semibold text-muted">

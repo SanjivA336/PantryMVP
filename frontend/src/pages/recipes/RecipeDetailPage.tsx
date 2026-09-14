@@ -191,7 +191,7 @@ export function RecipeDetailPage() {
         <input
           type="number"
           min={1}
-          className="w-20 rounded-control border border-subtle bg-surface-2 px-2 py-2 text-sm text-text outline-none focus:border-primary"
+          className="w-20 rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none focus:border-primary"
           value={servings ?? recipe.servings}
           onChange={(e) => setServings(Math.max(1, Number(e.target.value) || 1))}
         />
