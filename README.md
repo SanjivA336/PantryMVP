@@ -123,7 +123,7 @@ OCR-backed steps below are gated to a developer allowlist.
 
 ## What's left
 
-### Deferred hardening (before any non-local rollout)
+### Security & hardening (before any non-local rollout)
 
 - **CORS** is pinned to `localhost:5173/5174` in `backend/app/main.py` — the
   deployed frontend origin has to be added or every request fails.
@@ -131,7 +131,24 @@ OCR-backed steps below are gated to a developer allowlist.
   SMTP provider wired up; also blocks email verification.
 - No **Terms of Service / Privacy Policy**, no **CSV/data export**, no **API
   rate limiting**, no **error tracking**.
-- Dev and prod share one Supabase project.
+- **Dev and prod share one Supabase project** — a second (prod) project
+  needs its own migrations pushed and its own `.env` secrets; nothing here
+  splits environments automatically.
+
+### Deployment (nothing here exists yet)
+
+- **No hosting chosen or configured** for either half: the backend is a
+  plain FastAPI/uvicorn app (needs a host that can run a long-lived
+  process, not just static files) and the frontend builds to static
+  assets (`npm run build`) that need a static host/CDN.
+- **No CI** — no GitHub Actions or equivalent; `pytest`, `tsc`, and `oxlint`
+  currently only ever run locally, on request.
+- **No custom domain / DNS**, and the CORS + Supabase-project items above
+  both block a real deploy regardless of where it's hosted.
+- Once hosted, re-run the `rls` + `integration` suites against **that**
+  environment's Supabase project specifically — passing against the dev
+  project doesn't guarantee the prod one's migrations are applied the same
+  way.
 
 ### Known-incomplete features
 
