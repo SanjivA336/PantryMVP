@@ -168,7 +168,12 @@ leaving localhost.
   (`contact.burrowapp.site`) verified with Resend, SMTP configured in the
   Supabase Dashboard for the linked project, `ForgotPasswordPage` back to
   its real form with a client-side 60s resend cooldown matching the
-  per-email interval set in the Dashboard.
+  per-email interval set in the Dashboard. Entry points added on both
+  `LoginPage` ("Forgot password?") and `AccountPage` under Global account
+  (a collapsible change-password section), both exercising the same
+  `updatePassword` flow the post-email-link reset page already used.
+  Verified live end-to-end in a real browser: old password rejected after
+  a change, new password logs in.
 - [x] Signup email confirmation: enabled (per user decision) so a typo'd
   email can't silently lock someone out of password reset later.
   `SignupPage` shows a "check your email" state when `signUp` reports no
@@ -265,6 +270,11 @@ leaving localhost.
 
 ### Longer-term
 
+- **Comprehensive/exhaustive test suite in CI**: go beyond Phase 4's
+  current scope (running the existing unit-marked `pytest` suite plus
+  `tsc`/`oxlint`) toward broader, deeper coverage in CI, e.g. the
+  `integration`/`rls` suites and frontend e2e. Deliberately deferred; not
+  started yet.
 - **Real unit conversion** for recipe ingredient availability: weight↔volume
   needs a per-food density this app deliberately never asks for.
 - **Additional AI providers** beyond Ollama and **OCR engines** beyond Google
