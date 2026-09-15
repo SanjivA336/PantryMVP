@@ -186,6 +186,18 @@ leaving localhost.
   there's no reason to hand that distinction to whoever's poking at a
   household id in the URL. A genuine network/server failure gets its own,
   honest message instead.
+- [x] Fixed: a deleted account's still-unexpired access token kept working
+  against the API for up to an hour after deletion (JWT verification was
+  signature/expiry-only, no check that the account behind it still
+  existed) — `get_current_user_id` now confirms via `users.user_exists`
+  (`public.users` cascades from `auth.users` on delete, so a missing row
+  reliably means the account is gone). The frontend's `apiClient` treats
+  any 401 as "this session is stale" and force-clears it locally, so
+  `AuthGuard` bounces to `/login` automatically instead of a page getting
+  stuck showing a raw error with no way out. Also added a logout button to
+  the households picker page (including its error state) so there's always
+  a way out regardless. Verified live: logged in, deleted the account
+  server-side, reloaded — auto-redirected to `/login` within one request.
 - [x] Terms of Service + Privacy Policy drafted (`legal/terms-of-service.md`,
   `legal/privacy-policy.md`) — broad "informational aid, not financial/
   medical/professional advice" disclaimers covering cost-splitting, expiry

@@ -7,6 +7,7 @@ from app.core import jwks as jwks_module
 from app.core.config import get_settings
 from app.schemas.member import Member
 from app.services import members as members_service
+from app.services import users as users_service
 
 
 def get_current_user_id(authorization: str = Header(...)) -> UUID:
@@ -17,6 +18,12 @@ def get_current_user_id(authorization: str = Header(...)) -> UUID:
     `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`. This project does not use
     the legacy HS256 shared-secret scheme, even though a JWT secret is still
     present in project settings for backward compatibility with older APIs.
+
+    Also confirms the account still exists: a JWT is self-contained and
+    cryptographically valid regardless of whether the account it names has
+    since been deleted, so without this check a token issued minutes before
+    an account deletion would keep working against this API for up to an
+    hour (its natural expiry) -- see users.user_exists.
     """
     # Every failure below ends in the same user-facing text -- whatever
     # actually went wrong with the token (missing, malformed, expired,
@@ -60,7 +67,10 @@ def get_current_user_id(authorization: str = Header(...)) -> UUID:
     if not sub:
         raise session_expired
 
-    return UUID(sub)
+    user_id = UUID(sub)
+    if not users_service.user_exists(user_id):
+        raise session_expired
+    return user_id
 
 
 def require_household_membership(

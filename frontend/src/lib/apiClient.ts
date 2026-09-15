@@ -41,7 +41,11 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
       // An aborted request (our own timeout firing) should never be
       // retried — retrying would just wait out a second full timeout
       // before the caller ever sees an error.
-      if (init.method !== 'GET' || attempt >= GET_RETRY_ATTEMPTS || (err as Error)?.name === 'AbortError') {
+      if (
+        init.method !== 'GET' ||
+        attempt >= GET_RETRY_ATTEMPTS ||
+        (err as Error)?.name === 'AbortError'
+      ) {
         throw err
       }
       await new Promise((resolve) => setTimeout(resolve, 300))
@@ -49,11 +53,7 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
   }
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-  timeoutMs?: number,
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}, timeoutMs?: number): Promise<T> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -95,7 +95,10 @@ async function request<T>(
     // TypeError, and can filter this transient class of error out when it's
     // not worth surfacing (see RecipesPage, which treats it the same as
     // "nothing loaded yet" rather than an alarming error banner).
-    throw new ApiError('NETWORK', 'Could not reach the server. Check your connection and try again.')
+    throw new ApiError(
+      'NETWORK',
+      'Could not reach the server. Check your connection and try again.',
+    )
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId)
   }
@@ -111,10 +114,20 @@ async function request<T>(
   }
 
   if (envelope.status === 'error' || !response.ok) {
-    throw new ApiError(
-      envelope.error?.code ?? String(response.status),
-      envelope.error?.message ?? 'Request failed',
-    )
+    const code = envelope.error?.code ?? String(response.status)
+    // A 401 here means the backend rejected this token outright -- expired,
+    // malformed, or (see core/auth.py's get_current_user_id) the account it
+    // names no longer exists at all. Whatever the reason, the local session
+    // is stale and every other call on this page is about to fail the same
+    // way, so clear it now rather than leaving the caller to show a raw
+    // error with no way out -- AuthGuard reacts to the session going null
+    // and bounces to /login on its own. `scope: 'local'` only clears this
+    // browser's copy, no network call: there's nothing meaningful left to
+    // invalidate server-side for a token whose account may already be gone.
+    if (response.status === 401) {
+      void supabase.auth.signOut({ scope: 'local' })
+    }
+    throw new ApiError(code, envelope.error?.message ?? 'Request failed')
   }
 
   return envelope.data as T

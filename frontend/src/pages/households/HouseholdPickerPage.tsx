@@ -1,14 +1,29 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
-import { ChevronRight, Home, Plus } from 'lucide-react'
+import { ChevronRight, Home, LogOut, Plus } from 'lucide-react'
 import { apiClient } from '../../lib/apiClient'
+import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
+import { useAuth } from '../../hooks/useAuth'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import type { Household } from '../../types/entities'
 
 export function HouseholdPickerPage() {
   usePageTitle('Your Households')
+  const { signOut } = useAuth()
   const [households, setHouseholds] = useState<Household[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  const handleSignOut = async () => {
+    setLoggingOut(true)
+    try {
+      await signOut()
+    } finally {
+      setLoggingOut(false)
+      setLogoutConfirmOpen(false)
+    }
+  }
   // Set by the sidebar's "switch kitchens" button (see HouseholdShell) so a
   // deliberate click here always shows the picker, even with just one
   // household -- the auto-redirect below is meant only as a shortcut past
@@ -26,8 +41,23 @@ export function HouseholdPickerPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg p-6">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg p-6">
         <p className="text-sm text-danger">{error}</p>
+        <button
+          type="button"
+          onClick={() => setLogoutConfirmOpen(true)}
+          className="flex items-center gap-2 rounded-control border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger-soft"
+        >
+          <LogOut size={16} strokeWidth={1.75} />
+          Log out
+        </button>
+        {logoutConfirmOpen && (
+          <LogoutConfirmModal
+            loggingOut={loggingOut}
+            onClose={() => setLogoutConfirmOpen(false)}
+            onConfirm={() => void handleSignOut()}
+          />
+        )}
       </div>
     )
   }
@@ -47,9 +77,21 @@ export function HouseholdPickerPage() {
   return (
     <div className="min-h-screen bg-bg p-6 text-text">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6 pt-12">
-        <div>
-          <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
-          <h1 className="text-2xl font-semibold">Your households</h1>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
+            <h1 className="text-2xl font-semibold">Your households</h1>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLogoutConfirmOpen(true)}
+            title="Log out"
+            aria-label="Log out"
+            className="flex shrink-0 items-center gap-1.5 rounded-control border border-subtle px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <LogOut size={14} strokeWidth={1.75} />
+            Log out
+          </button>
         </div>
 
         {households.length === 0 ? (
@@ -91,6 +133,14 @@ export function HouseholdPickerPage() {
           </Link>
         </div>
       </div>
+
+      {logoutConfirmOpen && (
+        <LogoutConfirmModal
+          loggingOut={loggingOut}
+          onClose={() => setLogoutConfirmOpen(false)}
+          onConfirm={() => void handleSignOut()}
+        />
+      )}
     </div>
   )
 }

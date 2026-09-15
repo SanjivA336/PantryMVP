@@ -27,6 +27,21 @@ class LastAdminError(Exception):
         self.household_names = household_names
 
 
+def user_exists(user_id: UUID) -> bool:
+    """A previously-issued access token stays cryptographically valid (JWT
+    signature + expiry only, see core/auth.py's get_current_user_id) for up
+    to an hour after the account it names is deleted -- there's no built-in
+    revocation-on-delete for a bearer token that's already out in the wild.
+    This is the live check that closes that window: public.users.id
+    references auth.users(id) on delete cascade, so a missing row here
+    reliably means the account is gone, not just that this one query raced
+    something.
+    """
+    client = get_service_client()
+    result = client.table("users").select("id").eq("id", str(user_id)).limit(1).execute()
+    return len(result.data) > 0
+
+
 def _active_memberships(user_id: UUID) -> list[dict]:
     client = get_service_client()
     result = (

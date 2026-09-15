@@ -117,6 +117,26 @@ def captured_activity(request, monkeypatch):
     yield events
 
 
+@pytest.fixture(autouse=True)
+def stub_user_exists(request, monkeypatch):
+    """Stub app.services.users.user_exists for unit tests.
+
+    get_current_user_id now confirms the account behind a token still
+    exists (closes the window where a deleted account's still-unexpired
+    token kept working) -- a real network call unit tests' synthetic
+    uuid.uuid4() ids were never registered for. Autouse so no unit test
+    needs its own plumbing for this; skipped for the integration/rls
+    suites, which use real accounts against the real project and so
+    exercise the genuine check (same reasoning captured_activity uses).
+    """
+    if request.node.get_closest_marker("integration") or request.node.get_closest_marker("rls"):
+        yield
+        return
+
+    monkeypatch.setattr("app.services.users.user_exists", lambda user_id: True)
+    yield
+
+
 @pytest.fixture
 def fake_members(monkeypatch):
     """In-memory fake for app.services.members, so require_household_membership
