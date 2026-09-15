@@ -149,14 +149,27 @@ leaving localhost.
 
 ### Phase 2 — Security & compliance basics
 
-- [ ] Wire up an SMTP provider (Resend, Postmark, SES, …) so self-service
-  password reset and email verification work — currently blocked at the UI
-  layer specifically because no provider is configured.
-- [ ] Write a Terms of Service + Privacy Policy (even a minimal one).
-- [ ] Add basic API rate limiting.
-- [ ] Add error tracking (Sentry or similar).
-- [ ] Decide on a support/contact channel (even just an email address).
-- [ ] *(Optional, not blocking)* CSV/data export.
+- [ ] **Skipped — needs your input.** Wire up an SMTP provider (Resend,
+  Postmark, SES, …) so self-service password reset and email verification
+  work — currently blocked at the UI layer specifically because no
+  provider is configured. Needs an account/credentials only you can supply.
+- [ ] **Skipped — needs your input.** Write a Terms of Service + Privacy
+  Policy (even a minimal one) — needs real specifics (entity/contact name,
+  jurisdiction, data-handling details) rather than generic filler text.
+- [x] Add basic API rate limiting: a per-client-IP fixed-window cap
+  (`app/core/rate_limit.py`, 120 requests/minute by default, configurable
+  via `RATE_LIMIT_MAX_REQUESTS`/`RATE_LIMIT_WINDOW_SECONDS`), hand-rolled
+  rather than pulled from a library after discovering `slowapi` silently
+  no-ops against this project's FastAPI/Starlette version. `/health` stays
+  exempt for uptime monitors; disabled entirely under pytest.
+- [ ] **Skipped — needs your input.** Add error tracking (Sentry or
+  similar) — needs an account/DSN for whichever provider you'd prefer.
+- [ ] **Skipped — needs your input.** Decide on a support/contact channel
+  (even just an email address).
+- [x] CSV/data export: an "Export as CSV" button on the Inventory page,
+  generated client-side (no server round trip) from whatever's currently
+  shown (search/category/storage filters included), with buyer/shared-with
+  member ids resolved to nicknames.
 
 ### Phase 3 — Prod environment split (still local)
 

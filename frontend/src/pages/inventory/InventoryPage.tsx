@@ -4,6 +4,7 @@ import {
   CalendarX,
   ChevronDown,
   ChevronRight,
+  Download,
   LayoutGrid,
   MapPin,
   Package,
@@ -81,6 +82,65 @@ type ViewMode = 'flat' | 'sectional'
 // default changes later.
 function viewPrefKey(userId: string, householdId: string): string {
   return `burrow-inventory-view:${userId}:${householdId}`
+}
+
+// Wraps a field in quotes (doubling any internal quotes) only when it
+// actually needs it -- a comma, quote, or newline inside the value would
+// otherwise break column alignment for anything that opens this file.
+function csvField(value: string): string {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+  return value
+}
+
+// Client-side only, from data the page already has loaded -- no server
+// round trip needed, same pattern as RecipeDetailPage's own JSON export.
+function downloadInventoryAsCsv(items: InventoryItem[], members: Member[]) {
+  const nameById = new Map(members.map((m) => [m.id, m.nickname]))
+  const header = [
+    'Food',
+    'Nickname',
+    'Category',
+    'Quantity',
+    'Total quantity',
+    'Unit',
+    'Storage location',
+    'Cost',
+    'Status',
+    'Expiry date',
+    'Best-by date',
+    'Buyer',
+    'Shared with',
+    'Purchased at',
+  ]
+  const rows = items.map((item) => [
+    item.food_name,
+    item.name_override ?? '',
+    item.category ? FOOD_CATEGORY_LABELS[item.category] : '',
+    item.quantity,
+    item.total_quantity,
+    UNIT_LABELS[item.preferred_unit],
+    item.storage_location_name,
+    item.cost,
+    item.status,
+    item.expiry_date ?? '',
+    item.best_by_date ?? '',
+    nameById.get(item.buyer_member_id) ?? '',
+    item.allowed_member_ids.map((id) => nameById.get(id) ?? '').join('; '),
+    item.purchased_at,
+  ])
+  const csv = [header, ...rows]
+    .map((row) => row.map((v) => csvField(String(v))).join(','))
+    .join('\r\n')
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `inventory-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 // One combined line instead of a separate "Expires {date}" line plus its own
@@ -558,6 +618,17 @@ export function InventoryPage() {
               )}
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => downloadInventoryAsCsv(filtered, members ?? [])}
+            disabled={filtered.length === 0}
+            title="Export what's currently shown as a CSV file"
+            aria-label="Export as CSV"
+            className="shrink-0 rounded-control border border-subtle bg-field p-2 text-text shadow-field transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-field"
+          >
+            <Download size={16} strokeWidth={1.75} />
+          </button>
         </div>
       </div>
 

@@ -1,3 +1,5 @@
+import sys
+
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,11 +8,36 @@ from starlette.requests import Request
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.rate_limit import RateLimitMiddleware
 from app.core.responses import error_envelope
 
 settings = get_settings()
 
 app = FastAPI(title="Burrow API")
+
+# Per-client-IP backstop against abuse/scripted hammering -- see
+# Settings.rate_limit_max_requests/_window_seconds. Auth (signup/login/
+# password reset) never reaches this app at all (the frontend talks to
+# Supabase Auth directly, which rate-limits that on its own), so this only
+# ever covers the `/api/households/...` surface. Disabled under pytest: the
+# whole suite shares one imported `app` (and so one middleware instance's
+# in-memory counters) for its entire run, and a fast, high-volume test file
+# hitting the real ASGI app (the rls/integration suites do) would otherwise
+# trip it -- a false failure from the test harness, not a real client ever
+# getting rate limited. Checking "pytest" in sys.modules rather than the
+# PYTEST_CURRENT_TEST env var: that var is only set for the duration of
+# each individual test, but this module gets imported once at collection
+# time (before any test has started, via conftest.py's own `from app.main
+# import app`) -- checking it here would just always see "not set" and
+# permanently bake in enabled=True regardless of pytest. The pytest package
+# itself, by contrast, is already imported by the time collection reaches
+# this line, and stays imported for the rest of the process.
+app.add_middleware(
+    RateLimitMiddleware,
+    max_requests=settings.rate_limit_max_requests,
+    window_seconds=settings.rate_limit_window_seconds,
+    enabled="pytest" not in sys.modules,
+)
 
 app.add_middleware(
     CORSMiddleware,

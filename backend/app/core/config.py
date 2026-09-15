@@ -47,6 +47,18 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
+    # Auth itself (signup/login/password reset) goes straight from the
+    # frontend to Supabase Auth, which already rate-limits that on its own
+    # -- this backend never sees those requests. This is the backstop for
+    # everything this API *does* see: a per-client-IP cap, generous enough
+    # for normal use (including a realtime-refreshed dashboard), applied
+    # to every route by default rather than picked per-endpoint, since
+    # nothing here has a meaningfully different abuse profile from anything
+    # else (all of it sits behind Supabase JWT auth + household-membership
+    # checks already).
+    rate_limit_max_requests: int = 120
+    rate_limit_window_seconds: float = 60.0
+
     # Comma-separated Supabase auth user ids allowed to use AI/OCR-backed
     # features (recipe generate/import-by-text-or-url/substitutions, receipt
     # scanning) -- real inference/OCR cost, still experimental. A .env value
