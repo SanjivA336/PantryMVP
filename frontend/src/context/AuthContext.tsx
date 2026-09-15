@@ -33,8 +33,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password })
+    // Matches resetPasswordForEmail's own redirectTo below -- explicit
+    // rather than relying on the Dashboard's default Site URL, so the
+    // confirmation link lands back in whichever environment (localhost
+    // today, the real deployed origin later) actually sent it.
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: window.location.origin },
+    })
     if (error) throw error
+    // No session back means Supabase's "Confirm email" setting is on and
+    // this account can't sign in yet -- data.user still exists either way,
+    // so this is the one reliable signal for "needs to check their email
+    // first" versus "signed up and already logged in."
+    return { needsConfirmation: data.session === null }
   }
 
   const signIn = async (email: string, password: string) => {

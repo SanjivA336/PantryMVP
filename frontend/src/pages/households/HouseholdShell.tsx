@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
   ChefHat,
   Home,
@@ -10,7 +10,7 @@ import {
   ShoppingCart,
   UserCircle,
 } from 'lucide-react'
-import { apiClient } from '../../lib/apiClient'
+import { apiClient, ApiError } from '../../lib/apiClient'
 import { CopyButton } from '../../components/CopyButton'
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { MobileShortcutMenu } from '../../components/MobileShortcutMenu'
@@ -73,6 +73,17 @@ export function HouseholdShell() {
   const { signOut } = useAuth()
   const isDeveloper = useIsDeveloper()
   const [household, setHousehold] = useState<Household | null>(null)
+  // Deliberately one bucket for "doesn't exist" and "exists but you're not a
+  // member" -- the backend already collapses these into the same 403
+  // (require_household_membership can't tell them apart either: a bad id
+  // just has zero members, same as one you were never added to), and there's
+  // no reason to hand back that distinction to whoever's poking at a
+  // household id in the URL. A genuine network/server failure gets its own
+  // message instead of this one, since telling someone "you don't have
+  // access" for what's actually a dropped connection would be wrong, not
+  // just imprecise.
+  const [accessError, setAccessError] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
 
@@ -89,6 +100,8 @@ export function HouseholdShell() {
   useEffect(() => {
     if (!householdId) return
     let cancelled = false
+    setAccessError(false)
+    setLoadError(false)
 
     apiClient
       .get<Household>(`/api/households/${householdId}`)
@@ -96,13 +109,43 @@ export function HouseholdShell() {
         if (!cancelled) setHousehold(data)
       })
       .catch((err) => {
-        if (!cancelled) console.error('Failed to load household', err)
+        if (cancelled) return
+        console.error('Failed to load household', err)
+        if (err instanceof ApiError && err.code === '403') {
+          setAccessError(true)
+        } else {
+          setLoadError(true)
+        }
       })
 
     return () => {
       cancelled = true
     }
   }, [householdId])
+
+  if (accessError || loadError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg p-4 text-text">
+        <div className="w-full max-w-sm rounded-card border border-subtle bg-surface p-7 text-center shadow-card">
+          <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
+          <h1 className="mb-3 text-xl font-semibold">
+            {accessError ? "This burrow isn't available" : "Couldn't load this burrow"}
+          </h1>
+          <p className="mb-5 text-sm text-muted">
+            {accessError
+              ? 'It may not exist, or you may not have access to it. Double-check the link, or ask whoever invited you for a fresh one.'
+              : 'Something went wrong reaching the server. Check your connection and try again.'}
+          </p>
+          <Link
+            to="/"
+            className="inline-block w-full rounded-control bg-primary px-4 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
+          >
+            Back to your burrows
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-bg text-text md:flex md:h-screen md:overflow-hidden">

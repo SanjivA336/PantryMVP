@@ -225,7 +225,10 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# Matches the linked hosted project's own setting (Dashboard > Authentication
+# > Settings > User Signups > "Confirm email") -- see
+# frontend/src/pages/auth/SignupPage.tsx's matching "check your email" state.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -256,6 +259,18 @@ otp_expiry = 3600
 # [auth.email.template.invite]
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
+
+# Burrow-branded confirm-signup and reset-password emails. Only takes effect
+# for the local CLI stack -- the linked hosted project's own templates are
+# set separately, in the Supabase Dashboard (Authentication > Email
+# Templates), where these same two files' contents need to be pasted in.
+[auth.email.template.confirmation]
+subject = "Confirm your Burrow account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Burrow password"
+content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

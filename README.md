@@ -164,13 +164,28 @@ leaving localhost.
   and frontend (`main.tsx`, `Sentry.ErrorBoundary` + a themed crash
   fallback) both no-op until a real DSN is set — **remaining action:**
   create a Sentry project and set `SENTRY_DSN` / `VITE_SENTRY_DSN`.
-- [ ] Password reset email (Resend, chosen provider): `.env`'s
-  `RESEND_API_KEY` and `supabase/config.toml`'s `[auth.email.smtp]` block
-  are ready — **remaining action:** verify a sending domain with Resend,
-  then paste the same SMTP values into the Supabase Dashboard for the
-  linked project (Authentication > Settings > SMTP Settings; config.toml
-  only covers the local CLI stack). Once that's live, tell me and I'll
-  flip `ForgotPasswordPage` back to the real reset form.
+- [x] Password reset email (Resend, chosen provider): domain
+  (`contact.burrowapp.site`) verified with Resend, SMTP configured in the
+  Supabase Dashboard for the linked project, `ForgotPasswordPage` back to
+  its real form with a client-side 60s resend cooldown matching the
+  per-email interval set in the Dashboard.
+- [x] Signup email confirmation: enabled (per user decision) so a typo'd
+  email can't silently lock someone out of password reset later.
+  `SignupPage` shows a "check your email" state when `signUp` reports no
+  session came back; `supabase/config.toml`'s `enable_confirmations`
+  mirrors the Dashboard setting for the local stack. Burrow-branded email
+  templates for both this and password reset drafted in
+  `supabase/templates/` (`confirmation.html`, `recovery.html`) — paste
+  into the Dashboard's Email Templates section to use for the linked
+  project (config.toml only covers the local stack).
+- [x] Household-level error pages: navigating to a household id that
+  doesn't exist or that you're not a member of shows the same "this burrow
+  isn't available" message either way (`HouseholdShell`) — deliberately
+  not differentiated, since the backend can't tell the two cases apart
+  either (`require_household_membership` sees zero members for both) and
+  there's no reason to hand that distinction to whoever's poking at a
+  household id in the URL. A genuine network/server failure gets its own,
+  honest message instead.
 - [x] Terms of Service + Privacy Policy drafted (`legal/terms-of-service.md`,
   `legal/privacy-policy.md`) — broad "informational aid, not financial/
   medical/professional advice" disclaimers covering cost-splitting, expiry

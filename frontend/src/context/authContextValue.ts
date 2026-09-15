@@ -5,7 +5,11 @@ export interface AuthContextValue {
   user: User | null
   session: Session | null
   loading: boolean
-  signUp: (email: string, password: string) => Promise<void>
+  // needsConfirmation is true when Supabase Auth's "Confirm email" setting
+  // is on and the account isn't usable yet -- signUp succeeds (the account
+  // exists) but returns no session until the user clicks the link in their
+  // confirmation email.
+  signUp: (email: string, password: string) => Promise<{ needsConfirmation: boolean }>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   resetPasswordForEmail: (email: string) => Promise<void>
