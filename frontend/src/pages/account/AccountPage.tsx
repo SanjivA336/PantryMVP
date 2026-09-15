@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { CircleHelp, LogOut, TriangleAlert } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
@@ -7,6 +9,7 @@ import { Modal } from '../../components/Modal'
 import { useAuth } from '../../hooks/useAuth'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import type { Member } from '../../types/entities'
+import { newPasswordSchema, type NewPasswordForm } from '../auth/schema'
 
 const inputClass =
   'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
@@ -82,6 +85,98 @@ function BurrowSettingsCard({ householdId }: { householdId: string }) {
   )
 }
 
+// Distinct from the forgot-password flow (LoginPage's "Forgot password?" ->
+// email link -> ResetPasswordPage): this one needs no email round trip at
+// all, since being here already proves you're signed in -- updatePassword
+// just calls Supabase directly with the active session. Collapsed behind a
+// toggle rather than always-open fields, since it's a rare action next to
+// the account's everyday info.
+function ChangePasswordSection() {
+  const { updatePassword } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<NewPasswordForm>({ resolver: zodResolver(newPasswordSchema) })
+
+  const onSubmit = async (values: NewPasswordForm) => {
+    setServerError(null)
+    try {
+      await updatePassword(values.password)
+      reset()
+      setSaved(true)
+      setOpen(false)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      setServerError(err instanceof Error ? err.message : 'Something went wrong')
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-fit text-sm font-medium text-muted transition-colors hover:text-text hover:underline"
+      >
+        {saved ? 'Password changed.' : 'Change password'}
+      </button>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3">
+      <p className="text-sm font-medium text-muted">Change password</p>
+      <div>
+        <input
+          type="password"
+          placeholder="New password"
+          className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
+          {...register('password')}
+        />
+        {errors.password && <p className="mt-1.5 text-sm text-danger">{errors.password.message}</p>}
+      </div>
+      <div>
+        <input
+          type="password"
+          placeholder="Confirm new password"
+          className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
+          {...register('confirmPassword')}
+        />
+        {errors.confirmPassword && (
+          <p className="mt-1.5 text-sm text-danger">{errors.confirmPassword.message}</p>
+        )}
+      </div>
+      {serverError && <p className="text-sm text-danger">{serverError}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false)
+            reset()
+            setServerError(null)
+          }}
+          className="flex-1 rounded-control border border-subtle px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex-1 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+        >
+          {isSubmitting ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export function AccountPage() {
   usePageTitle('Account')
   const { user, signOut } = useAuth()
@@ -132,6 +227,8 @@ export function AccountPage() {
             <p className="text-sm font-medium text-muted">Email</p>
             <p className="text-text">{user?.email}</p>
           </div>
+
+          <ChangePasswordSection />
 
           {/* Hidden entirely until a real form/inbox exists to send this
               to -- VITE_SUPPORT_URL unset means nothing to link to yet. */}
