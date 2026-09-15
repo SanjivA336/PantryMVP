@@ -45,8 +45,8 @@ export function SignupPage() {
         <h1 className="mb-6 text-2xl font-semibold">Create your account</h1>
         {needsConfirmation ? (
           <p className="text-sm text-muted">
-            Almost there — we've sent a confirmation link to your email. Click it to finish creating
-            your account, then come back and log in.
+            We've sent a confirmation link to your email. Click it to finish creating your account,
+            then come back and log in.
           </p>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">

@@ -1,7 +1,7 @@
 """Integration tests for the live-until-frozen debt model (migration 0024),
 against the real linked Supabase project.
 
-Every dollar amount here is hand-computed, not just "assert it changed" —
+Every dollar amount here is hand-computed, not just "assert it changed":
 this is the highest-risk part of the whole build (real money-shaped
 numbers), so the test gate has to actually pin the arithmetic, not just
 smoke-test that requests succeed. Excluded from the default run (see

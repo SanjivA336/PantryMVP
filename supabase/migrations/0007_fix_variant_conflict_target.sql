@@ -1,7 +1,7 @@
 -- Same class of bug as 0002: household_food_variants_unique_global is a
 -- partial unique index (where global_food_definition_id is not null), so
 -- Postgres can't infer it as the ON CONFLICT arbiter without repeating that
--- predicate in the clause — otherwise 42P10 "no unique or exclusion
+-- predicate in the clause, otherwise it fails with 42P10 "no unique or exclusion
 -- constraint matching the ON CONFLICT specification".
 
 create or replace function public.create_manual_inventory_item(

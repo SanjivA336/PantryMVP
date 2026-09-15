@@ -99,7 +99,7 @@ def test_unknown_kid_raises_401(mock_jwks) -> None:
 
 def test_token_signed_by_a_different_key_raises_401(mock_jwks) -> None:
     # Same kid the mocked JWKS client actually serves, but signed with a
-    # different private key — this must fail signature verification, not
+    # different private key. This must fail signature verification, not
     # succeed just because the kid happened to match.
     impostor_key = ECSigningKey(kid=TEST_SIGNING_KEY.kid)
     token = _make_token(sub=str(uuid.uuid4()), signing_key=impostor_key)

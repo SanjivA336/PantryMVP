@@ -1,7 +1,7 @@
 """RLS isolation tests, run against the real linked Supabase project.
 
 Excluded from the default `pytest` run (see pyproject.toml's addopts) since
-it costs real Supabase Auth quota — run explicitly with `uv run pytest -m rls`.
+it costs real Supabase Auth quota; run explicitly with `uv run pytest -m rls`.
 
 This suite tests the RLS policies directly via PostgREST with each user's own
 JWT, which is a *separate* boundary from FastAPI's own membership checks
@@ -88,8 +88,8 @@ async def test_non_member_gets_empty_result_on_direct_rest_select(api_client, tw
                 },
             )
 
-        # RLS silently filters SELECT rows rather than raising — an outsider
-        # sees an empty array, not a 403/404.
+        # RLS silently filters SELECT rows rather than raising, so an
+        # outsider sees an empty array, not a 403/404.
         assert households_response.status_code == 200
         assert households_response.json() == []
         assert members_response.status_code == 200

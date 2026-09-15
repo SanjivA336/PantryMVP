@@ -2,7 +2,7 @@
 
 Exercises the actual Postgres RPCs and triggers from migrations 0004-0006
 (get-or-create variant, atomic quantity cap, usage_count bump, immutability,
-auto-EMPTY transition) — none of this logic lives in Python, so it can't be
+auto-EMPTY transition), none of which lives in Python, so none of it can be
 verified with mocks. Excluded from the default run (see pyproject.toml);
 run explicitly with `uv run pytest -m integration`.
 """
@@ -111,7 +111,7 @@ async def test_full_add_consume_discard_lifecycle(api_client, household) -> None
     item = create_resp.json()["data"]
     assert Decimal(item["quantity"]) == Decimal("5")
     assert item["status"] == "ACTIVE"
-    # Not just "some string" — confirms the food-name join actually resolved
+    # Not just "some string": confirms the food-name join actually resolved
     # rather than silently falling back to the "Unknown food" default.
     assert item["food_name"] == "Whole Milk"
     assert item["storage_location_name"] == "Test Fridge"
@@ -140,7 +140,7 @@ async def test_full_add_consume_discard_lifecycle(api_client, household) -> None
     )
     assert Decimal(unchanged.json()["data"]["quantity"]) == Decimal("5")
 
-    # Consume the exact remaining amount — should auto-transition to EMPTY.
+    # Consume the exact remaining amount: should auto-transition to EMPTY.
     consume_resp = await api_client.post(
         f"/api/households/{household['household_id']}/inventory-items/{item['id']}/consume",
         json={"quantity_used": "5"},

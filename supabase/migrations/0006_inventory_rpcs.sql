@@ -77,7 +77,7 @@ grant execute on function public.create_manual_inventory_item to service_role;
 --
 -- Atomically caps usage at the item's remaining physical quantity: the
 -- UPDATE's WHERE clause (quantity >= p_quantity_used) makes this safe under
--- concurrent requests without explicit locking — Postgres serializes
+-- concurrent requests without explicit locking, since Postgres serializes
 -- concurrent UPDATEs to the same row, so only one racing request can
 -- succeed once quantity would go negative.
 -- =========================================================================

@@ -48,7 +48,7 @@ def mock_jwks(monkeypatch):
 
     Deliberately NOT autouse: the rls-marked suite needs the real network
     JWKS fetch against the real project, since it's testing the genuine
-    end-to-end auth path — only the `client` fixture below opts into this.
+    end-to-end auth path. Only the `client` fixture below opts into this.
     """
     fake_client = FakeJWKSClient({TEST_SIGNING_KEY.kid: TEST_SIGNING_KEY.jwk})
     monkeypatch.setattr("app.core.jwks.get_jwks_client", lambda: fake_client)

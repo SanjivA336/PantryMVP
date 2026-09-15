@@ -18,7 +18,8 @@ export default defineConfig({
       manifest: {
         name: 'Burrow',
         short_name: 'Burrow',
-        description: 'Household pantry tracking: inventory, shopping lists, cost splitting, and recipes.',
+        description:
+          'Household pantry tracking: inventory, shopping lists, cost splitting, and recipes.',
         // Matches --color-bg / --color-primary in index.css -- the app's
         // actual off-black/green identity, not generic PWA defaults.
         theme_color: '#0c0d0d',
@@ -57,7 +58,7 @@ export default defineConfig({
     }),
   ],
   // The repo keeps a single .env at the project root (shared with the
-  // backend) instead of a separate frontend/.env — point Vite at it.
+  // backend) instead of a separate frontend/.env, so point Vite at it.
   envDir: path.resolve(__dirname, '..'),
   server: {
     port: 5173,

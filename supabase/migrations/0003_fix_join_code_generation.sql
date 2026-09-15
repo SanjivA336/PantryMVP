@@ -2,7 +2,7 @@
 -- nearest in Postgres (not truncate), so it can land on `length(chars)`
 -- itself (~1.55% chance per character), one past the last valid index.
 -- substr() with an out-of-range start silently returns '', shortening the
--- generated code — which the char(8) column then silently space-padded
+-- generated code, which the char(8) column then silently space-padded
 -- back up to 8, producing join codes like "9X88BT8 " that no one could
 -- ever actually type in. Caught by manual end-to-end verification, not by
 -- any automated test, since nothing asserted on join_code's exact shape.
@@ -27,7 +27,7 @@ end;
 $$;
 
 -- char(8) silently space-pads short values instead of erroring, which is
--- exactly what masked the bug above — switch to text with an explicit
+-- exactly what masked the bug above. Switch to text with an explicit
 -- format constraint so any future regression fails loudly instead.
 alter table public.households alter column join_code type text;
 alter table public.households add constraint join_code_format check (join_code ~ '^[A-HJ-NP-Z2-9]{8}$');

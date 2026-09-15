@@ -11,8 +11,8 @@ def get_service_client() -> Client:
     """Service-role Supabase client for FastAPI's own writes.
 
     This key bypasses RLS entirely, so every write path that uses this
-    client must independently re-check membership/admin rights in code —
-    see app.core.auth. Never expose this client or its key to the frontend.
+    client must independently re-check membership/admin rights in code
+    (see app.core.auth). Never expose this client or its key to the frontend.
 
     One client per thread, not a single process-wide instance: FastAPI runs
     sync path operations in a thread pool, and sharing one client's

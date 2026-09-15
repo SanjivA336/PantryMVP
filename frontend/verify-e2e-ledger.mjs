@@ -1,6 +1,6 @@
 // Ad-hoc Playwright verification for Phase 2c: the accounting-type selector
-// on the add-item form, the Balances page, and — the part that can only be
-// verified in a real browser — Realtime actually pushing live updates to a
+// on the add-item form, the Balances page, and, the part that can only be
+// verified in a real browser, Realtime actually pushing live updates to a
 // *second* browser session without that session ever reloading or
 // navigating away. Not a permanent test suite (Phase 13's job).
 //
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const BASE = 'http://localhost:5173'
-// Reuses the already-gitignored e2e-shots/ directory (see .gitignore —
+// Reuses the already-gitignored e2e-shots/ directory (see .gitignore:
 // it's an exact-name match, not a prefix, so a differently-named dir
 // wouldn't be ignored).
 const SHOTS = './e2e-shots'
@@ -143,7 +143,7 @@ await pageA.fill('input[type="number"][step="any"]', '10')
 await pageA.locator('select').nth(0).selectOption({ label: 'Shared Fridge' })
 await pageA.fill('input[type="number"][step="0.01"]', '10.00')
 await pageA.locator('select').nth(1).selectOption({
-  label: 'Unit-based — split evenly, but charge extra to whoever goes over their share',
+  label: 'Unit-based: split evenly, but charge extra to whoever goes over their share',
 })
 await snap(pageA, 'add-item-unit-based')
 await pageA.click('button:has-text("Add item")')

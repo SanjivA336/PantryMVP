@@ -1,9 +1,9 @@
-// Ad-hoc Playwright verification script — NOT a permanent test suite
+// Ad-hoc Playwright verification script, NOT a permanent test suite
 // (that's Phase 13's job). Drives the real UI in a real browser and
 // screenshots each step so a human (or Claude) can actually look at it.
 //
 // Uses a pre-provisioned user (via Supabase's Admin API, same as the pytest
-// integration suite) and drives the LOGIN form — Supabase's hosted-project
+// integration suite) and drives the LOGIN form, since Supabase's hosted-project
 // email rate limit gets exhausted fast by repeated real signups.
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'

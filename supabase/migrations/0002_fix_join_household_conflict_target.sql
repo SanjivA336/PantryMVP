@@ -1,7 +1,7 @@
 -- Fixes join_household_by_code: `members_household_user_unique` is a partial
 -- unique index (where user_id is not null), so Postgres can't infer it as the
--- ON CONFLICT arbiter unless the same predicate is repeated in the clause —
--- otherwise it fails with "no unique or exclusion constraint matching the ON
+-- ON CONFLICT arbiter unless the same predicate is repeated in the clause.
+-- Otherwise it fails with "no unique or exclusion constraint matching the ON
 -- CONFLICT specification" (42P10).
 
 create or replace function public.join_household_by_code(

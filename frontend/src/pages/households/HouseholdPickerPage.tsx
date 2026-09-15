@@ -96,7 +96,7 @@ export function HouseholdPickerPage() {
 
         {households.length === 0 ? (
           <p className="rounded-card border border-subtle bg-surface p-5 text-sm text-muted">
-            You're not in a household yet — create one or join with a code below.
+            You're not in a household yet. Create one or join with a code below.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">

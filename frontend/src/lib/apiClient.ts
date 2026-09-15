@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 if (!API_BASE_URL) {
-  throw new Error('Missing VITE_API_BASE_URL — check your .env file.')
+  throw new Error('Missing VITE_API_BASE_URL. Check your .env file.')
 }
 
 interface Envelope<T> {
@@ -29,7 +29,7 @@ export class ApiError extends Error {
 // page that fires several concurrent GETs at once (e.g. household + items +
 // warnings all loading together) can occasionally trip a transient
 // connection-pool hiccup on the dev backend. Retrying is safe here because
-// we only do it for GET — a lost POST/PATCH/DELETE might have actually
+// we only do it for GET: a lost POST/PATCH/DELETE might have actually
 // reached the server, and blindly retrying a mutation risks duplicating it.
 const GET_RETRY_ATTEMPTS = 2
 
@@ -39,7 +39,7 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
       return await fetch(url, init)
     } catch (err) {
       // An aborted request (our own timeout firing) should never be
-      // retried — retrying would just wait out a second full timeout
+      // retried: retrying would just wait out a second full timeout
       // before the caller ever sees an error.
       if (
         init.method !== 'GET' ||
@@ -62,7 +62,7 @@ async function request<T>(path: string, options: RequestInit = {}, timeoutMs?: n
     throw new ApiError('NO_SESSION', 'You must be signed in to do that.')
   }
 
-  // Only used by the AI recipe endpoints today — a local Ollama call can
+  // Only used by the AI recipe endpoints today: a local Ollama call can
   // take 10-20+ seconds, well past what's reasonable to let a normal CRUD
   // request hang for, so this is opt-in per call rather than a global default.
   const controller = timeoutMs !== undefined ? new AbortController() : undefined

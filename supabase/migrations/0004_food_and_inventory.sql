@@ -1,5 +1,5 @@
 -- Phase 2a: food definitions + manual inventory tracking.
--- No ledger/accounting tables yet — that's Phase 2b. This phase only
+-- No ledger/accounting tables yet; that's Phase 2b. This phase only
 -- tracks what a household owns, not who owes whom for it.
 
 -- =========================================================================
@@ -13,7 +13,7 @@ create type accounting_type as enum ('UNIT_BASED', 'SHARED_CONSUMABLE', 'PERSONA
 create type inventory_item_status as enum ('ACTIVE', 'EMPTY', 'DISCARDED', 'EXPIRED', 'LOST');
 
 -- =========================================================================
--- global_food_definitions — shared across all households
+-- global_food_definitions: shared across all households
 -- =========================================================================
 
 create table public.global_food_definitions (
@@ -45,7 +45,7 @@ create trigger global_food_definitions_set_updated_at
   for each row execute function public.set_updated_at();
 
 -- =========================================================================
--- household_food_variants — household-specific customizations
+-- household_food_variants: household-specific customizations
 -- =========================================================================
 
 create table public.household_food_variants (
@@ -58,7 +58,7 @@ create table public.household_food_variants (
   updated_at timestamptz not null default now()
 );
 
--- A household should only ever have one variant per global definition —
+-- A household should only ever have one variant per global definition;
 -- re-picking "Whole Milk" reuses the existing variant instead of duplicating.
 -- Household-local creations (global_food_definition_id is null) are exempt,
 -- since there's nothing to dedupe against.
@@ -74,7 +74,7 @@ create trigger household_food_variants_set_updated_at
   for each row execute function public.set_updated_at();
 
 -- =========================================================================
--- purchase_events — one per manual "add item" or (later) receipt import
+-- purchase_events: one per manual "add item" or (later) receipt import
 -- =========================================================================
 
 create table public.purchase_events (
@@ -123,7 +123,7 @@ create index inventory_items_household_id_idx on public.inventory_items (househo
 create index inventory_items_status_idx on public.inventory_items (household_id, status);
 create index inventory_items_storage_location_idx on public.inventory_items (storage_location_id);
 
--- Auto-transition to EMPTY when quantity hits zero, and stamp updated_at —
+-- Auto-transition to EMPTY when quantity hits zero, and stamp updated_at;
 -- one trigger handles both instead of stacking two BEFORE UPDATE triggers.
 create or replace function public.inventory_items_before_update()
 returns trigger
@@ -143,7 +143,7 @@ create trigger inventory_items_before_update
   for each row execute function public.inventory_items_before_update();
 
 -- Increment the global definition's usage_count whenever a household adds
--- an item against it — drives the search-ranking "popularity" signal.
+-- an item against it, driving the search-ranking "popularity" signal.
 -- Household-local-only variants (no global_food_definition_id) are skipped.
 create or replace function public.bump_food_definition_usage()
 returns trigger
@@ -173,7 +173,7 @@ create trigger inventory_items_bump_usage
   for each row execute function public.bump_food_definition_usage();
 
 -- =========================================================================
--- inventory_item_allowed_members — who's allowed to use this item
+-- inventory_item_allowed_members: who's allowed to use this item
 -- =========================================================================
 
 create table public.inventory_item_allowed_members (
@@ -183,7 +183,7 @@ create table public.inventory_item_allowed_members (
 );
 
 -- =========================================================================
--- consumption_events — immutable usage log
+-- consumption_events: immutable usage log
 -- =========================================================================
 
 create table public.consumption_events (
@@ -202,7 +202,7 @@ create index consumption_events_inventory_item_id_idx on public.consumption_even
 -- =========================================================================
 -- Immutability: purchase_events and consumption_events are an audit trail.
 -- Enforced as rejecting triggers (not just revoked grants) so it holds
--- regardless of which role — including service_role — attempts the write.
+-- regardless of which role, including service_role, attempts the write.
 -- =========================================================================
 
 create or replace function public.reject_mutation()
@@ -210,7 +210,7 @@ returns trigger
 language plpgsql
 as $$
 begin
-  raise exception 'rows in % are immutable and cannot be % — % id=%',
+  raise exception 'rows in % are immutable and cannot be %: % id=%',
     TG_TABLE_NAME, lower(TG_OP), TG_OP, coalesce(old.id, new.id);
 end;
 $$;
@@ -243,7 +243,7 @@ alter table public.consumption_events enable row level security;
 -- global_food_definitions: readable by any authenticated user (it's a
 -- shared catalog, not household-scoped); insertable by any authenticated
 -- user (matches "users can create custom definitions" from the design doc).
--- No update/delete policy — edits go through FastAPI's service-role path
+-- No update/delete policy; edits go through FastAPI's service-role path
 -- only (e.g. verification status, duplicate merging), never client-direct.
 create policy global_food_definitions_select on public.global_food_definitions
   for select
@@ -264,7 +264,7 @@ create policy household_food_variants_insert on public.household_food_variants
   with check (public.is_household_member(household_id));
 
 -- purchase_events: members can read and create (create is a manual "I bought
--- this" declaration); no update/delete policy at all — immutable, and the
+-- this" declaration); no update/delete policy at all, immutable, and the
 -- triggers above back this up even against direct SQL.
 create policy purchase_events_select on public.purchase_events
   for select

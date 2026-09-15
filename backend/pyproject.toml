@@ -41,6 +41,6 @@ target-version = "py313"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.flake8-bugbear]
-# FastAPI's DI system requires `= Depends(...)` in argument defaults — this
+# FastAPI's DI system requires `= Depends(...)` in argument defaults, which
 # isn't the mutable-default-argument footgun B008 exists to catch.
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query", "fastapi.Path"]

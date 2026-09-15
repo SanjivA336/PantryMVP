@@ -1,4 +1,4 @@
--- Phase 1: core foundation — users, households, members, storage locations.
+-- Phase 1: core foundation: users, households, members, storage locations.
 -- Raw SQL is the single schema source of truth for this project (no ORM-owned migrations).
 
 -- =========================================================================
@@ -24,7 +24,7 @@ end;
 $$;
 
 -- =========================================================================
--- users — mirrors auth.users
+-- users: mirrors auth.users
 -- =========================================================================
 
 create table public.users (
@@ -127,7 +127,7 @@ create table public.members (
   updated_at timestamptz not null default now()
 );
 
--- One membership row per user per household, ever (not filtered by is_active) —
+-- One membership row per user per household, ever (not filtered by is_active):
 -- rejoining reactivates the existing row rather than inserting a duplicate.
 create unique index members_household_user_unique
   on public.members (household_id, user_id)
@@ -206,7 +206,7 @@ $$;
 --
 -- p_user_id is an explicit parameter (not auth.uid()) because FastAPI invokes
 -- these under the service_role key, where auth.uid() is null. That is exactly
--- why EXECUTE must be revoked from anon/authenticated below — otherwise any
+-- why EXECUTE must be revoked from anon/authenticated below: otherwise any
 -- logged-in browser user could call the RPC directly via PostgREST and pass
 -- an arbitrary p_user_id, impersonating someone else.
 -- =========================================================================
@@ -279,7 +279,7 @@ alter table public.members enable row level security;
 alter table public.storage_locations enable row level security;
 
 -- users: read own row, or rows of people who share an active household with you.
--- No insert/update/delete policy — rows are only ever written by the auth trigger.
+-- No insert/update/delete policy: rows are only ever written by the auth trigger.
 create policy users_select on public.users
   for select
   using (
@@ -333,7 +333,7 @@ create policy members_insert on public.members
   );
 
 -- Note: RLS is row-level, so this cannot stop a non-admin from flipping their
--- own is_admin flag via a raw PATCH — that restriction is enforced in FastAPI,
+-- own is_admin flag via a raw PATCH: that restriction is enforced in FastAPI,
 -- which is the authoritative check for all writes regardless of RLS.
 create policy members_update on public.members
   for update

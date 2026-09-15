@@ -1,5 +1,5 @@
 -- Phase 2b: the ledger settlement engine. This is the highest-risk part of
--- the whole project — read the comments, they encode real design decisions
+-- the whole project. Read the comments: they encode real design decisions
 -- (some of which correct genuine contradictions in the original design doc),
 -- not just mechanics.
 
@@ -32,7 +32,7 @@ create table public.ledger_entries (
   household_id uuid not null references public.households (id) on delete cascade,
   creditor_member_id uuid not null references public.members (id) on delete restrict,
   debtor_member_id uuid not null references public.members (id) on delete restrict,
-  -- Deliberately unconstrained scale (not numeric(x,2)) — constraining scale
+  -- Deliberately unconstrained scale (not numeric(x,2)): constraining scale
   -- would mean rounding at write time, which the resolved design explicitly
   -- forbids. Debts are exact; rounding only ever happens at display/settle
   -- time, outside this table.
@@ -43,7 +43,7 @@ create table public.ledger_entries (
   settled_at timestamptz,
   created_at timestamptz not null default now(),
   check (creditor_member_id <> debtor_member_id),
-  -- Two nullable FKs rather than a polymorphic (type, id) pair — keeps real
+  -- Two nullable FKs rather than a polymorphic (type, id) pair: keeps real
   -- referential integrity, matching how the rest of this schema is built.
   check (
     (reason = 'PURCHASE' and source_purchase_event_id is not null and source_consumption_event_id is null)
@@ -64,9 +64,9 @@ create index ledger_entries_source_consumption_idx on public.ledger_entries (sou
 create index consumption_events_item_member_idx on public.consumption_events (inventory_item_id, member_id);
 
 -- =========================================================================
--- RLS: ledger_entries — no insert/update/delete policy for authenticated/
+-- RLS: ledger_entries. No insert/update/delete policy for authenticated/
 -- anon at all. FastAPI's own writes go through the service-role client
--- (which bypasses RLS unconditionally) via exactly two RPCs below — RLS
+-- (which bypasses RLS unconditionally) via exactly two RPCs below. RLS
 -- here protects against a browser talking to PostgREST directly, it does
 -- NOT protect against a stray write from FastAPI's own code. That half of
 -- "single writer" is enforced by code discipline: only the two RPCs below
@@ -84,7 +84,7 @@ revoke insert, update, delete on public.ledger_entries from authenticated, anon;
 create trigger ledger_entries_no_update
   before update on public.ledger_entries
   for each row execute function public.reject_mutation();
--- No delete-blocking trigger — per the 0008 lesson, deletion stays possible
+-- No delete-blocking trigger: per the 0008 lesson, deletion stays possible
 -- only via the household's cascade (ledger_entries.household_id references
 -- households on delete cascade), gated by "no RLS delete policy exists, no
 -- endpoint deletes a row individually."
@@ -94,7 +94,7 @@ create trigger ledger_entries_no_update
 --
 -- 2a left this table freely editable by any member at any time (fine when
 -- it was purely informational). 2b's allotment/overage math is defined in
--- terms of "the roster at purchase time" — if the roster can change after
+-- terms of "the roster at purchase time"; if the roster can change after
 -- the fact, the math silently drifts from what was actually charged. PERSON-
 -- AL items never touch the ledger, so they keep free roster editing.
 -- =========================================================================
@@ -122,7 +122,7 @@ create policy inventory_item_allowed_members_delete on public.inventory_item_all
         and i.accounting_type = 'PERSONAL'
     )
   );
--- Note: this doesn't block the RPCs' own initial insert into this table —
+-- Note: this doesn't block the RPCs' own initial insert into this table:
 -- they run under the function owner's privileges (SECURITY DEFINER) and
 -- bypass RLS entirely, same as every other RPC in this schema.
 
@@ -130,8 +130,8 @@ create policy inventory_item_allowed_members_delete on public.inventory_item_all
 -- create_manual_inventory_item: add accounting_type + the initial PURCHASE
 -- split.
 --
--- Adding a parameter changes the function's signature/identity in Postgres
--- — CREATE OR REPLACE with a different parameter list creates a new
+-- Adding a parameter changes the function's signature/identity in Postgres:
+-- CREATE OR REPLACE with a different parameter list creates a new
 -- overload alongside the old one rather than replacing it. Drop the old
 -- 10-parameter signature explicitly first, or it lingers as dead, stale code.
 -- =========================================================================
@@ -202,7 +202,7 @@ begin
     select v_item.id, unnest(p_allowed_member_ids);
 
   -- Initial cost split: everyone on the roster except the buyer owes their
-  -- equal share. The buyer never gets a "self" entry — they already hold
+  -- equal share. The buyer never gets a "self" entry: they already hold
   -- their own share by construction (nobody bills them for it).
   if p_accounting_type <> 'PERSONAL' and p_cost > 0 then
     v_share := p_cost / v_member_count;
@@ -226,14 +226,14 @@ grant execute on function public.create_manual_inventory_item(
 
 -- =========================================================================
 -- consume_inventory_item: enforce allowed_member_ids (2a left this
--- unenforced — harmless when only physical quantity was at stake, not
+-- unenforced, harmless when only physical quantity was at stake, not
 -- harmless now that consuming generates real debt), plus incremental
 -- overage settlement for UNIT_BASED items.
 --
 -- INVARIANT: the UPDATE below must stay the FIRST statement in this
 -- function. It acquires a row-level lock on the inventory_items row, held
 -- for the rest of the transaction. Every downstream overage/slack read
--- relies on inheriting that lock — a second concurrent call for the SAME
+-- relies on inheriting that lock: a second concurrent call for the SAME
 -- item blocks on its own UPDATE until this transaction fully commits, which
 -- means by the time it proceeds, all of this transaction's consumption_events
 -- and ledger_entries writes are already visible to it. This is what makes
@@ -321,13 +321,13 @@ begin
       -- consume request over a bookkeeping edge case.
       if v_total_slack > 0 then
         -- Over-consumer pays each slack-holding member directly, proportional
-        -- to their share of slack. The buyer is NOT involved here — they
+        -- to their share of slack. The buyer is NOT involved here: they
         -- already received their money via the initial PURCHASE split and
         -- have no further role in overage settlement. (This corrects a
         -- contradiction in the original design doc, where the worked
         -- example's prose said the over-consumer pays the slack members
         -- directly, but the accompanying pseudocode showed the buyer
-        -- paying instead — resolved in favor of the prose.)
+        -- paying instead. Resolved in favor of the prose.)
         insert into public.ledger_entries
           (household_id, creditor_member_id, debtor_member_id, amount, reason, source_consumption_event_id)
         select p_household_id, s.member_id, p_member_id,

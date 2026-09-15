@@ -2,7 +2,7 @@
 
 Used exclusively by the `rls`-marked test suite, which asserts real RLS
 behavior against the linked hosted project rather than mocks. Keep total
-test-user creation to a small, reused pool — the hosted project's Auth rate
+test-user creation to a small, reused pool: the hosted project's Auth rate
 limits (see supabase/config.toml) apply here just like production traffic.
 """
 

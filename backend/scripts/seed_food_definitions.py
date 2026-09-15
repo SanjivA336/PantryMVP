@@ -2,7 +2,7 @@
 
 Run from the backend/ directory: `uv run python scripts/seed_food_definitions.py`
 
-Inserts are upserted on `name` so this script is safe to re-run — it won't
+Inserts are upserted on `name` so this script is safe to re-run: it won't
 create duplicates if some entries already exist.
 """
 

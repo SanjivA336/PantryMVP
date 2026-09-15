@@ -1,9 +1,9 @@
 # Burrow
 
-A home for your food — shared-household kitchen/pantry management system.
+A home for your food: shared-household kitchen/pantry management system.
 
 ```
-/supabase   Supabase CLI project — migrations + config.toml (schema/RLS source of truth)
+/supabase   Supabase CLI project: migrations + config.toml (schema/RLS source of truth)
 /backend    FastAPI (Python, managed with uv)
 /frontend   React + TypeScript + Vite (Tailwind CSS v4)
 ```
@@ -30,7 +30,7 @@ A home for your food — shared-household kitchen/pantry management system.
   and rough "about this much" presets (a cup, a handful, ...)
 - Consume and discard actions; full purchase history is retained even after
   an item is fully used up
-- Correct a mis-logged consumption after the fact — an append-only signed
+- Correct a mis-logged consumption after the fact: an append-only signed
   adjustment, never an edit; re-splits an already-frozen item's ledger
   entries if needed
 - Quantities are stored in a canonical base unit (g / ml / count) and
@@ -66,7 +66,7 @@ A home for your food — shared-household kitchen/pantry management system.
 - Auto-suggest from current stock warnings, with either a temporary
   (until-next-purchase) or permanent per-food dismissal
 - Clear-list action
-- **"Bought marked items" wizard** — turns every collected item into a
+- **"Bought marked items" wizard**: turns every collected item into a
   draft purchase "order" (removing them from the list at the same time so
   two people can't double-import). A two-pane modal: line list on the left,
   a per-line add-item form on the right with a complete/incomplete toggle;
@@ -86,7 +86,7 @@ A home for your food — shared-household kitchen/pantry management system.
 ### Recipes
 - Manual creation/editing: ingredients linked to the food catalog, ordered
   instructions, servings, prep/cook time
-- Live ingredient availability against current inventory (have it / don't —
+- Live ingredient availability against current inventory (have it or don't,
   plus an exact-quantity match when units align; no unit conversion)
 - Import from a URL (reads schema.org Recipe JSON-LD, falls back to page
   text) or from pasted text, parsed by a local LLM
@@ -125,29 +125,29 @@ OCR-backed steps below are gated to a developer allowlist.
 
 Ordered by when it should happen, not just grouped by topic. AI/OCR
 features (recipe generation, receipt scanning, AI recipe import) are
-deliberately left out of this list entirely — they stay behind the
+deliberately left out of this list entirely: they stay behind the
 developer gate through v1. Hosting stays local (both frontend and
 backend, on-machine) through Phase 5; only Phase 6 involves anything
 leaving localhost.
 
-### Phase 1 — Correctness & polish (local)
+### Phase 1: Correctness & polish (local)
 
 - [x] Confirm the AI/OCR routes (`recipes/generate`, `scan-receipt*`, and
   AI-backed recipe import) stay behind `DeveloperGuard` / `require_developer`
-  at both the frontend route and backend endpoint level — verified, not
+  at both the frontend route and backend endpoint level. Verified, not
   reachable by a non-developer account.
 - [x] **Consumption correction on a frozen item**: `freeze_item_debt` used
   to read `consumption_events` + the member roster as plain unlocked
-  SELECTs, *then* claim the freeze via a compare-and-swap — a roster edit
+  SELECTs, *then* claim the freeze via a compare-and-swap. A roster edit
   landing in between was priced on the stale snapshot and never reached
   the ledger. Fixed (migration 0039): the read and the claim now happen
   inside one `claim_item_debt_freeze` function under the same row lock
   `set_inventory_item_roster` already takes, so whichever side commits
-  first is what wins — a late roster edit either gets priced correctly or
+  first is what wins: a late roster edit either gets priced correctly or
   is cleanly rejected as "already frozen," never silently lost.
 - [x] Mobile-width pass across the app (done separately from this list).
 
-### Phase 2 — Security & compliance basics
+### Phase 2: Security & compliance basics
 
 - [x] Add basic API rate limiting: a per-client-IP fixed-window cap
   (`app/core/rate_limit.py`, 120 requests/minute by default, configurable
@@ -162,7 +162,7 @@ leaving localhost.
 - [x] Error tracking wired up (Sentry, chosen provider): backend
   (`app/main.py`, explicit `capture_exception` in the catch-all handler)
   and frontend (`main.tsx`, `Sentry.ErrorBoundary` + a themed crash
-  fallback) both no-op until a real DSN is set — **remaining action:**
+  fallback) both no-op until a real DSN is set. **Remaining action:**
   create a Sentry project and set `SENTRY_DSN` / `VITE_SENTRY_DSN`.
 - [x] Password reset email (Resend, chosen provider): domain
   (`contact.burrowapp.site`) verified with Resend, SMTP configured in the
@@ -175,12 +175,12 @@ leaving localhost.
   session came back; `supabase/config.toml`'s `enable_confirmations`
   mirrors the Dashboard setting for the local stack. Burrow-branded email
   templates for both this and password reset drafted in
-  `supabase/templates/` (`confirmation.html`, `recovery.html`) — paste
+  `supabase/templates/` (`confirmation.html`, `recovery.html`); paste
   into the Dashboard's Email Templates section to use for the linked
   project (config.toml only covers the local stack).
 - [x] Household-level error pages: navigating to a household id that
   doesn't exist or that you're not a member of shows the same "this burrow
-  isn't available" message either way (`HouseholdShell`) — deliberately
+  isn't available" message either way (`HouseholdShell`). Deliberately
   not differentiated, since the backend can't tell the two cases apart
   either (`require_household_membership` sees zero members for both) and
   there's no reason to hand that distinction to whoever's poking at a
@@ -189,7 +189,7 @@ leaving localhost.
 - [x] Fixed: a deleted account's still-unexpired access token kept working
   against the API for up to an hour after deletion (JWT verification was
   signature/expiry-only, no check that the account behind it still
-  existed) — `get_current_user_id` now confirms via `users.user_exists`
+  existed). `get_current_user_id` now confirms via `users.user_exists`
   (`public.users` cascades from `auth.users` on delete, so a missing row
   reliably means the account is gone). The frontend's `apiClient` treats
   any 401 as "this session is stale" and force-clears it locally, so
@@ -197,45 +197,46 @@ leaving localhost.
   stuck showing a raw error with no way out. Also added a logout button to
   the households picker page (including its error state) so there's always
   a way out regardless. Verified live: logged in, deleted the account
-  server-side, reloaded — auto-redirected to `/login` within one request.
+  server-side, reloaded, and got auto-redirected to `/login` within one
+  request.
 - [x] Terms of Service + Privacy Policy drafted (`legal/terms-of-service.md`,
-  `legal/privacy-policy.md`) — broad "informational aid, not financial/
+  `legal/privacy-policy.md`): broad "informational aid, not financial/
   medical/professional advice" disclaimers covering cost-splitting, expiry
   dates, and AI-generated content, plus a no-cookies disclosure (confirmed:
   this app sets none; only strictly-necessary localStorage, exempt from
   consent requirements). Texas governing law, contact via a Google Form
   link. **Remaining action:** fill in your full legal name, today's date,
   and the Google Form link once it exists; review the wording; decide
-  whether/how to wire these into real in-app pages (not done yet — these
+  whether/how to wire these into real in-app pages (not done yet: these
   are standalone drafts to review first).
 - [ ] Support/contact channel: a Google Form is the plan. The frontend
   already has a "Contact support" link on the Account page, hidden until
-  `VITE_SUPPORT_URL` is set — **remaining action:** create the form, set
+  `VITE_SUPPORT_URL` is set. **Remaining action:** create the form, set
   the env var.
 
-### Phase 3 — Prod environment split (still local)
+### Phase 3: Prod environment split (still local)
 
 - [ ] Create a separate prod Supabase project (distinct from the one used
   for development) and push all migrations to it.
 - [ ] Decide the env var / secrets story for switching between dev and prod
   configs cleanly (e.g. a documented `.env.production`).
 - [ ] Re-run the `rls` + `integration` suites against the new prod project
-  specifically — passing against dev doesn't prove prod's migrations
+  specifically: passing against dev doesn't prove prod's migrations
   behave the same.
-- [ ] Decide what happens to existing test data ("Test Zone" etc.) — prod
+- [ ] Decide what happens to existing test data ("Test Zone" etc.): prod
   should start clean.
 - [ ] Confirm Supabase's backup/point-in-time recovery is enabled on the
   prod project before real data exists.
 
-### Phase 4 — CI (still local hosting, just automation)
+### Phase 4: CI (still local hosting, just automation)
 
 - [ ] GitHub Actions workflow: backend `pytest` (unit-marked), frontend
   `tsc` + `oxlint`, on every push/PR.
 - [ ] Add a build check (`npm run build`) to the same workflow.
 
-### Phase 5 — Deployment prep (decide & configure, don't cut over yet)
+### Phase 5: Deployment prep (decide & configure, don't cut over yet)
 
-- [ ] Choose a backend host (needs a long-running process — Railway,
+- [ ] Choose a backend host (needs a long-running process: Railway,
   Fly.io, Render, a VPS, …).
 - [ ] Choose a frontend static host/CDN (Vercel, Netlify, Cloudflare
   Pages, …).
@@ -246,46 +247,46 @@ leaving localhost.
 - [ ] Write down the actual deploy steps (build command, required env
   vars, migration step) so cutover day is a checklist.
 
-### Phase 6 — Cutover (the only phase that leaves localhost)
+### Phase 6: Cutover (the only phase that leaves localhost)
 
 - [ ] Deploy the backend, pointed at the prod Supabase project.
 - [ ] Deploy the frontend build, pointed at the deployed backend.
 - [ ] Point the domain at the new deployment, if applicable.
-- [ ] Full manual smoke test against the real production URL (signup →
-  household → inventory → shopping list → balances) — not localhost.
+- [ ] Full manual smoke test against the real production URL (signup,
+  household, inventory, shopping list, balances), not localhost.
 - [ ] Invite real users. That's v1.
 
 ### Deferred past v1 (developer-gated; not required for launch)
 
 - **Receipt review page** (`ReviewReceiptSessionPage`) got a mechanical
   rename onto the shared purchase-session model; its Confirm/Skip UX still
-  assumes the old skip semantics and needs reworking — bundled with the
+  assumes the old skip semantics and needs reworking. Bundled with the
   rest of AI/OCR, not needed until that's turned on for real users.
 
 ### Longer-term
 
-- **Real unit conversion** for recipe ingredient availability — weight↔volume
+- **Real unit conversion** for recipe ingredient availability: weight↔volume
   needs a per-food density this app deliberately never asks for.
 - **Additional AI providers** beyond Ollama and **OCR engines** beyond Google
-  Cloud Vision — both are swappable by config, with one implementation each.
-- **Garden / harvest-based tracking** — an initial `GARDEN` storage type was
+  Cloud Vision: both are swappable by config, with one implementation each.
+- **Garden / harvest-based tracking**: an initial `GARDEN` storage type was
   dropped, pending its own harvest-date-based model.
-- **Fuzzy/semantic ingredient matching** for AI-recipe food resolution —
+- **Fuzzy/semantic ingredient matching** for AI-recipe food resolution:
   currently exact, case-insensitive name matching only.
-- **Push/email notifications** — the in-app activity feed is the stand-in.
+- **Push/email notifications**: the in-app activity feed is the stand-in.
 
 ## Setup
 
 1. Copy `.env.example` to `.env` at the repo root and fill in your Supabase project's URL/keys (Project Settings → API in the Supabase dashboard).
 2. Backend: `cd backend && uv run uvicorn app.main:app --reload`
 3. Frontend: `cd frontend && npm install && npm run dev`
-4. Supabase CLI (installed as a root devDependency, no global install needed): `npx supabase <command>` from the repo root — e.g. `npx supabase link --project-ref <ref>`, `npx supabase db push`.
+4. Supabase CLI (installed as a root devDependency, no global install needed): `npx supabase <command>` from the repo root, e.g. `npx supabase link --project-ref <ref>`, `npx supabase db push`.
 
 ## Backend tooling
 
 - Dependency management: `uv` (`uv add <pkg>`, `uv run <cmd>`)
 - Lint/format: `uv run ruff check .` / `uv run ruff format .`
-- Tests: `uv run pytest` (unit tests only by default; `rls`, `integration`, and `ollama`-marked tests hit your real linked Supabase project and/or a local Ollama instance — run explicitly with e.g. `uv run pytest -m rls`)
+- Tests: `uv run pytest` (unit tests only by default; `rls`, `integration`, and `ollama`-marked tests hit your real linked Supabase project and/or a local Ollama instance, so run those explicitly with e.g. `uv run pytest -m rls`)
 
 ## Frontend tooling
 

@@ -9,7 +9,7 @@ class JWKSClient:
     """Fetches and caches this Supabase project's public JWT signing keys.
 
     This project uses Supabase's asymmetric JWT signing keys (ES256), not
-    the legacy HS256 shared secret — verifying a token means matching its
+    the legacy HS256 shared secret, so verifying a token means matching its
     `kid` header against one of these published public keys, never trusting
     a secret embedded in application config.
     """
@@ -25,7 +25,7 @@ class JWKSClient:
 
     def get_key(self, kid: str) -> dict | None:
         if kid not in self._keys_by_kid:
-            # Refetch once on a cache miss — handles key rotation without
+            # Refetch once on a cache miss: handles key rotation without
             # requiring a service restart, without refetching on every call.
             self._fetch()
         return self._keys_by_kid.get(kid)

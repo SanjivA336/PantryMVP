@@ -50,8 +50,8 @@ Specifically, and without limitation:
   own judgment before relying on anything the Service tells you.
 
 In short: Burrow is a suggestion engine, not a source of truth. You are
-always responsible for verifying anything that matters before acting on
-it — financial, dietary, or otherwise.
+always responsible for verifying anything that matters, whether financial,
+dietary, or otherwise, before acting on it.
 
 ## 3. Accounts
 
@@ -78,7 +78,7 @@ non-infringement, to the fullest extent permitted by law.
 To the fullest extent permitted by law, Burrow and its operator will not
 be liable for any indirect, incidental, special, consequential, or
 punitive damages, or any loss of data, money, food, or goodwill, arising
-from your use of (or inability to use) the Service — including, without
+from your use of (or inability to use) the Service. This includes, without
 limitation, any dispute between household members over cost splitting or
 balances, any harm from relying on an expiry date or food-safety
 inference, or any error in AI-generated or AI-assisted content. To the

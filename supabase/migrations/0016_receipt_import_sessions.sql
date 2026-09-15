@@ -201,7 +201,7 @@ begin
     select v_item.id, unnest(p_allowed_member_ids);
 
   -- Initial cost split: everyone on the roster except the buyer owes their
-  -- equal share. The buyer never gets a "self" entry — they already hold
+  -- equal share. The buyer never gets a "self" entry: they already hold
   -- their own share by construction (nobody bills them for it).
   if p_accounting_type <> 'PERSONAL' and p_cost > 0 then
     v_share := p_cost / v_member_count;

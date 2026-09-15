@@ -79,10 +79,10 @@ def require_household_membership(
     """FastAPI dependency: caller must be an active member of `household_id`.
 
     `household_id` is resolved from the route's path parameter of the same
-    name — any handler on a `/{household_id}` route gets this for free.
+    name, so any handler on a `/{household_id}` route gets this for free.
 
     This is the FastAPI-side authorization layer. It must never assume RLS
-    already caught an unauthorized request — FastAPI's writes use the
+    already caught an unauthorized request, since FastAPI's writes use the
     service-role key, which bypasses RLS entirely, so this check is the only
     thing standing between a request and someone else's household data.
     """
