@@ -1,5 +1,6 @@
 import sys
 
+import sentry_sdk
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,15 @@ from app.core.rate_limit import RateLimitMiddleware
 from app.core.responses import error_envelope
 
 settings = get_settings()
+
+# A no-op until Settings.sentry_dsn is actually set (sentry_sdk's own
+# functions -- capture_exception below included -- silently do nothing pre-
+# init) -- no account needed for local dev. Errors only, not performance
+# tracing, since that's what was actually asked for; it's a distinct Sentry
+# feature with its own quota, not something to turn on as a side effect of
+# wiring up error tracking.
+if settings.sentry_dsn:
+    sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.environment)
 
 app = FastAPI(title="Burrow API")
 
@@ -86,6 +96,13 @@ async def validation_exception_handler(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+    # Explicit capture rather than relying on Sentry's own ASGI
+    # instrumentation: this handler itself returns a normal response for
+    # every unhandled exception (that's its whole job), so nothing ever
+    # propagates as far as the server-error-level middleware Sentry's
+    # auto-instrumentation typically hooks into. A no-op call if sentry_sdk
+    # was never initialized (no DSN set).
+    sentry_sdk.capture_exception(exc)
     return JSONResponse(
         status_code=500,
         content=error_envelope("500", "Internal server error").model_dump(mode="json"),

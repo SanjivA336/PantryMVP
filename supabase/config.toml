@@ -235,15 +235,20 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
+# Production SMTP -- Resend. Only takes effect for the local CLI stack
+# (`supabase start`); the linked hosted project's own SMTP settings are
+# configured separately, in the Supabase Dashboard for that project
+# (Authentication > Settings > SMTP Settings), using these same values.
+# Needs a domain verified with Resend first -- until then Resend can only
+# send to your own Resend account email, not real users.
 # [auth.email.smtp]
 # enabled = true
-# host = "smtp.sendgrid.net"
+# host = "smtp.resend.com"
 # port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# user = "resend"
+# pass = "env(RESEND_API_KEY)"
+# admin_email = "noreply@your-verified-domain.com"
+# sender_name = "Burrow"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

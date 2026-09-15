@@ -47,6 +47,12 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
+    # Error tracking (Sentry). Empty by default -- sentry_sdk.init is simply
+    # never called when this is blank (see main.py), so local dev never
+    # needs an account to run the app; set it once a real project's DSN
+    # exists.
+    sentry_dsn: str = ""
+
     # Auth itself (signup/login/password reset) goes straight from the
     # frontend to Supabase Auth, which already rate-limits that on its own
     # -- this backend never sees those requests. This is the backstop for

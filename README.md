@@ -149,27 +149,42 @@ leaving localhost.
 
 ### Phase 2 — Security & compliance basics
 
-- [ ] **Skipped — needs your input.** Wire up an SMTP provider (Resend,
-  Postmark, SES, …) so self-service password reset and email verification
-  work — currently blocked at the UI layer specifically because no
-  provider is configured. Needs an account/credentials only you can supply.
-- [ ] **Skipped — needs your input.** Write a Terms of Service + Privacy
-  Policy (even a minimal one) — needs real specifics (entity/contact name,
-  jurisdiction, data-handling details) rather than generic filler text.
 - [x] Add basic API rate limiting: a per-client-IP fixed-window cap
   (`app/core/rate_limit.py`, 120 requests/minute by default, configurable
   via `RATE_LIMIT_MAX_REQUESTS`/`RATE_LIMIT_WINDOW_SECONDS`), hand-rolled
   rather than pulled from a library after discovering `slowapi` silently
   no-ops against this project's FastAPI/Starlette version. `/health` stays
   exempt for uptime monitors; disabled entirely under pytest.
-- [ ] **Skipped — needs your input.** Add error tracking (Sentry or
-  similar) — needs an account/DSN for whichever provider you'd prefer.
-- [ ] **Skipped — needs your input.** Decide on a support/contact channel
-  (even just an email address).
 - [x] CSV/data export: an "Export as CSV" button on the Inventory page,
   generated client-side (no server round trip) from whatever's currently
   shown (search/category/storage filters included), with buyer/shared-with
   member ids resolved to nicknames.
+- [x] Error tracking wired up (Sentry, chosen provider): backend
+  (`app/main.py`, explicit `capture_exception` in the catch-all handler)
+  and frontend (`main.tsx`, `Sentry.ErrorBoundary` + a themed crash
+  fallback) both no-op until a real DSN is set — **remaining action:**
+  create a Sentry project and set `SENTRY_DSN` / `VITE_SENTRY_DSN`.
+- [ ] Password reset email (Resend, chosen provider): `.env`'s
+  `RESEND_API_KEY` and `supabase/config.toml`'s `[auth.email.smtp]` block
+  are ready — **remaining action:** verify a sending domain with Resend,
+  then paste the same SMTP values into the Supabase Dashboard for the
+  linked project (Authentication > Settings > SMTP Settings; config.toml
+  only covers the local CLI stack). Once that's live, tell me and I'll
+  flip `ForgotPasswordPage` back to the real reset form.
+- [x] Terms of Service + Privacy Policy drafted (`legal/terms-of-service.md`,
+  `legal/privacy-policy.md`) — broad "informational aid, not financial/
+  medical/professional advice" disclaimers covering cost-splitting, expiry
+  dates, and AI-generated content, plus a no-cookies disclosure (confirmed:
+  this app sets none; only strictly-necessary localStorage, exempt from
+  consent requirements). Texas governing law, contact via a Google Form
+  link. **Remaining action:** fill in your full legal name, today's date,
+  and the Google Form link once it exists; review the wording; decide
+  whether/how to wire these into real in-app pages (not done yet — these
+  are standalone drafts to review first).
+- [ ] Support/contact channel: a Google Form is the plan. The frontend
+  already has a "Contact support" link on the Account page, hidden until
+  `VITE_SUPPORT_URL` is set — **remaining action:** create the form, set
+  the env var.
 
 ### Phase 3 — Prod environment split (still local)
 
