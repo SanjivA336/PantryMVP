@@ -1,0 +1,81 @@
+name: CI
+
+# "on" is which real-world events trigger this workflow. push covers direct
+# commits to main; pull_request covers every PR targeting main, both the
+# first time it's opened and every time you push a new commit onto it.
+# Between those two, every change either lands on main or arrives as a PR
+# first, so nothing slips through unchecked.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Each top-level entry under `jobs` runs on its own fresh virtual machine,
+  # in parallel with the others by default. backend and frontend don't
+  # depend on each other, so splitting them means a frontend typo doesn't
+  # wait around for the (slower) backend test suite to finish first.
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      # "uses" pulls in a reusable action someone else published (GitHub's
+      # own actions/* here) instead of you writing the equivalent shell
+      # commands yourself. This one just clones your repo onto the runner.
+      - uses: actions/checkout@v4
+
+      # astral-sh/setup-uv installs the `uv` CLI itself onto the runner
+      # (there's no uv preinstalled, unlike a language runtime).
+      - uses: astral-sh/setup-uv@v5
+        with:
+          # Caches downloaded packages between runs using uv.lock's hash as
+          # the cache key, so CI doesn't redownload every dependency from
+          # scratch on every single push.
+          enable-cache: true
+
+      # Installs everything in pyproject.toml (including the `dev` group:
+      # pytest, ruff) into a fresh virtual environment, pinned to the exact
+      # versions recorded in uv.lock.
+      - run: uv sync
+
+      # Matches this repo's own default: pyproject.toml's addopts already
+      # excludes rls/integration/ollama-marked tests, which need a real
+      # linked Supabase project or a running Ollama instance neither of
+      # which exist on this runner. Confirmed this passes with zero .env
+      # file / environment variables present before wiring it up here.
+      - run: uv run pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      # actions/setup-node installs Node itself. cache: npm additionally
+      # caches ~/.npm keyed on package-lock.json, the same idea as uv's
+      # cache above.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` (as opposed to `npm install`) installs exactly what's
+      # pinned in package-lock.json and refuses to proceed if the lockfile
+      # and package.json disagree, rather than silently updating anything.
+      # That determinism is exactly what you want in CI: the same lockfile
+      # should produce the same install every time.
+      - run: npm ci
+
+      - run: npm run lint
+
+      # tsc -b (type check) followed by vite build (the real production
+      # bundle) -- confirmed this succeeds with no .env file present, since
+      # VITE_* variables are only read at runtime in the browser, not
+      # while Vite is bundling.
+      - run: npm run build

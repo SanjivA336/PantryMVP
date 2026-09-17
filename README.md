@@ -241,9 +241,15 @@ leaving localhost.
 
 ### Phase 4: CI (still local hosting, just automation)
 
-- [ ] GitHub Actions workflow: backend `pytest` (unit-marked), frontend
-  `tsc` + `oxlint`, on every push/PR.
-- [ ] Add a build check (`npm run build`) to the same workflow.
+- [x] GitHub Actions workflow (`.github/workflows/ci.yml`): a `backend` job
+  (`uv sync` + `uv run pytest`, unit-marked by `pyproject.toml`'s default
+  `addopts`) and a `frontend` job (`npm ci`, `npm run lint`, `npm run
+  build`), on every push to `main` and every PR targeting it. Needs no
+  secrets: unit tests mock the Supabase client at the service layer, and
+  the frontend build doesn't read `VITE_*` vars until the browser runs it.
+- [x] Build check folded into the frontend job above (`npm run build`
+  already runs `tsc -b && vite build`, so it's both the type check and the
+  production bundle in one step).
 
 ### Phase 5: Deployment prep (decide & configure, don't cut over yet)
 
