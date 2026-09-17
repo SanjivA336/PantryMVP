@@ -25,11 +25,11 @@ jobs:
       # "uses" pulls in a reusable action someone else published (GitHub's
       # own actions/* here) instead of you writing the equivalent shell
       # commands yourself. This one just clones your repo onto the runner.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # astral-sh/setup-uv installs the `uv` CLI itself onto the runner
       # (there's no uv preinstalled, unlike a language runtime).
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           # Caches downloaded packages between runs using uv.lock's hash as
           # the cache key, so CI doesn't redownload every dependency from
@@ -54,12 +54,12 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # actions/setup-node installs Node itself. cache: npm additionally
       # caches ~/.npm keyed on package-lock.json, the same idea as uv's
       # cache above.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
