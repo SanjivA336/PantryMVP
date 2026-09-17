@@ -219,19 +219,25 @@ leaving localhost.
   `VITE_SUPPORT_URL` is set. **Remaining action:** create the form, set
   the env var.
 
-### Phase 3: Prod environment split (still local)
+### Phase 3: Prod environment split (deferred, decision made 2026-09-17)
 
-- [ ] Create a separate prod Supabase project (distinct from the one used
-  for development) and push all migrations to it.
-- [ ] Decide the env var / secrets story for switching between dev and prod
-  configs cleanly (e.g. a documented `.env.production`).
-- [ ] Re-run the `rls` + `integration` suites against the new prod project
-  specifically: passing against dev doesn't prove prod's migrations
-  behave the same.
-- [ ] Decide what happens to existing test data ("Test Zone" etc.): prod
-  should start clean.
-- [ ] Confirm Supabase's backup/point-in-time recovery is enabled on the
-  prod project before real data exists.
+- [x] **Decided: no separate prod Supabase project for now.** This is a
+  small/solo project without real production traffic riding on it, so the
+  cost of maintaining two projects (separate env files, keeping schemas in
+  sync, re-running test suites against both) isn't worth it yet. The one
+  linked Supabase project doubles as prod.
+- [ ] Discipline to follow now that this project may hold real user data:
+  stop running the destructive `rls`/`integration` suites (they create and
+  delete real accounts) against it; test new migrations against the local
+  Supabase CLI stack first, before pushing here.
+- [ ] Confirm Supabase's backup/point-in-time recovery is enabled before
+  real user data exists. Cheap insurance regardless of the dev/prod
+  decision above; check whether it's included on the current plan tier.
+- **Revisit if this ever needs undoing**: create a real separate prod
+  project, push migrations to it, and pick back up the original plan
+  (documented `.env.production`, re-running `rls`/`integration` against
+  the new project specifically, deciding what happens to any test data
+  accumulated on the shared project by then).
 
 ### Phase 4: CI (still local hosting, just automation)
 
@@ -254,7 +260,8 @@ leaving localhost.
 
 ### Phase 6: Cutover (the only phase that leaves localhost)
 
-- [ ] Deploy the backend, pointed at the prod Supabase project.
+- [ ] Deploy the backend, pointed at the (shared dev/prod, per Phase 3)
+  Supabase project.
 - [ ] Deploy the frontend build, pointed at the deployed backend.
 - [ ] Point the domain at the new deployment, if applicable.
 - [ ] Full manual smoke test against the real production URL (signup,
