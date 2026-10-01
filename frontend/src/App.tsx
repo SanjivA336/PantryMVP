@@ -1,4 +1,7 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { ServerWakingBanner } from './components/ServerWakingBanner'
+import { warmUpServer } from './lib/apiClient'
 import { AuthProvider } from './context/AuthContext'
 import { AuthGuard } from './components/AuthGuard'
 import { DeveloperGuard } from './components/DeveloperGuard'
@@ -28,8 +31,14 @@ import { ScanReceiptPage } from './pages/scan-receipt'
 import { ReviewReceiptSessionPage } from './pages/scan-receipt/ReviewReceiptSessionPage'
 
 function App() {
+  // Once per page load: starts waking a sleeping backend right away.
+  useEffect(() => {
+    warmUpServer()
+  }, [])
+
   return (
     <BrowserRouter>
+      <ServerWakingBanner />
       <AuthProvider>
         <Routes>
           <Route path="/signup" element={<SignupPage />} />

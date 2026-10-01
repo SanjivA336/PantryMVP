@@ -1,9 +1,23 @@
+import { trackRequest } from './serverWake'
 import { supabase } from './supabaseClient'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 if (!API_BASE_URL) {
   throw new Error('Missing VITE_API_BASE_URL. Check your .env file.')
+}
+
+// Fire-and-forget request to the backend's health check, sent as soon as the
+// app loads (even on the login page). On the free hosting tier the backend
+// sleeps when idle; waking it while someone is still typing their password
+// means it's usually ready by their first real request, so most people never
+// see the "waking up" banner at all. no-cors because the response is never
+// read, only the wake-up matters; /health is exempt from rate limiting and
+// doesn't touch the database.
+export function warmUpServer(): void {
+  fetch(`${API_BASE_URL}/health`, { mode: 'no-cors', cache: 'no-store' }).catch(() => {
+    // Nothing to do: if the server is down, the first real request reports it.
+  })
 }
 
 interface Envelope<T> {
@@ -69,6 +83,12 @@ async function request<T>(path: string, options: RequestInit = {}, timeoutMs?: n
   const timeoutId =
     controller !== undefined ? setTimeout(() => controller.abort(), timeoutMs) : undefined
 
+  // Lets the UI say "waking up the server" if this hangs (see serverWake.ts).
+  // Skipped for requests with their own explicit timeout: today that's only
+  // the AI endpoints, which are slow by nature and not a sign of a sleeping
+  // server.
+  const endTracking = timeoutMs === undefined ? trackRequest() : undefined
+
   let response: Response
   try {
     response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
@@ -101,6 +121,7 @@ async function request<T>(path: string, options: RequestInit = {}, timeoutMs?: n
     )
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId)
+    endTracking?.()
   }
 
   let envelope: Envelope<T>
