@@ -20,7 +20,11 @@ settings = get_settings()
 # tracing, since that's what was actually asked for; it's a distinct Sentry
 # feature with its own quota, not something to turn on as a side effect of
 # wiring up error tracking.
-if settings.sentry_dsn:
+#
+# Skipped under pytest for the same reason the rate limiter is (see below):
+# with a real DSN in .env, tests that deliberately trigger the catch-all
+# handler would otherwise file fake errors in the real Sentry project.
+if settings.sentry_dsn and "pytest" not in sys.modules:
     sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.environment)
 
 app = FastAPI(title="Burrow API")
