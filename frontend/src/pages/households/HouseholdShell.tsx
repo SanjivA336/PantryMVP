@@ -14,6 +14,7 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { CopyButton } from '../../components/CopyButton'
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { MobileShortcutMenu } from '../../components/MobileShortcutMenu'
+import { SupportLink } from '../../components/SupportLink'
 import { useAuth } from '../../hooks/useAuth'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import type { Household } from '../../types/entities'
@@ -197,6 +198,7 @@ export function HouseholdShell() {
         </nav>
 
         <div className="shrink-0 border-t border-subtle p-3">
+          <SupportLink className="mb-1 rounded-control px-2 py-2 hover:bg-surface-hover" />
           <div className="flex items-center gap-2">
             <NavLink
               to="settings"

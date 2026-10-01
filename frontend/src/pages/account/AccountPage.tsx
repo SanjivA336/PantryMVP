@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CircleHelp, LogOut, TriangleAlert } from 'lucide-react'
+import { LogOut, TriangleAlert } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { Modal } from '../../components/Modal'
+import { SupportLink } from '../../components/SupportLink'
 import { useAuth } from '../../hooks/useAuth'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import type { Member } from '../../types/entities'
@@ -13,10 +14,6 @@ import { newPasswordSchema, type NewPasswordForm } from '../auth/schema'
 
 const inputClass =
   'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
-
-// Wherever support requests actually go (a Google Form today) -- unset
-// until that exists, in which case the link below just doesn't render.
-const SUPPORT_URL = import.meta.env.VITE_SUPPORT_URL
 
 function BurrowSettingsCard({ householdId }: { householdId: string }) {
   const { user } = useAuth()
@@ -230,19 +227,7 @@ export function AccountPage() {
 
           <ChangePasswordSection />
 
-          {/* Hidden entirely until a real form/inbox exists to send this
-              to -- VITE_SUPPORT_URL unset means nothing to link to yet. */}
-          {SUPPORT_URL && (
-            <a
-              href={SUPPORT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex w-fit items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-text hover:underline"
-            >
-              <CircleHelp size={16} strokeWidth={1.75} />
-              Contact support
-            </a>
-          )}
+          <SupportLink className="w-fit hover:underline" />
 
           <button
             type="button"

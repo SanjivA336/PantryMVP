@@ -209,15 +209,19 @@ leaving localhost.
   medical/professional advice" disclaimers covering cost-splitting, expiry
   dates, and AI-generated content, plus a no-cookies disclosure (confirmed:
   this app sets none; only strictly-necessary localStorage, exempt from
-  consent requirements). Texas governing law, contact via a Google Form
-  link. **Remaining action:** fill in your full legal name, today's date,
-  and the Google Form link once it exists; review the wording; decide
-  whether/how to wire these into real in-app pages (not done yet: these
-  are standalone drafts to review first).
-- [ ] Support/contact channel: a Google Form is the plan. The frontend
-  already has a "Contact support" link on the Account page, hidden until
-  `VITE_SUPPORT_URL` is set. **Remaining action:** create the form, set
-  the env var.
+  consent requirements). Texas governing law, contact via the support
+  Google Form. Finalized as Word files (`legal/Burrow-Terms-of-Service.docx`,
+  `legal/Burrow-Privacy-Policy.docx`) with the operator's name and form
+  link filled in. **Remaining action:** host them as real in-app pages and
+  add an agree-to-terms line on `SignupPage` (not done yet; the older
+  `.md` drafts are now stale). Once hosts are chosen in Phase 5, name them
+  in the Privacy Policy's provider table, and add Sentry's row's final
+  details once its DSN is set.
+- [x] Support/contact channel: a Google Form, linked in the app through a
+  shared `SupportLink` component (desktop sidebar above Settings, the
+  Burrow settings tab, and the Account page), hidden if `VITE_SUPPORT_URL`
+  is unset. **Remaining action:** set `VITE_SUPPORT_URL` on the frontend
+  host at deploy time.
 
 ### Phase 3: Prod environment split (deferred, decision made 2026-09-17)
 
