@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { LogOut, TriangleAlert } from 'lucide-react'
@@ -228,6 +228,15 @@ export function AccountPage() {
           <ChangePasswordSection />
 
           <SupportLink className="w-fit hover:underline" />
+
+          <div className="flex gap-4 text-sm font-medium text-muted">
+            <Link to="/terms" target="_blank" className="hover:text-text hover:underline">
+              Terms of Service
+            </Link>
+            <Link to="/privacy" target="_blank" className="hover:text-text hover:underline">
+              Privacy Policy
+            </Link>
+          </div>
 
           <button
             type="button"
