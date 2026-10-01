@@ -47,6 +47,14 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
+    # Browser origins allowed to call this API (CORS), comma-separated. The
+    # defaults are the local Vite dev servers; a deployed backend must set this
+    # to the real frontend origin(s), e.g. "https://burrowapp.site". Kept as a
+    # plain string rather than a list field because pydantic-settings expects
+    # JSON for list env vars, which is easy to get subtly wrong in a host's
+    # dashboard; see cors_origin_list for the parsed form.
+    cors_origins: str = "http://localhost:5173,http://localhost:5174"
+
     # Error tracking (Sentry). Empty by default -- sentry_sdk.init is simply
     # never called when this is blank (see main.py), so local dev never
     # needs an account to run the app; set it once a real project's DSN
@@ -71,6 +79,10 @@ class Settings(BaseSettings):
     # rather than a DB-editable role since there's exactly one such account
     # today; see app/core/auth.py's is_developer/require_developer.
     developer_user_ids: str = ""
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

@@ -1,0 +1,30 @@
+# Render "Blueprint": the backend's hosting settings as code, so they live in
+# git instead of only in a dashboard. See DEPLOYMENT.md for the full steps.
+#
+# Secrets are declared with `sync: false`: Render asks for them in its
+# dashboard when the Blueprint is first applied, so no value is ever committed.
+services:
+  - type: web
+    name: burrow-api
+    runtime: docker
+    plan: free
+    # Closest Render region to the Supabase project (AWS ca-central-1, Montreal).
+    region: virginia
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # /health is exempt from the rate limiter and never touches Supabase.
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      # The deployed frontend's origin: scheme + host, no trailing slash.
+      - key: CORS_ORIGINS
+        value: https://burrowapp.site
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false

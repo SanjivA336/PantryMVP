@@ -279,16 +279,31 @@ leaving localhost.
 
 ### Phase 5: Deployment prep (decide & configure, don't cut over yet)
 
-- [ ] Choose a backend host (needs a long-running process: Railway,
-  Fly.io, Render, a VPS, …).
-- [ ] Choose a frontend static host/CDN (Vercel, Netlify, Cloudflare
-  Pages, …).
-- [ ] Decide on a domain name and where DNS will live, if wanted.
-- [ ] Add the real deployed frontend origin to CORS in
-  `backend/app/main.py` (currently pinned to `localhost:5173/5174`) ahead
-  of time.
-- [ ] Write down the actual deploy steps (build command, required env
-  vars, migration step) so cutover day is a checklist.
+- [x] **Backend host: Render free web service** (Virginia, closest to
+  the Supabase project in AWS ca-central-1). Chosen to stay free with no
+  card; the cost is a roughly 30 to 60 second cold start after 15 idle
+  minutes (options to soften it are in `DEPLOYMENT.md`). The backend is
+  plain stateless request/response, not a long-running-process app; its
+  only state is the in-memory rate limiter, which needs a single instance.
+  Settings live in `render.yaml` and `backend/Dockerfile` (tested locally:
+  starts, CORS follows the env var, rate limiting keys on forwarded IPs).
+- [x] **Frontend host: Cloudflare Pages** (free; built-in SPA fallback).
+- [x] **Domain: `burrowapp.site`**, registered with Cloudflare, which also
+  hosts its DNS. Plan: the app at `burrowapp.site`, the API at
+  `api.burrowapp.site` so the backend host can change later without a
+  frontend rebuild.
+- [x] CORS is now the `CORS_ORIGINS` env var (comma-separated; defaults to
+  the local dev origins) instead of being pinned in `backend/app/main.py`.
+  `backend/requirements.txt` was regenerated (it was missing `sentry-sdk`).
+- [x] Deploy steps written down: see [DEPLOYMENT.md](DEPLOYMENT.md).
+- [ ] Before launch: update the Privacy Policy's provider table to name
+  Cloudflare and Render, then bump the legal version (details in
+  `DEPLOYMENT.md`, Step 0).
+- [x] "Getting things ready…" banner for slow first requests (any API call
+  pending past 10 seconds; AI endpoints excluded), plus a fire-and-forget
+  `/health` request on every page load that wakes a sleeping backend while
+  the user is still logging in. `frontend/src/lib/serverWake.ts`.
+- [ ] Optional: Sentry source-map upload.
 
 ### Phase 6: Cutover (the only phase that leaves localhost)
 
