@@ -20,7 +20,14 @@ async def create_test_user(email: str, password: str) -> dict:
                 "apikey": settings.supabase_service_role_key,
                 "Authorization": f"Bearer {settings.supabase_service_role_key}",
             },
-            json={"email": email, "password": password, "email_confirm": True},
+            json={
+                "email": email,
+                "password": password,
+                "email_confirm": True,
+                # A database trigger (migration 0040) rejects any account with
+                # no accepted terms version, admin-created ones included.
+                "user_metadata": {"accepted_terms_version": "test-fixture"},
+            },
         )
         response.raise_for_status()
         return response.json()

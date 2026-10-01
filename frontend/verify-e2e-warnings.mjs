@@ -36,7 +36,13 @@ async function createTestUser(email) {
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, password: PASSWORD, email_confirm: true }),
+    body: JSON.stringify({
+      email,
+      password: PASSWORD,
+      email_confirm: true,
+      // Required by the migration 0040 signup trigger, admin-created users included.
+      user_metadata: { accepted_terms_version: 'test-fixture' },
+    }),
   })
   if (!res.ok) throw new Error(`create_test_user failed: ${res.status} ${await res.text()}`)
   return res.json()
@@ -150,7 +156,8 @@ await pageB.waitForTimeout(200)
 await snap(pageB, 'low-stock-banner')
 const lowStockText = await pageB.locator('p:has-text("Running low:")').textContent()
 console.log('B sees (via realtime):', lowStockText)
-if (!lowStockText.includes('Butter')) throw new Error(`Expected Butter in low-stock banner, got: ${lowStockText}`)
+if (!lowStockText.includes('Butter'))
+  throw new Error(`Expected Butter in low-stock banner, got: ${lowStockText}`)
 
 console.log('--- A: consume the rest of the butter -> out of stock ---')
 const butterRowAgain = pageA.locator('li', { hasText: 'Butter' })
@@ -163,7 +170,8 @@ await pageB.waitForSelector('text=Out of stock:', { timeout: 15000 })
 await snap(pageB, 'out-of-stock-banner')
 const outOfStockText = await pageB.locator('p:has-text("Out of stock:")').textContent()
 console.log('B sees (via realtime):', outOfStockText)
-if (!outOfStockText.includes('Butter')) throw new Error(`Expected Butter in out-of-stock banner, got: ${outOfStockText}`)
+if (!outOfStockText.includes('Butter'))
+  throw new Error(`Expected Butter in out-of-stock banner, got: ${outOfStockText}`)
 
 console.log('--- console errors collected ---')
 console.log(consoleErrors.length ? consoleErrors.join('\n') : '(none)')

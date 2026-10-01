@@ -41,7 +41,13 @@ async function createTestUser(email) {
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, password: PASSWORD, email_confirm: true }),
+    body: JSON.stringify({
+      email,
+      password: PASSWORD,
+      email_confirm: true,
+      // Required by the migration 0040 signup trigger, admin-created users included.
+      user_metadata: { accepted_terms_version: 'test-fixture' },
+    }),
   })
   if (!res.ok) throw new Error(`create_test_user failed: ${res.status} ${await res.text()}`)
   return res.json()
@@ -134,7 +140,9 @@ await uploadInput.setInputFiles(fixtureImage)
 await page.waitForURL(/\/scan-receipt\/[0-9a-f-]+$/, { timeout: 15000 })
 await page.waitForSelector('text=Scan failed', { timeout: 15000 })
 await page.waitForSelector('text=Retry')
-console.log('OK: real upload + process pipeline cleanly reached FAILED (expected: no OCR API key configured)')
+console.log(
+  'OK: real upload + process pipeline cleanly reached FAILED (expected: no OCR API key configured)',
+)
 await snap('scan-failed-no-api-key')
 const failedSessionId = page.url().split('/scan-receipt/')[1]
 

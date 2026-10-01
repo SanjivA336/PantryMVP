@@ -42,7 +42,13 @@ async function createTestUser(email) {
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, password: PASSWORD, email_confirm: true }),
+    body: JSON.stringify({
+      email,
+      password: PASSWORD,
+      email_confirm: true,
+      // Required by the migration 0040 signup trigger, admin-created users included.
+      user_metadata: { accepted_terms_version: 'test-fixture' },
+    }),
   })
   if (!res.ok) throw new Error(`create_test_user failed: ${res.status} ${await res.text()}`)
   return res.json()
@@ -156,7 +162,13 @@ async function resolveAllIngredientFoods(page) {
 // mode of llama2 -- see AiOutputParsingError/502) -- clicking the action
 // again is exactly what a real user would do, so retry a bounded number of
 // times here rather than treating one bad roll as a verification failure.
-async function clickAndWaitForEither(page, clickSelector, successSelector, errorSelector, attempts) {
+async function clickAndWaitForEither(
+  page,
+  clickSelector,
+  successSelector,
+  errorSelector,
+  attempts,
+) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     await page.click(clickSelector)
     // The click handler clears any previous error synchronously before the
@@ -178,7 +190,8 @@ async function clickAndWaitForEither(page, clickSelector, successSelector, error
       await page.waitForTimeout(500)
     }
     if (result === 'success') return
-    if (attempt === attempts) throw new Error(`Gave up after ${attempts} attempts: ${clickSelector}`)
+    if (attempt === attempts)
+      throw new Error(`Gave up after ${attempts} attempts: ${clickSelector}`)
     console.log(`  attempt ${attempt} failed (model output error), retrying...`)
     await page.waitForTimeout(1000)
   }
@@ -275,7 +288,9 @@ await clickAndWaitForEither(
 // locator (which only matches text nodes, never form control values).
 const importedName = await page.locator('input[name="name"]').inputValue()
 if (!importedName.toLowerCase().includes('grilled cheese')) {
-  throw new Error(`Expected the URL-imported draft's name to mention "grilled cheese", got: "${importedName}"`)
+  throw new Error(
+    `Expected the URL-imported draft's name to mention "grilled cheese", got: "${importedName}"`,
+  )
 }
 await snap('import-url-review')
 console.log('OK: URL import extracted the fixture JSON-LD recipe name')
@@ -324,7 +339,9 @@ await snap('substitution-result')
 const substitutionError = await firstIngredientRow.locator('p.text-red-600').count()
 if (substitutionError > 0) {
   const message = await firstIngredientRow.locator('p.text-red-600').first().textContent()
-  console.log(`Substitution call returned an error (acceptable under a weak local model): ${message}`)
+  console.log(
+    `Substitution call returned an error (acceptable under a weak local model): ${message}`,
+  )
 } else {
   const suggestionCount = await firstIngredientRow.locator('ul li').count()
   if (suggestionCount === 0) {

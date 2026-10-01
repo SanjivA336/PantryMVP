@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { LEGAL_VERSION } from '../legal/version'
 import { supabase } from '../lib/supabaseClient'
 import { AuthContext } from './authContextValue'
 
@@ -37,10 +38,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // rather than relying on the Dashboard's default Site URL, so the
     // confirmation link lands back in whichever environment (localhost
     // today, the real deployed origin later) actually sent it.
+    //
+    // accepted_terms_version is required by a database trigger (migration
+    // 0040): without it Supabase refuses to create the account at all, so the
+    // signup checkboxes can't be skipped by calling the Auth API directly.
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: window.location.origin },
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: { accepted_terms_version: LEGAL_VERSION },
+      },
     })
     if (error) throw error
     // No session back means Supabase's "Confirm email" setting is on and

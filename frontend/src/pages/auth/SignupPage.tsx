@@ -4,7 +4,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuth } from '../../hooks/useAuth'
 import { usePageTitle } from '../../hooks/usePageTitle'
-import { credentialsSchema, type CredentialsForm } from './schema'
+import { signupSchema, type SignupForm } from './schema'
+
+const checkboxClass = 'mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary'
+const legalLinkClass = 'font-medium text-primary hover:text-primary-hover hover:underline'
 
 export function SignupPage() {
   usePageTitle('Sign Up')
@@ -18,13 +21,20 @@ export function SignupPage() {
   // the account-creation form), so it's fine to be direct about it.
   const [needsConfirmation, setNeedsConfirmation] = useState(false)
 
+  // No defaultValues for the checkboxes: their schema type is the literal
+  // `true`, so `false` isn't a legal default. An untouched checkbox reads as
+  // undefined here and as false at submit time, and both fail the schema.
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
-  } = useForm<CredentialsForm>({ resolver: zodResolver(credentialsSchema) })
+  } = useForm<SignupForm>({ resolver: zodResolver(signupSchema) })
 
-  const onSubmit = async (values: CredentialsForm) => {
+  const [acceptedTerms, acceptedPrivacy] = watch(['acceptedTerms', 'acceptedPrivacy'])
+  const agreedToBoth = Boolean(acceptedTerms && acceptedPrivacy)
+
+  const onSubmit = async (values: SignupForm) => {
     setServerError(null)
     try {
       const { needsConfirmation } = await signUp(values.email, values.password)
@@ -70,10 +80,48 @@ export function SignupPage() {
                 <p className="mt-1.5 text-sm text-danger">{errors.password.message}</p>
               )}
             </div>
+            {/* Both open in a new tab so reading them doesn't throw away
+                what's already typed into this form. */}
+            <div className="flex flex-col gap-2.5">
+              <label className="flex cursor-pointer items-start gap-2 text-sm text-muted">
+                <input type="checkbox" className={checkboxClass} {...register('acceptedTerms')} />
+                <span>
+                  I agree to the{' '}
+                  <Link
+                    to="/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={legalLinkClass}
+                  >
+                    Terms of Service
+                  </Link>
+                </span>
+              </label>
+              {errors.acceptedTerms && (
+                <p className="text-sm text-danger">{errors.acceptedTerms.message}</p>
+              )}
+              <label className="flex cursor-pointer items-start gap-2 text-sm text-muted">
+                <input type="checkbox" className={checkboxClass} {...register('acceptedPrivacy')} />
+                <span>
+                  I've read the{' '}
+                  <Link
+                    to="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={legalLinkClass}
+                  >
+                    Privacy Policy
+                  </Link>
+                </span>
+              </label>
+              {errors.acceptedPrivacy && (
+                <p className="text-sm text-danger">{errors.acceptedPrivacy.message}</p>
+              )}
+            </div>
             {serverError && <p className="text-sm text-danger">{serverError}</p>}
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !agreedToBoth}
               className="mt-1 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
             >
               {isSubmitting ? 'Creating account…' : 'Sign up'}

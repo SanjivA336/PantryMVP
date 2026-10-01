@@ -36,7 +36,13 @@ async function createTestUser(email) {
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, password: PASSWORD, email_confirm: true }),
+    body: JSON.stringify({
+      email,
+      password: PASSWORD,
+      email_confirm: true,
+      // Required by the migration 0040 signup trigger, admin-created users included.
+      user_metadata: { accepted_terms_version: 'test-fixture' },
+    }),
   })
   if (!res.ok) throw new Error(`create_test_user failed: ${res.status} ${await res.text()}`)
   return res.json()
@@ -119,10 +125,7 @@ await page.fill('input[name="prep_time_minutes"]', '10')
 await page.fill('input[name="cook_time_minutes"]', '15')
 
 // Ingredient 1: Butter (50g, unit matches the 200g purchase's "g").
-await page
-  .locator('input[placeholder="Search for a food (e.g. milk)"]')
-  .first()
-  .fill('Butter')
+await page.locator('input[placeholder="Search for a food (e.g. milk)"]').first().fill('Butter')
 const butterOption = page.getByRole('button', { name: 'Butter', exact: true })
 await butterOption.waitFor()
 await butterOption.click()

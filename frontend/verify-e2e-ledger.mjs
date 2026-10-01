@@ -43,7 +43,13 @@ async function createTestUser(email) {
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, password: PASSWORD, email_confirm: true }),
+    body: JSON.stringify({
+      email,
+      password: PASSWORD,
+      email_confirm: true,
+      // Required by the migration 0040 signup trigger, admin-created users included.
+      user_metadata: { accepted_terms_version: 'test-fixture' },
+    }),
   })
   if (!res.ok) throw new Error(`create_test_user failed: ${res.status} ${await res.text()}`)
   return res.json()
