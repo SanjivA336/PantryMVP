@@ -162,8 +162,13 @@ leaving localhost.
 - [x] Error tracking wired up (Sentry, chosen provider): backend
   (`app/main.py`, explicit `capture_exception` in the catch-all handler)
   and frontend (`main.tsx`, `Sentry.ErrorBoundary` + a themed crash
-  fallback) both no-op until a real DSN is set. **Remaining action:**
-  create a Sentry project and set `SENTRY_DSN` / `VITE_SENTRY_DSN`.
+  fallback) both no-op until a real DSN is set. Two Sentry projects (a
+  FastAPI one and a React one), errors only (no tracing, profiling, or
+  Session Replay). DSNs are set locally and a test event from each side
+  was confirmed. Backend Sentry is skipped under pytest so test runs
+  don't file fake errors. **Remaining action at deploy time:** set both
+  DSNs on the hosts, set `ENVIRONMENT=production` on the backend, and
+  upload source maps so frontend traces are readable.
 - [x] Password reset email (Resend, chosen provider): domain
   (`contact.burrowapp.site`) verified with Resend, SMTP configured in the
   Supabase Dashboard for the linked project, `ForgotPasswordPage` back to
@@ -212,11 +217,20 @@ leaving localhost.
   consent requirements). Texas governing law, contact via the support
   Google Form. Finalized as Word files (`legal/Burrow-Terms-of-Service.docx`,
   `legal/Burrow-Privacy-Policy.docx`) with the operator's name and form
-  link filled in. **Remaining action:** host them as real in-app pages and
-  add an agree-to-terms line on `SignupPage` (not done yet; the older
-  `.md` drafts are now stale). Once hosts are chosen in Phase 5, name them
-  in the Privacy Policy's provider table, and add Sentry's row's final
-  details once its DSN is set.
+  link filled in. Ages 13+ (under 18 with a parent or guardian's
+  permission). AI/OCR is deliberately left out until those features open
+  to the public. Hosted in-app at `/terms` and `/privacy` (public routes,
+  rendered from `frontend/src/legal/`), and signup requires ticking both
+  boxes. Acceptance is enforced and recorded in the database (migration
+  0040: a before-insert trigger on `auth.users` rejects any account
+  without an `accepted_terms_version`, and `public.users` stores
+  `terms_version` / `terms_accepted_at`). The version lives in
+  `frontend/src/legal/version.ts`; bump it when the wording changes in a
+  way users should re-accept (e.g. billing, public AI/OCR). The wording
+  exists twice (Word files + `src/legal/*.ts`), so edit both. The older
+  `.md` drafts are stale. **Remaining action:** name the real hosts in the
+  Privacy Policy's provider table once Phase 5 picks them, and make the
+  host serve `index.html` for unknown paths so `/terms` survives a refresh.
 - [x] Support/contact channel: a Google Form, linked in the app through a
   shared `SupportLink` component (desktop sidebar above Settings, the
   Burrow settings tab, and the Account page), hidden if `VITE_SUPPORT_URL`
@@ -234,14 +248,22 @@ leaving localhost.
   stop running the destructive `rls`/`integration` suites (they create and
   delete real accounts) against it; test new migrations against the local
   Supabase CLI stack first, before pushing here.
-- [ ] Confirm Supabase's backup/point-in-time recovery is enabled before
-  real user data exists. Cheap insurance regardless of the dev/prod
-  decision above; check whether it's included on the current plan tier.
+- [x] **Decided: stay on the free tier, no automatic backups or PITR.**
+  Safety net is a manual dump before any risky migration:
+  `npx supabase db dump --linked -f <path outside the repo>` (schema), plus
+  `--data-only` (public) and `--data-only -s auth` (users); needs Docker and
+  `SUPABASE_DB_PASSWORD`. Restore data dumps with `--disable-triggers`
+  (circular foreign keys). The free tier also pauses after about a week
+  idle. Revisit the Pro plan once real users exist.
 - **Revisit if this ever needs undoing**: create a real separate prod
   project, push migrations to it, and pick back up the original plan
   (documented `.env.production`, re-running `rls`/`integration` against
   the new project specifically, deciding what happens to any test data
-  accumulated on the shared project by then).
+  accumulated on the shared project by then). Note: a brand-new Supabase
+  project (or fresh local stack) no longer auto-grants table privileges
+  to the `anon`/`authenticated`/`service_role` API roles, and the
+  migrations contain no explicit `GRANT`s, so tables would be unreachable
+  from the API until grants are added.
 
 ### Phase 4: CI (still local hosting, just automation)
 
