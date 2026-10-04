@@ -18,14 +18,18 @@ export function isInstalledApp(): boolean {
 // standards-based path. Double-tap zoom and focus-zoom are handled in
 // index.css (touch-action and 16px form fields).
 //
-// This deliberately does NOT edit the viewport meta tag at runtime. An earlier
-// version did, and in the installed iOS app the page then stopped short of the
-// bottom of the screen (a dark strip under the tab bar) with every safe-area
-// inset reading 0, as if `viewport-fit=cover` had been ignored. Rewriting the
-// tag was the prime suspect, so it was removed; the tag now stays exactly as
-// written in index.html.
+// This deliberately does NOT edit the viewport meta tag at runtime (an earlier
+// version did). That was suspected of causing a dark strip under the tab bar in
+// the installed iOS app, though the strip turned out to survive its removal, so
+// it isn't the proven cause. The tag stays as written in index.html.
+//
+// TEMPORARILY OFF while chasing the dark strip under the iOS tab bar: set to
+// true to block pinch-zoom in the installed app again. (index.css has a matching
+// `touch-action: pan-x pan-y` rule for the installed app, also commented out.)
+const ZOOM_LOCK_ENABLED = false
+
 export function lockZoomWhenInstalled(): void {
-  if (!isInstalledApp()) return
+  if (!ZOOM_LOCK_ENABLED || !isInstalledApp()) return
 
   const block = (event: Event) => event.preventDefault()
   document.addEventListener('gesturestart', block)

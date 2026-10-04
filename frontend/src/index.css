@@ -168,8 +168,11 @@
 
 /* Installed to the home screen: also block pinch-zoom. (lib/lockZoom.ts adds
    the iOS-specific gesture handling; this is the standards-based half.) */
+/* TEMPORARILY OFF while chasing the dark strip under the iOS tab bar (see
+   ZOOM_LOCK_ENABLED in lib/lockZoom.ts). Restore both together.
 @media (display-mode: standalone) {
   html {
     touch-action: pan-x pan-y;
   }
 }
+*/
