@@ -1,0 +1,13 @@
+{
+  // Cloudflare Workers config for serving the built site (static files only, no
+  // Worker code). `name` must match the project name in the Cloudflare dashboard.
+  "name": "burrow",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    // Output of `npm run build`.
+    "directory": "./dist",
+    // Unknown paths (like a refresh on /terms) get index.html so React Router
+    // can handle them.
+    "not_found_handling": "single-page-application"
+  }
+}
