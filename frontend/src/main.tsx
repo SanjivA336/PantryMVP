@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react'
 import './index.css'
 import App from './App.tsx'
 import { CrashFallback } from './components/CrashFallback.tsx'
+import { lockZoomWhenInstalled } from './lib/lockZoom.ts'
 
 // A no-op until VITE_SENTRY_DSN is actually set -- no account needed for
 // local dev. Sentry's browser SDK auto-captures uncaught errors and
@@ -16,6 +17,8 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     environment: import.meta.env.MODE,
   })
 }
+
+lockZoomWhenInstalled()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

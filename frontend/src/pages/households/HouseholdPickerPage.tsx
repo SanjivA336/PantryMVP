@@ -41,7 +41,7 @@ export function HouseholdPickerPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg p-6">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-bg p-6">
         <p className="text-sm text-danger">{error}</p>
         <button
           type="button"
@@ -64,7 +64,7 @@ export function HouseholdPickerPage() {
 
   if (households === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg p-6">
+      <div className="flex min-h-dvh items-center justify-center bg-bg p-6">
         <p className="text-sm text-muted">Loading…</p>
       </div>
     )
@@ -75,7 +75,7 @@ export function HouseholdPickerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-bg p-6 text-text">
+    <div className="min-h-dvh bg-bg p-6 text-text">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6 pt-12">
         <div className="flex items-start justify-between gap-3">
           <div>

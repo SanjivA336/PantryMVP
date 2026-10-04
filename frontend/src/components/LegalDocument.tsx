@@ -119,7 +119,7 @@ interface Props {
 
 export function LegalDocument({ doc, other }: Props) {
   return (
-    <div className="min-h-screen bg-bg p-4 text-text">
+    <div className="min-h-dvh bg-bg px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] text-text">
       <div className="mx-auto w-full max-w-2xl py-6">
         <div className="mb-6 flex items-center justify-between gap-3 text-sm">
           <Link to="/" className="font-medium text-primary hover:text-primary-hover">

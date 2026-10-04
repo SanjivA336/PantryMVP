@@ -14,9 +14,11 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { CopyButton } from '../../components/CopyButton'
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { MobileShortcutMenu } from '../../components/MobileShortcutMenu'
+import { PullToRefreshIndicator } from '../../components/PullToRefreshIndicator'
 import { SupportLink } from '../../components/SupportLink'
 import { useAuth } from '../../hooks/useAuth'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
+import { usePullToRefresh } from '../../hooks/usePullToRefresh'
 import type { Household } from '../../types/entities'
 import logoSource from '../../assets/logo.svg?raw'
 
@@ -86,6 +88,11 @@ export function HouseholdShell() {
   const [accessError, setAccessError] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  // Pull-to-refresh bumps this; it is the key on <Outlet />, so the current
+  // page remounts and every fetch and live subscription on it starts over.
+  // (Any half-typed form on the page is lost, which is why modals block it.)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const { pull, dragging, refreshing } = usePullToRefresh(() => setRefreshKey((k) => k + 1))
   const [loggingOut, setLoggingOut] = useState(false)
 
   const handleSignOut = async () => {
@@ -126,7 +133,7 @@ export function HouseholdShell() {
 
   if (accessError || loadError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg p-4 text-text">
+      <div className="flex min-h-dvh items-center justify-center bg-bg p-4 text-text">
         <div className="w-full max-w-sm rounded-card border border-subtle bg-surface p-7 text-center shadow-card">
           <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
           <h1 className="mb-3 text-xl font-semibold">
@@ -149,7 +156,7 @@ export function HouseholdShell() {
   }
 
   return (
-    <div className="min-h-screen bg-bg text-text md:flex md:h-screen md:overflow-hidden">
+    <div className="min-h-dvh bg-bg text-text md:flex md:h-dvh md:overflow-hidden">
       {/* Desktop sidebar -- fixed height, never scrolls as a whole; only the
           nav links scroll internally if they ever overflow (the household
           name/code header and the settings/sign-out footer stay pinned). */}
@@ -232,7 +239,7 @@ export function HouseholdShell() {
       </aside>
 
       {/* Mobile top bar */}
-      <header className="flex items-center justify-between gap-2 border-b border-subtle bg-surface px-4 py-3 md:hidden">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-subtle bg-surface px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
         <div
           role="button"
           tabIndex={0}
@@ -304,9 +311,10 @@ export function HouseholdShell() {
         />
       )}
 
-      <main className="flex-1 px-4 pb-24 pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
+      <main className="flex-1 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
+        <PullToRefreshIndicator pull={pull} dragging={dragging} refreshing={refreshing} />
         <div className="mx-auto w-full max-w-5xl">
-          <Outlet />
+          <Outlet key={refreshKey} />
         </div>
       </main>
 
@@ -316,7 +324,7 @@ export function HouseholdShell() {
           exactly evenly regardless of label length, which puts the middle
           slot dead center for free -- no separate "center it in the
           viewport" math to keep in sync with the bar's own layout. */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-stretch border-t border-subtle bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-[calc(4rem+0.5rem+env(safe-area-inset-bottom))] items-stretch border-t border-subtle bg-surface pb-[calc(0.5rem+env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
         <div className="flex flex-1">
           {MOBILE_BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
             <BottomTabLink key={item.label} {...item} />

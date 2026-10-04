@@ -102,6 +102,21 @@
   specificity with a layered utility, it just always wins outright).
 */
 @layer base {
+  /*
+    Turns off double-tap-to-zoom (and the tap delay it causes) on touch
+    devices while keeping pinch-zoom for accessibility. Touch-action values
+    combine down the element tree, so setting it on html covers every child.
+  */
+  html {
+    touch-action: manipulation;
+    /* The page behind the status bar and home indicator, and anything
+       revealed by overscroll, should be the app's background, not white. */
+    background-color: var(--color-bg);
+    /* No rubber-band bounce at the top or bottom edge. The pull-to-refresh
+       gesture draws its own indicator, and the auth pages shouldn't wobble. */
+    overscroll-behavior-y: none;
+  }
+
   body {
     margin: 0;
     background-color: var(--color-bg);
@@ -112,5 +127,38 @@
 
   * {
     border-color: var(--color-subtle);
+  }
+}
+
+/*
+  iOS Safari zooms the page in whenever a text field with a font size under
+  16px gets focus, and never zooms back out on its own. The form fields use
+  `text-sm` (14px), so on touch screens bump them to 16px. This is
+  deliberately *unlayered*: unlike the base rules above, it has to beat the
+  `text-sm` utility, and unlayered CSS always wins over layered utilities.
+  Mouse-and-keyboard screens keep the compact 14px.
+*/
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Phones draw scrollbars as overlay indicators on top of the content;
+     touch users scroll by dragging, so hide them. Desktop keeps its own. */
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Installed to the home screen: also block pinch-zoom. (lib/lockZoom.ts adds
+   the iOS-specific gesture handling; this is the standards-based half.) */
+@media (display-mode: standalone) {
+  html {
+    touch-action: pan-x pan-y;
   }
 }
