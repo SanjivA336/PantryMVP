@@ -103,6 +103,17 @@
 */
 @layer base {
   /*
+    Space under the mobile bottom tab bar, so it clears the home-indicator
+    swipe area and the rounded screen corners without a big dead strip: 30%
+    of the phone's bottom inset (about 10px on a notched iPhone) with a 6px
+    floor for phones that report no inset. Single source of truth for the bar
+    and the page padding that clears it.
+  */
+  :root {
+    --bottom-bar-gap: max(6px, calc(env(safe-area-inset-bottom) * 0.3));
+  }
+
+  /*
     Turns off double-tap-to-zoom (and the tap delay it causes) on touch
     devices while keeping pinch-zoom for accessibility. Touch-action values
     combine down the element tree, so setting it on html covers every child.

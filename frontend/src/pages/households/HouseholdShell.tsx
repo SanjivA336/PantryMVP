@@ -311,7 +311,7 @@ export function HouseholdShell() {
         />
       )}
 
-      <main className="flex-1 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
+      <main className="flex-1 px-4 pb-[calc(6rem+var(--bottom-bar-gap))] pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
         <PullToRefreshIndicator pull={pull} dragging={dragging} refreshing={refreshing} />
         <div className="mx-auto w-full max-w-5xl">
           <Outlet key={refreshKey} />
@@ -324,7 +324,7 @@ export function HouseholdShell() {
           exactly evenly regardless of label length, which puts the middle
           slot dead center for free -- no separate "center it in the
           viewport" math to keep in sync with the bar's own layout. */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-[calc(4rem+0.5rem+env(safe-area-inset-bottom))] items-stretch border-t border-subtle bg-surface pb-[calc(0.5rem+env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-[calc(4rem+var(--bottom-bar-gap))] items-stretch border-t border-subtle bg-surface pb-[var(--bottom-bar-gap)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
         <div className="flex flex-1">
           {MOBILE_BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
             <BottomTabLink key={item.label} {...item} />

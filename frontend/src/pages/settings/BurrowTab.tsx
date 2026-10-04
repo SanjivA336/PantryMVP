@@ -7,6 +7,7 @@ import { apiClient, ApiError } from '../../lib/apiClient'
 import { CopyButton } from '../../components/CopyButton'
 import { FieldTooltip } from '../../components/FieldTooltip'
 import { Modal } from '../../components/Modal'
+import { AppVersion } from '../../components/AppVersion'
 import { SupportLink } from '../../components/SupportLink'
 import { useAuth } from '../../hooks/useAuth'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
@@ -122,7 +123,10 @@ export function BurrowTab({ members }: Props) {
           </p>
         </div>
         <p className="text-xs text-faint">Only admins can edit or delete this kitchen.</p>
+        <div className="flex flex-col gap-1">
         <SupportLink className="w-fit hover:underline" />
+        <AppVersion />
+      </div>
       </div>
     )
   }
@@ -203,7 +207,10 @@ export function BurrowTab({ members }: Props) {
         </button>
       </div>
 
-      <SupportLink className="w-fit hover:underline" />
+      <div className="flex flex-col gap-1">
+        <SupportLink className="w-fit hover:underline" />
+        <AppVersion />
+      </div>
 
       {deleteOpen && (
         <Modal
