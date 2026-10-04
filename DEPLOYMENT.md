@@ -49,12 +49,11 @@ Phase 5 of the README is writing this down. Phase 6 is doing it.
 ## Step 0: Before touching any host
 
 1. Everything green locally: `cd backend && uv run pytest`, `cd frontend && npm run lint && npm run build`.
-2. Update the Privacy Policy's provider table: replace the "Web hosting providers" row with
+2. **Done (legal version `2026-10-01.2`).** The Privacy Policy's provider table names
    **Cloudflare** (hosts the website and DNS; sees your IP address and request logs) and
    **Render** (hosts the API; sees your IP address, request logs, and the data passing through).
-   Edit both the Word file and `frontend/src/legal/privacy.ts`, then bump `LEGAL_VERSION` in
-   `frontend/src/legal/version.ts` and both documents' "updated" date. Do this before launch,
-   while nobody has accepted the old version.
+   If you change hosts later, update both the Word file and `frontend/src/legal/privacy.ts`,
+   and bump `LEGAL_VERSION` in `frontend/src/legal/version.ts`.
 3. Push to GitHub and confirm CI passes on `main`. Both Render and Cloudflare deploy from the
    GitHub repo (`SanjivA336/PantryMVP`).
 4. Take a manual backup (see README, Phase 3) into a folder outside the repo.

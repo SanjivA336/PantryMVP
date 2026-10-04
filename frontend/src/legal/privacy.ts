@@ -95,9 +95,14 @@ export const privacyPolicy: LegalDocument = {
           'Your email address, message, device details, and any files you attach',
         ],
         [
-          'Web hosting providers',
-          'Serve the website and the API',
-          'Technical data such as IP address and request logs',
+          'Cloudflare',
+          'Hosts the website and its domain name (DNS)',
+          'Technical data such as your IP address and request logs',
+        ],
+        [
+          'Render',
+          'Hosts the API (the server behind the app)',
+          'Technical data such as your IP address and request logs, plus the data your app sends to and receives from the API',
         ],
       ],
     },

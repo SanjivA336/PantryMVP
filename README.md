@@ -296,9 +296,9 @@ leaving localhost.
   the local dev origins) instead of being pinned in `backend/app/main.py`.
   `backend/requirements.txt` was regenerated (it was missing `sentry-sdk`).
 - [x] Deploy steps written down: see [DEPLOYMENT.md](DEPLOYMENT.md).
-- [ ] Before launch: update the Privacy Policy's provider table to name
-  Cloudflare and Render, then bump the legal version (details in
-  `DEPLOYMENT.md`, Step 0).
+- [x] Privacy Policy's provider table now names Cloudflare and Render, and
+  the legal version was bumped to `2026-10-01.2` (Word file and in-app
+  page both updated).
 - [x] "Getting things ready…" banner for slow first requests (any API call
   pending past 10 seconds; AI endpoints excluded), plus a fire-and-forget
   `/health` request on every page load that wakes a sleeping backend while
