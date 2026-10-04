@@ -104,13 +104,13 @@
 @layer base {
   /*
     Space under the mobile bottom tab bar, so it clears the home-indicator
-    swipe area and the rounded screen corners without a big dead strip: 30%
-    of the phone's bottom inset (about 10px on a notched iPhone) with a 6px
+    swipe area and the rounded screen corners without a big dead strip: 15%
+    of the phone's bottom inset (about 5px on a notched iPhone) with a 4px
     floor for phones that report no inset. Single source of truth for the bar
     and the page padding that clears it.
   */
   :root {
-    --bottom-bar-gap: max(6px, calc(env(safe-area-inset-bottom) * 0.3));
+    --bottom-bar-gap: max(4px, calc(env(safe-area-inset-bottom) * 0.15));
   }
 
   /*

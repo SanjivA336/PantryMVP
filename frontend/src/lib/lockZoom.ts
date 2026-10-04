@@ -12,20 +12,20 @@ export function isInstalledApp(): boolean {
 // Blocks pinch-zoom, but only in the installed app: a website should stay
 // zoomable for people who rely on it, while an app screen is a fixed layout.
 //
-// iOS Safari ignores `user-scalable=no` in the viewport tag for pinch gestures
-// in most contexts, so the dependable half is cancelling its proprietary
-// `gesturestart` / `gesturechange` events. The viewport tag change is a
-// best-effort extra, and index.css adds `touch-action: pan-x pan-y` for the
+// iOS Safari ignores `user-scalable=no` in the viewport tag for pinch gestures,
+// so the dependable half is cancelling its proprietary `gesturestart` /
+// `gesturechange` events; index.css adds `touch-action: pan-x pan-y` for the
 // standards-based path. Double-tap zoom and focus-zoom are handled in
 // index.css (touch-action and 16px form fields).
+//
+// This deliberately does NOT edit the viewport meta tag at runtime. An earlier
+// version did, and in the installed iOS app the page then stopped short of the
+// bottom of the screen (a dark strip under the tab bar) with every safe-area
+// inset reading 0, as if `viewport-fit=cover` had been ignored. Rewriting the
+// tag was the prime suspect, so it was removed; the tag now stays exactly as
+// written in index.html.
 export function lockZoomWhenInstalled(): void {
   if (!isInstalledApp()) return
-
-  const viewport = document.querySelector('meta[name="viewport"]')
-  const content = viewport?.getAttribute('content')
-  if (viewport && content && !content.includes('user-scalable')) {
-    viewport.setAttribute('content', `${content}, maximum-scale=1, user-scalable=no`)
-  }
 
   const block = (event: Event) => event.preventDefault()
   document.addEventListener('gesturestart', block)
