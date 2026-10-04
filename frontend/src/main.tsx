@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react'
 import './index.css'
 import App from './App.tsx'
 import { CrashFallback } from './components/CrashFallback.tsx'
+import { startDiagnosticsRecording } from './lib/diagnostics.ts'
 import { lockZoomWhenInstalled } from './lib/lockZoom.ts'
 
 // A no-op until VITE_SENTRY_DSN is actually set -- no account needed for
@@ -19,6 +20,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 }
 
 lockZoomWhenInstalled()
+startDiagnosticsRecording()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

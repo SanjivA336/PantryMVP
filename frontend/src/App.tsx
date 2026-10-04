@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { DiagnosticsHost } from './components/DiagnosticsPanel'
 import { ServerWakingBanner } from './components/ServerWakingBanner'
 import { warmUpServer } from './lib/apiClient'
 import { AuthProvider } from './context/AuthContext'
@@ -39,6 +40,7 @@ function App() {
   return (
     <BrowserRouter>
       <ServerWakingBanner />
+      <DiagnosticsHost />
       <AuthProvider>
         <Routes>
           <Route path="/signup" element={<SignupPage />} />
