@@ -3,7 +3,7 @@
 The plan, in one picture:
 
 ```
-Browser ──> Cloudflare Pages   burrowapp.site        (the React app: static files)
+Browser ──> Cloudflare Workers burrowapp.site        (the React app: static files)
 Browser ──> Render             api.burrowapp.site    (the FastAPI backend, free tier)
 Browser ──> Supabase           <ref>.supabase.co     (sign-in, live updates)
 Render  ──> Supabase                                  (data, service-role key)
@@ -11,7 +11,7 @@ Render  ──> Supabase                                  (data, service-role ke
 
 | Piece | Host | Why |
 |---|---|---|
-| Frontend | Cloudflare Pages (free) | Free, unlimited bandwidth, domain already lives at Cloudflare, SPA routing built in |
+| Frontend | Cloudflare Workers static assets (free) | Free, domain already lives at Cloudflare. The dashboard no longer offered classic Pages; the Workers flow serves the same static files |
 | Backend | Render free web service, Virginia | Free, no card needed; Virginia is the closest Render region to Supabase (AWS ca-central-1, Montreal) |
 | Database + auth | Supabase free (existing project) | Dev and prod share one project (see README, Phase 3) |
 | Errors | Sentry (existing two projects) | Already wired up |
@@ -91,20 +91,34 @@ Authentication, Emails:
 **Check:** open `https://api.burrowapp.site/health` (the first load may take a minute). You
 should see `{"status":"ok","environment":"production"}`.
 
-If the Blueprint reports an error, the message names the offending line in `render.yaml`. The
-file was written from Render's documented format but could not be tested without an account.
+If the Blueprint reports an error, the message names the offending line in `render.yaml`.
 
-## Step 3: Frontend on Cloudflare Pages
+**If every login says "Your session isn't valid":** the token is fine but the backend's
+service-role lookup of the account is failing, which means a wrong or badly pasted
+`SUPABASE_SERVICE_ROLE_KEY` (it must be the service_role key, not the anon key) or
+`SUPABASE_URL` on Render. Re-paste both from `.env` and let it redeploy. The app gives one
+message for every auth failure on purpose, so the cause isn't visible in the browser.
 
-1. Cloudflare dashboard, **Workers & Pages, Create, Pages, Connect to Git**, pick the repo.
-   (If Cloudflare only offers Workers static assets for new projects, the settings below still
-   apply; the screens differ.)
-2. Build settings:
-   - Root directory: `frontend`
+## Step 3: Frontend on Cloudflare (Workers static assets)
+
+Cloudflare's dashboard now creates a Workers project for new sites instead of classic Pages. It
+serves the same built files. The repo already has `frontend/wrangler.jsonc`, which names the
+project (`burrow`), points at the build output (`./dist`), and sets
+`not_found_handling: single-page-application` so a refresh on `/terms` returns `index.html`
+instead of a 404.
+
+1. Cloudflare dashboard, **Workers & Pages, Create, Connect to Git**, pick the repo.
+2. Settings:
+   - Project name: `burrow` (must match `name` in `frontend/wrangler.jsonc`)
+   - Root directory (path): `frontend`
    - Build command: `npm run build`
-   - Build output directory: `dist`
-3. Environment variables (Production). These are baked into the site at build time, so changing
-   one means redeploying:
+   - Deploy command: `npx wrangler deploy`
+   - Non-production branch builds: off (you only deploy `main`)
+   - Protect with Cloudflare Access: off (it would put a login wall on a public site)
+   - API token: create a new one for this project rather than reusing an old token
+3. Build variables (the name/value rows under Advanced settings, or Settings, Build, Variables
+   and secrets). These are baked into the site at build time, so changing one means
+   redeploying:
 
    | Name | Value |
    |---|---|
@@ -115,12 +129,19 @@ file was written from Render's documented format but could not be tested without
    | `VITE_SUPPORT_URL` | the Google Form link |
    | `VITE_SENTRY_DSN` | the frontend Sentry DSN |
 
-   Leave `VITE_DEVELOPER_USER_IDS` unset.
-4. Deploy. Then, in the project's Custom domains, add `burrowapp.site`. Because DNS is on
-   Cloudflare, it creates the records for you.
+   Leave `VITE_DEVELOPER_USER_IDS` unset. Encrypting these is optional: everything `VITE_*` ships
+   in the browser bundle anyway. Never put the service-role key or the backend `SENTRY_DSN` here.
+4. **Paste values without a trailing newline or space.** A stray newline in
+   `VITE_SUPABASE_ANON_KEY` once broke the live-update WebSocket (the key ends up in its URL as
+   `%0A`) while normal requests kept working. The app now trims these values when it reads them
+   (`frontend/src/lib/supabaseClient.ts`), but paste carefully anyway. The same goes for the
+   secrets on Render.
+5. Deploy. Then, in the project's **Settings, Domains & Routes, Add, Custom domain**, add
+   `burrowapp.site`. Because DNS is on Cloudflare, it creates the record for you.
 
 **Check:** `https://burrowapp.site` loads, and so does `https://burrowapp.site/terms` when you
-open it directly and when you refresh it (Pages sends unknown paths to `index.html`).
+open it directly and when you refresh it. The `*.workers.dev` address will load too, but the API
+only allows requests from `https://burrowapp.site` (`CORS_ORIGINS`), so log in on the real domain.
 
 ## Step 4: Email deliverability
 
@@ -136,7 +157,10 @@ are uploaded in the build; that is a separate task.
 
 ## Step 6: Smoke test on the real URL
 
-Use one real test account, then delete it from Account settings at the end.
+Use one real test account, then delete it from Account settings at the end. Signup and the
+emails need a real inbox, so do those by hand. Everything after login can also be driven by a
+browser script that signs in as that normal user (no service key); the first live run caught a
+wrong key on Render and the newline bug above.
 
 - [ ] Sign up: both checkboxes are required, the confirmation email arrives (note whether in
       spam), and its link lands on `https://burrowapp.site`.
@@ -157,7 +181,8 @@ Share `https://burrowapp.site`. That's v1.
 ## Rolling back
 
 - **Backend:** Render, Deploys, pick a previous deploy, Rollback.
-- **Frontend:** Cloudflare Pages, Deployments, roll back to a previous one.
+- **Frontend:** the Cloudflare project's Deployments (or Versions) list, roll back to a
+  previous one.
 - **Database:** migrations are not rolled back by redeploying. Use the manual dump you took in
   Step 0, and read each migration's own notes first.
 

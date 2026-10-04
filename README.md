@@ -307,12 +307,17 @@ leaving localhost.
 
 ### Phase 6: Cutover (the only phase that leaves localhost)
 
-- [ ] Deploy the backend, pointed at the (shared dev/prod, per Phase 3)
-  Supabase project.
-- [ ] Deploy the frontend build, pointed at the deployed backend.
-- [ ] Point the domain at the new deployment, if applicable.
-- [ ] Full manual smoke test against the real production URL (signup,
-  household, inventory, shopping list, balances), not localhost.
+- [x] Deploy the backend, pointed at the (shared dev/prod, per Phase 3)
+  Supabase project. Render free, Docker, at `https://api.burrowapp.site`.
+- [x] Deploy the frontend build, pointed at the deployed backend.
+  Cloudflare Workers static assets (the classic Pages flow was no longer
+  offered); see `frontend/wrangler.jsonc`.
+- [x] Point the domain at the new deployment, if applicable. `burrowapp.site`
+  and `api.burrowapp.site`, both at Cloudflare DNS.
+- [x] Full manual smoke test against the real production URL (signup,
+  household, inventory, shopping list, balances), not localhost. Passed: a
+  12-step browser run plus hand-checked signup/reset emails (inbox, not spam,
+  SPF/DKIM/DMARC pass).
 - [ ] Invite real users. That's v1.
 
 ### Deferred past v1 (developer-gated; not required for launch)
