@@ -1,7 +1,7 @@
 import { trackRequest } from './serverWake'
 import { supabase } from './supabaseClient'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim()
 
 if (!API_BASE_URL) {
   throw new Error('Missing VITE_API_BASE_URL. Check your .env file.')
