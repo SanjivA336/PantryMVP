@@ -8,7 +8,7 @@ import { usePageTitle } from '../../hooks/usePageTitle'
 import type { Household } from '../../types/entities'
 
 export function HouseholdPickerPage() {
-  usePageTitle('Your Households')
+  usePageTitle('Your Burrows')
   const { signOut } = useAuth()
   const [households, setHouseholds] = useState<Household[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -24,7 +24,7 @@ export function HouseholdPickerPage() {
       setLogoutConfirmOpen(false)
     }
   }
-  // Set by the sidebar's "switch kitchens" button (see HouseholdShell) so a
+  // Set by the sidebar's "switch burrows" button (see HouseholdShell) so a
   // deliberate click here always shows the picker, even with just one
   // household -- the auto-redirect below is meant only as a shortcut past
   // an empty choice right after login, not something that should make this
@@ -80,7 +80,7 @@ export function HouseholdPickerPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
-            <h1 className="text-2xl font-semibold">Your households</h1>
+            <h1 className="text-2xl font-semibold">Your burrows</h1>
           </div>
           <button
             type="button"
@@ -96,7 +96,7 @@ export function HouseholdPickerPage() {
 
         {households.length === 0 ? (
           <p className="rounded-card border border-subtle bg-surface p-5 text-sm text-muted">
-            You're not in a household yet. Create one or join with a code below.
+            You're not in a burrow yet. Create one or join with a code below.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -123,7 +123,7 @@ export function HouseholdPickerPage() {
             className="flex flex-1 items-center justify-center gap-2 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
           >
             <Plus size={16} strokeWidth={2} />
-            Create a household
+            Create a burrow
           </Link>
           <Link
             to="/households/join"

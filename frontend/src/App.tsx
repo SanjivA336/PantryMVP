@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route, useParams } from 'react-router-dom'
 import { DiagnosticsHost } from './components/DiagnosticsPanel'
 import { ServerWakingScreen } from './components/ServerWakingScreen'
 import { warmUpServer } from './lib/apiClient'
@@ -16,7 +16,10 @@ import { HouseholdPickerPage } from './pages/households/HouseholdPickerPage'
 import { CreateHouseholdPage } from './pages/households/CreateHouseholdPage'
 import { JoinHouseholdPage } from './pages/households/JoinHouseholdPage'
 import { HouseholdShell } from './pages/households/HouseholdShell'
-import { SettingsPage } from './pages/settings/SettingsPage'
+import { BurrowDetails } from './pages/settings/BurrowDetails'
+import { MembersScreen } from './pages/settings/MembersScreen'
+import { SettingsLayout } from './pages/settings/SettingsLayout'
+import { ActivityPage } from './pages/activity/ActivityPage'
 import { AccountPage } from './pages/account/AccountPage'
 import { InventoryPage } from './pages/inventory/InventoryPage'
 import { InventoryItemDetailPage } from './pages/inventory/InventoryItemDetailPage'
@@ -30,6 +33,11 @@ import { ImportRecipePage } from './pages/recipes/ImportRecipePage'
 import { GenerateRecipePage } from './pages/recipes/GenerateRecipePage'
 import { ScanReceiptPage } from './pages/scan-receipt'
 import { ReviewReceiptSessionPage } from './pages/scan-receipt/ReviewReceiptSessionPage'
+
+function AccountRedirect() {
+  const { householdId } = useParams<{ householdId: string }>()
+  return <Navigate to={`/households/${householdId}/settings/account`} replace />
+}
 
 function App() {
   // Once per page load: starts waking a sleeping backend right away.
@@ -59,8 +67,14 @@ function App() {
               <Route index element={<InventoryPage />} />
               <Route path="inventory-items/:itemId" element={<InventoryItemDetailPage />} />
               <Route path="balances" element={<BalancesPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route path="account" element={<AccountPage />} />
+              <Route path="settings" element={<SettingsLayout />}>
+                <Route path="burrow" element={<BurrowDetails />} />
+                <Route path="members" element={<MembersScreen />} />
+                <Route path="activity" element={<ActivityPage />} />
+                <Route path="account" element={<AccountPage />} />
+              </Route>
+              {/* Account used to be its own page; it now lives inside Settings. */}
+              <Route path="account" element={<AccountRedirect />} />
               <Route path="storage/:storageLocationId" element={<InventoryPage />} />
               <Route path="shopping-list" element={<ShoppingListPage />} />
               <Route path="recipes" element={<RecipesPage />} />

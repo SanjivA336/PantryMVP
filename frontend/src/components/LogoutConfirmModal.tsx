@@ -10,7 +10,7 @@ export function LogoutConfirmModal({ onConfirm, onClose, loggingOut = false }: P
   return (
     <Modal title="Log out?" onClose={onClose}>
       <p className="mb-4 text-sm text-muted">
-        You'll need to sign back in to get back to your kitchens.
+        You'll need to sign back in to get back to your burrows.
       </p>
       <div className="flex gap-2">
         <button

@@ -259,7 +259,7 @@ export function GenerateRecipePage() {
 
         <div className="flex items-center justify-between gap-3 rounded-control border border-subtle bg-surface-2 px-3 py-2.5">
           <div>
-            <p className="text-sm font-medium text-text">Only use items from my kitchen</p>
+            <p className="text-sm font-medium text-text">Only use items from my burrow</p>
             <p className="text-xs text-faint">
               Sticks to your current inventory, plus basic seasonings, oil, and water.
             </p>
@@ -268,7 +268,7 @@ export function GenerateRecipePage() {
             type="button"
             role="switch"
             aria-checked={pantryOnly}
-            aria-label="Only use items from my kitchen"
+            aria-label="Only use items from my burrow"
             onClick={() => setPantryOnly((prev) => !prev)}
             className={`relative h-6 w-11 shrink-0 rounded-pill transition-colors ${
               pantryOnly ? 'bg-primary' : 'bg-surface-hover'

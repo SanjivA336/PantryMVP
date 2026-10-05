@@ -3,26 +3,22 @@ import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
   ChefHat,
   Home,
-  LogOut,
   Receipt,
   Scale,
   Settings,
   ShoppingCart,
-  UserCircle,
 } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { BurrowLogo } from '../../components/BurrowLogo'
 import { CopyButton } from '../../components/CopyButton'
-import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { MobileShortcutMenu } from '../../components/MobileShortcutMenu'
 import { PullToRefreshIndicator } from '../../components/PullToRefreshIndicator'
 import { SupportLink } from '../../components/SupportLink'
 import { ShellChromeContext } from '../../context/shellChrome'
-import { useAuth } from '../../hooks/useAuth'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import { usePullToRefresh } from '../../hooks/usePullToRefresh'
 import type { Household } from '../../types/entities'
-// Activity now lives inside Settings (see SettingsPage's third tab) rather
+// Activity now lives inside Settings (see SettingsList) rather
 // than as its own destination -- it's a look-back log, not a daily action,
 // so it doesn't need a permanent slot in the primary nav on either platform.
 const PRIMARY_NAV_ITEMS = [
@@ -51,7 +47,6 @@ const MOBILE_BOTTOM_NAV_ITEMS = [...PRIMARY_NAV_ITEMS, ...RECIPES_NAV_ITEMS]
 export function HouseholdShell() {
   const { householdId } = useParams<{ householdId: string }>()
   const navigate = useNavigate()
-  const { signOut } = useAuth()
   const isDeveloper = useIsDeveloper()
   const [household, setHousehold] = useState<Household | null>(null)
   // Deliberately one bucket for "doesn't exist" and "exists but you're not a
@@ -65,7 +60,6 @@ export function HouseholdShell() {
   // just imprecise.
   const [accessError, setAccessError] = useState(false)
   const [loadError, setLoadError] = useState(false)
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   // Pull-to-refresh bumps this; it is the key on <Outlet />, so the current
   // page remounts and every fetch and live subscription on it starts over.
   // (Any half-typed form on the page is lost, which is why modals block it.)
@@ -75,17 +69,6 @@ export function HouseholdShell() {
   const [tabBarHidden, setTabBarHidden] = useState(false)
   const chrome = useMemo(() => ({ setTabBarHidden }), [])
   const { pull, dragging, refreshing } = usePullToRefresh(() => setRefreshKey((k) => k + 1))
-  const [loggingOut, setLoggingOut] = useState(false)
-
-  const handleSignOut = async () => {
-    setLoggingOut(true)
-    try {
-      await signOut()
-    } finally {
-      setLoggingOut(false)
-      setLogoutConfirmOpen(false)
-    }
-  }
 
   useEffect(() => {
     if (!householdId) return
@@ -154,7 +137,7 @@ export function HouseholdShell() {
                 navigate('/', { state: { forcePicker: true } })
               }
             }}
-            title="Switch kitchens"
+            title="Switch burrows"
             className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-control p-2 transition-colors hover:bg-surface-hover"
           >
             <BurrowLogo className="h-9 w-9 shrink-0 text-text transition-colors group-hover:text-primary" />
@@ -202,20 +185,6 @@ export function HouseholdShell() {
               <Settings size={18} strokeWidth={1.75} />
               Settings
             </NavLink>
-            <NavLink
-              to="account"
-              title="Account"
-              aria-label="Account"
-              className={({ isActive }) =>
-                `flex shrink-0 items-center justify-center rounded-control p-2.5 transition-colors ${
-                  isActive
-                    ? 'bg-primary-soft text-primary'
-                    : 'text-muted hover:bg-surface-hover hover:text-text'
-                }`
-              }
-            >
-              <UserCircle size={18} strokeWidth={1.75} />
-            </NavLink>
           </div>
         </div>
       </aside>
@@ -232,7 +201,7 @@ export function HouseholdShell() {
               navigate('/', { state: { forcePicker: true } })
             }
           }}
-          title="Switch kitchens"
+          title="Switch burrows"
           className="group -m-1 flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-control p-1 transition-colors hover:bg-surface-hover"
         >
           <BurrowLogo className="h-7 w-7 shrink-0 text-text transition-colors group-hover:text-primary" />
@@ -262,36 +231,8 @@ export function HouseholdShell() {
           >
             <Settings size={18} strokeWidth={1.75} />
           </NavLink>
-          <NavLink
-            to="account"
-            aria-label="Account"
-            title="Account"
-            className={({ isActive }) =>
-              `rounded-control p-2 transition-colors ${
-                isActive ? 'text-primary' : 'text-muted hover:bg-surface-hover hover:text-text'
-              }`
-            }
-          >
-            <UserCircle size={18} strokeWidth={1.75} />
-          </NavLink>
-          <button
-            type="button"
-            onClick={() => setLogoutConfirmOpen(true)}
-            className="rounded-control p-2 text-muted transition-colors hover:bg-danger-soft hover:text-danger"
-            aria-label="Sign out"
-          >
-            <LogOut size={18} strokeWidth={1.75} />
-          </button>
         </div>
       </header>
-
-      {logoutConfirmOpen && (
-        <LogoutConfirmModal
-          loggingOut={loggingOut}
-          onClose={() => setLogoutConfirmOpen(false)}
-          onConfirm={() => void handleSignOut()}
-        />
-      )}
 
       <main className="flex-1 px-4 pb-[calc(6rem+var(--bottom-bar-gap))] pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
         <PullToRefreshIndicator pull={pull} dragging={dragging} refreshing={refreshing} />

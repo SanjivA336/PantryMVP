@@ -188,7 +188,7 @@ function describe(event: ActivityEvent, subject: ReactNode): ReactNode {
     case 'MEMBER_JOINED':
       return (
         <>
-          <b>{actor}</b> joined the household
+          <b>{actor}</b> joined the burrow
         </>
       )
     case 'MEMBER_LEFT':
@@ -197,7 +197,7 @@ function describe(event: ActivityEvent, subject: ReactNode): ReactNode {
           <b>{actor}</b> removed {subject}
         </>
       ) : (
-        <>{subject} left the household</>
+        <>{subject} left the burrow</>
       )
   }
 }

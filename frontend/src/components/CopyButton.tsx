@@ -29,7 +29,7 @@ export function CopyButton({ value, label, size = 12 }: Props) {
       type="button"
       onClick={(e) => {
         // Callers sometimes wrap this in their own clickable region (the
-        // mobile header's "switch kitchens" area) -- without this, copying
+        // mobile header's "switch burrows" area) -- without this, copying
         // would also trigger whatever that region's own click does.
         e.stopPropagation()
         void copy()

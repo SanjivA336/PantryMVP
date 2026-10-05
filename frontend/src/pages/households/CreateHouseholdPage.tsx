@@ -8,7 +8,7 @@ import type { Household } from '../../types/entities'
 import { createHouseholdSchema, type CreateHouseholdForm } from './schema'
 
 export function CreateHouseholdPage() {
-  usePageTitle('New Household')
+  usePageTitle('New Burrow')
   const navigate = useNavigate()
   const [serverError, setServerError] = useState<string | null>(null)
 
@@ -32,10 +32,10 @@ export function CreateHouseholdPage() {
     <div className="flex min-h-app items-center justify-center bg-surface px-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-text md:bg-bg md:p-4">
       <div className="w-full max-w-sm bg-surface p-7 md:rounded-card md:border md:border-subtle md:shadow-card">
         <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
-        <h1 className="mb-6 text-2xl font-semibold">Create a household</h1>
+        <h1 className="mb-6 text-2xl font-semibold">Create a burrow</h1>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-muted">Household name</label>
+            <label className="mb-1.5 block text-sm font-medium text-muted">Burrow name</label>
             <input
               type="text"
               placeholder="3BR Apartment on Main St"
@@ -72,7 +72,7 @@ export function CreateHouseholdPage() {
             disabled={isSubmitting}
             className="mt-1 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
           >
-            {isSubmitting ? 'Creating…' : 'Create household'}
+            {isSubmitting ? 'Creating…' : 'Create burrow'}
           </button>
         </form>
       </div>

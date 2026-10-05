@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { LogOut, TriangleAlert } from 'lucide-react'
+import { TriangleAlert } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
-import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { Modal } from '../../components/Modal'
-import { SupportLink } from '../../components/SupportLink'
 import { useAuth } from '../../hooks/useAuth'
-import { usePageTitle } from '../../hooks/usePageTitle'
 import type { Member } from '../../types/entities'
 import { newPasswordSchema, type NewPasswordForm } from '../auth/schema'
 
@@ -52,7 +49,7 @@ function BurrowSettingsCard({ householdId }: { householdId: string }) {
     <div className="rounded-card border border-subtle bg-surface p-4">
       <p className="mb-3 text-sm font-semibold text-muted">This burrow</p>
       <label className="mb-1.5 block text-sm font-medium text-muted">
-        Your nickname in this household
+        Your nickname in this burrow
       </label>
       <div className="flex items-center gap-1.5">
         <input
@@ -175,7 +172,6 @@ function ChangePasswordSection() {
 }
 
 export function AccountPage() {
-  usePageTitle('Account')
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const { householdId } = useParams<{ householdId: string }>()
@@ -184,19 +180,6 @@ export function AccountPage() {
   const [confirmText, setConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
-  const [loggingOut, setLoggingOut] = useState(false)
-
-  const handleSignOut = async () => {
-    setLoggingOut(true)
-    try {
-      await signOut()
-      navigate('/login')
-    } finally {
-      setLoggingOut(false)
-      setLogoutConfirmOpen(false)
-    }
-  }
 
   const confirmDelete = async () => {
     setError(null)
@@ -213,8 +196,6 @@ export function AccountPage() {
 
   return (
     <div className="flex max-w-md flex-col gap-6">
-      <h2 className="text-xl font-semibold">Account</h2>
-
       {householdId && <BurrowSettingsCard householdId={householdId} />}
 
       <div className="rounded-card border border-subtle bg-surface p-4">
@@ -227,34 +208,14 @@ export function AccountPage() {
 
           <ChangePasswordSection />
 
-          <SupportLink className="w-fit hover:underline" />
-
-          <div className="flex gap-4 text-sm font-medium text-muted">
-            <Link to="/terms" target="_blank" className="hover:text-text hover:underline">
-              Terms of Service
-            </Link>
-            <Link to="/privacy" target="_blank" className="hover:text-text hover:underline">
-              Privacy Policy
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setLogoutConfirmOpen(true)}
-            className="flex w-fit items-center gap-2 rounded-control border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger-soft"
-          >
-            <LogOut size={16} strokeWidth={1.75} />
-            Log out
-          </button>
-
           <div className="rounded-card border border-danger/30 bg-danger-soft p-4">
             <p className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-danger">
               <TriangleAlert size={15} strokeWidth={2} />
               Danger zone
             </p>
             <p className="mb-3 text-xs text-muted">
-              Deleting your account permanently removes it and signs you out of every kitchen you're
-              in. This cannot be undone. If you own a kitchen, transfer ownership or delete it
+              Deleting your account permanently removes it and signs you out of every burrow you're
+              in. This cannot be undone. If you own a burrow, transfer ownership or delete it
               first.
             </p>
             <button
@@ -268,14 +229,6 @@ export function AccountPage() {
         </div>
       </div>
 
-      {logoutConfirmOpen && (
-        <LogoutConfirmModal
-          loggingOut={loggingOut}
-          onClose={() => setLogoutConfirmOpen(false)}
-          onConfirm={() => void handleSignOut()}
-        />
-      )}
-
       {deleteOpen && (
         <Modal
           title="Delete your account?"
@@ -286,7 +239,7 @@ export function AccountPage() {
           }}
         >
           <p className="mb-3 text-sm text-muted">
-            This permanently deletes your account and removes you from every kitchen. Type your
+            This permanently deletes your account and removes you from every burrow. Type your
             email to confirm.
           </p>
           <input
