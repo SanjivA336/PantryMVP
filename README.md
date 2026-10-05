@@ -329,6 +329,16 @@ leaving localhost.
 
 ### Longer-term
 
+- [x] **Regenerate the join code** (from the 2026-10-05 security review): a
+  "Make a new code" button on the Invite card in Settings, visible to admins
+  (the owner is always one), that replaces the burrow's join code on demand
+  after a confirmation. It never rotates automatically. The new code is drawn
+  by the same generator as the original (same format, redrawn until it doesn't
+  collide with another burrow's code), and the old code stops working the
+  moment the new one is issued, which is the way to lock out someone who was
+  removed but still knows it. Backend: `POST
+  /households/{id}/regenerate-join-code` (migration 0042's service-role-only
+  `regenerate_join_code`).
 - [ ] **Per-burrow "Split costs" setting**: a toggle that hides the Cost and
   Buyer fields (and the Balances tab) for burrows that never split anything,
   typically families, and keeps them for roommate groups, where cost is used

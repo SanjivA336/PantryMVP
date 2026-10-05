@@ -163,3 +163,70 @@ async def test_joining_by_code_grants_rest_visibility(api_client, two_users) -> 
         assert response.json()[0]["id"] == household["id"]
     finally:
         await _delete_household(api_client, two_users["a"]["token"], household["id"])
+
+
+def _rest_headers(token: str, prefer_representation: bool = False) -> dict:
+    headers = {"apikey": get_settings().supabase_anon_key, "Authorization": f"Bearer {token}"}
+    if prefer_representation:
+        headers["Prefer"] = "return=representation"
+    return headers
+
+
+async def test_member_cannot_promote_themselves_via_direct_rest(api_client, two_users) -> None:
+    # Regression for the 2026-10-05 review: RLS alone let a member PATCH their own
+    # members row (including is_admin). Migration 0041 removes client write
+    # privileges on every public table, so PostgREST must refuse the write.
+    settings = get_settings()
+    household = await _create_household(api_client, two_users["a"]["token"], "RLS Test Household E")
+
+    try:
+        join_response = await api_client.post(
+            "/api/households/join",
+            json={"join_code": household["join_code"], "nickname": "Joiner"},
+            headers={"Authorization": f"Bearer {two_users['b']['token']}"},
+        )
+        assert join_response.status_code == 200, join_response.text
+
+        async with httpx.AsyncClient(base_url=settings.supabase_url) as rest_client:
+            patch_response = await rest_client.patch(
+                "/rest/v1/members",
+                params={
+                    "household_id": f"eq.{household['id']}",
+                    "user_id": f"eq.{two_users['b']['id']}",
+                },
+                json={"is_admin": True},
+                headers=_rest_headers(two_users["b"]["token"], prefer_representation=True),
+            )
+            row_response = await rest_client.get(
+                "/rest/v1/members",
+                params={
+                    "household_id": f"eq.{household['id']}",
+                    "user_id": f"eq.{two_users['b']['id']}",
+                    "select": "is_admin",
+                },
+                headers=_rest_headers(two_users["b"]["token"]),
+            )
+
+        assert patch_response.status_code in (401, 403)
+        assert row_response.status_code == 200
+        assert row_response.json() == [{"is_admin": False}]
+    finally:
+        await _delete_household(api_client, two_users["a"]["token"], household["id"])
+
+
+async def test_admin_cannot_change_household_owner_via_direct_rest(api_client, two_users) -> None:
+    settings = get_settings()
+    household = await _create_household(api_client, two_users["a"]["token"], "RLS Test Household F")
+
+    try:
+        async with httpx.AsyncClient(base_url=settings.supabase_url) as rest_client:
+            patch_response = await rest_client.patch(
+                "/rest/v1/households",
+                params={"id": f"eq.{household['id']}"},
+                json={"owner_id": two_users["b"]["id"]},
+                headers=_rest_headers(two_users["a"]["token"], prefer_representation=True),
+            )
+
+        assert patch_response.status_code in (401, 403)
+    finally:
+        await _delete_household(api_client, two_users["a"]["token"], household["id"])

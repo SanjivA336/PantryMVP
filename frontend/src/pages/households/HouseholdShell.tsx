@@ -70,7 +70,7 @@ export function HouseholdShell() {
   // Editing screens hide the phone tab bar and pin their own Save bar there
   // instead (see hooks/useHideTabBar).
   const [tabBarHidden, setTabBarHidden] = useState(false)
-  const chrome = useMemo(() => ({ setTabBarHidden }), [])
+  const chrome = useMemo(() => ({ setTabBarHidden, setHousehold }), [])
   // The household's one add-item flow (see context/addItemWizard). It lives here,
   // above every page, so there is only ever one copy that reopens an in-progress
   // order from the address.

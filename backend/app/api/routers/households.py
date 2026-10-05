@@ -89,6 +89,14 @@ def delete_household(
     return ok(None)
 
 
+@router.post("/{household_id}/regenerate-join-code", response_model=Envelope[Household])
+def regenerate_join_code(
+    household_id: UUID, _member: Member = Depends(require_household_admin)
+) -> Envelope[Household]:
+    # Only on request, never automatic. The old code stops working immediately.
+    return ok(households_service.regenerate_join_code(household_id))
+
+
 @router.post("/{household_id}/transfer-ownership", response_model=Envelope[Household])
 def transfer_ownership(
     household_id: UUID,

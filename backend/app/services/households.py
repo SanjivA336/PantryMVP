@@ -87,6 +87,15 @@ def delete_household(household_id: UUID) -> None:
     client.table(_TABLE).delete().eq("id", str(household_id)).execute()
 
 
+def regenerate_join_code(household_id: UUID) -> Household:
+    # The new code is drawn in the database (migration 0042), by the same
+    # generator that made the original: same format, redrawn until it doesn't
+    # collide with another burrow's code. Who may ask is checked in the router.
+    client = get_service_client()
+    result = client.rpc("regenerate_join_code", {"p_household_id": str(household_id)}).execute()
+    return _coerce_household(result.data)
+
+
 def transfer_ownership(household_id: UUID, new_owner_user_id: UUID) -> Household:
     # Caller-is-owner and target-is-admin are authorization/business-rule
     # checks, not persistence -- those live in the router (see

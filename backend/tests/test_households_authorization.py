@@ -9,9 +9,7 @@ async def test_non_member_cannot_get_household(client, fake_members, fake_househ
     outsider_id = uuid.uuid4()
     fake_households["store"][household_id] = _household(household_id)
 
-    response = await client.get(
-        f"/api/households/{household_id}", headers=auth_header(outsider_id)
-    )
+    response = await client.get(f"/api/households/{household_id}", headers=auth_header(outsider_id))
 
     assert response.status_code == 403
 
@@ -22,9 +20,7 @@ async def test_member_can_get_household(client, fake_members, fake_households) -
     fake_members.seed(make_member(household_id, user_id))
     fake_households["store"][household_id] = _household(household_id, name="Casa del Sol")
 
-    response = await client.get(
-        f"/api/households/{household_id}", headers=auth_header(user_id)
-    )
+    response = await client.get(f"/api/households/{household_id}", headers=auth_header(user_id))
 
     assert response.status_code == 200
     assert response.json()["data"]["name"] == "Casa del Sol"
@@ -89,9 +85,7 @@ async def test_non_admin_member_cannot_delete_household(
     fake_members.seed(make_member(household_id, user_id, is_admin=False))
     fake_households["store"][household_id] = _household(household_id)
 
-    response = await client.delete(
-        f"/api/households/{household_id}", headers=auth_header(user_id)
-    )
+    response = await client.delete(f"/api/households/{household_id}", headers=auth_header(user_id))
 
     assert response.status_code == 403
     assert household_id not in fake_households["deleted"]
@@ -103,9 +97,7 @@ async def test_admin_can_delete_household(client, fake_members, fake_households)
     fake_members.seed(make_member(household_id, user_id, is_admin=True))
     fake_households["store"][household_id] = _household(household_id)
 
-    response = await client.delete(
-        f"/api/households/{household_id}", headers=auth_header(user_id)
-    )
+    response = await client.delete(f"/api/households/{household_id}", headers=auth_header(user_id))
 
     assert response.status_code == 200
     assert household_id in fake_households["deleted"]
@@ -169,3 +161,46 @@ async def test_cannot_transfer_ownership_to_a_non_admin(
     )
 
     assert response.status_code == 400
+
+
+async def test_admin_can_regenerate_join_code(client, fake_members, fake_households) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id, is_admin=True))
+    fake_households["store"][household_id] = _household(household_id, join_code="AAAA2222")
+
+    response = await client.post(
+        f"/api/households/{household_id}/regenerate-join-code", headers=auth_header(user_id)
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["join_code"] == "ZZZZ2222"
+    assert fake_households["store"][household_id].join_code == "ZZZZ2222"
+
+
+async def test_non_admin_cannot_regenerate_join_code(client, fake_members, fake_households) -> None:
+    household_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    fake_members.seed(make_member(household_id, user_id, is_admin=False))
+    fake_households["store"][household_id] = _household(household_id, join_code="AAAA2222")
+
+    response = await client.post(
+        f"/api/households/{household_id}/regenerate-join-code", headers=auth_header(user_id)
+    )
+
+    assert response.status_code == 403
+    assert fake_households["store"][household_id].join_code == "AAAA2222"
+
+
+async def test_non_member_cannot_regenerate_join_code(
+    client, fake_members, fake_households
+) -> None:
+    household_id = uuid.uuid4()
+    fake_households["store"][household_id] = _household(household_id, join_code="AAAA2222")
+
+    response = await client.post(
+        f"/api/households/{household_id}/regenerate-join-code", headers=auth_header(uuid.uuid4())
+    )
+
+    assert response.status_code == 403
+    assert fake_households["store"][household_id].join_code == "AAAA2222"

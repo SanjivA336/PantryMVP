@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useContext, useState, type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   ChevronRight,
@@ -17,6 +17,7 @@ import {
 import { AppVersion } from '../../components/AppVersion'
 import { DeleteBurrowModal } from '../../components/DeleteBurrowModal'
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
+import { ShellChromeContext } from '../../context/shellChrome'
 import { useAuth } from '../../hooks/useAuth'
 import { InviteCard } from './InviteCard'
 import type { SettingsContext } from './settingsContext'
@@ -138,9 +139,10 @@ function Group({
 // account and the app, as short grouped rows. Each row opens its own screen (or
 // a link, or a confirmation), so no screen is a long wall of controls.
 export function SettingsList({ ctx }: { ctx: SettingsContext }) {
-  const { household, members, isAdmin } = ctx
+  const { household, members, isAdmin, reloadHousehold } = ctx
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const shell = useContext(ShellChromeContext)
   const [logoutOpen, setLogoutOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -160,7 +162,16 @@ export function SettingsList({ ctx }: { ctx: SettingsContext }) {
 
   return (
     <div className="flex flex-col gap-6">
-      {household && <InviteCard household={household} />}
+      {household && (
+        <InviteCard
+          household={household}
+          canRegenerate={isAdmin}
+          onRegenerated={(updated) => {
+            reloadHousehold()
+            shell?.setHousehold(updated)
+          }}
+        />
+      )}
 
       <Group title="This burrow">
         <ScreenRow to="burrow" icon={Home} label="Burrow details" value={household?.name} />

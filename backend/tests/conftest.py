@@ -230,9 +230,13 @@ def fake_households(monkeypatch):
     def transfer_ownership(household_id, new_owner_user_id):
         return update_household(household_id, {"owner_id": new_owner_user_id})
 
+    def regenerate_join_code(household_id):
+        return update_household(household_id, {"join_code": "ZZZZ2222"})
+
     monkeypatch.setattr("app.services.households.get_household", get_household)
     monkeypatch.setattr("app.services.households.update_household", update_household)
     monkeypatch.setattr("app.services.households.delete_household", delete_household)
     monkeypatch.setattr("app.services.households.transfer_ownership", transfer_ownership)
+    monkeypatch.setattr("app.services.households.regenerate_join_code", regenerate_join_code)
 
     return {"store": store, "deleted": deleted}
