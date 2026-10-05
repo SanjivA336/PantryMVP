@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, PackageX, Trash2 } from 'lucide-react'
+import { ArrowLeft, Hourglass, PackageX } from 'lucide-react'
 import { formatQuantity } from '../../lib/formatQuantity'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
@@ -300,7 +300,7 @@ export function InventoryItemDetailPage() {
                 onClick={() => void removeAs('EXPIRED')}
                 className="flex items-center justify-center gap-2 rounded-control border border-subtle px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
               >
-                <Trash2 size={16} strokeWidth={1.75} />
+                <Hourglass size={16} strokeWidth={1.75} />
                 {removing === 'EXPIRED' ? 'Marking…' : 'Mark expired'}
               </button>
               <button

@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  Hourglass,
   LayoutGrid,
   MapPin,
   Package,
@@ -64,12 +65,39 @@ import { WarningsButton } from './WarningsButton'
 // whoever clicked the button); the only real difference is which word shows
 // up afterward, on the item and in the activity feed.
 const REMOVAL_REASONS: { reason: RemovalReason; label: string; icon: typeof Package }[] = [
-  { reason: 'EXPIRED', label: 'Mark expired', icon: Trash2 },
+  { reason: 'EXPIRED', label: 'Mark expired', icon: Hourglass },
   { reason: 'EMPTY', label: 'Mark empty', icon: PackageX },
 ]
 
-// Width of one swipe-revealed button (phones); two buttons are revealed.
-const SWIPE_ACTION_WIDTH = 76
+// One swipe-revealed button (phones), and the gap before each.
+const SWIPE_ACTION_WIDTH = 72
+const SWIPE_ACTION_GAP = 8
+
+// "Oct 1", or "Oct 1, 2025" when it isn't this year. `date` is a plain YYYY-MM-DD.
+function shortDate(date: string): string {
+  const d = new Date(`${date}T00:00:00`)
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
+}
+
+function daysLeftText(daysUntil: number): string {
+  if (daysUntil <= 0) return 'Expires today'
+  return `${daysUntil} ${daysUntil === 1 ? 'day' : 'days'} left`
+}
+
+interface SwipeAction {
+  key: string
+  label: string
+  icon: typeof Package
+  // Solid fill with dark text, e.g. 'bg-danger text-bg'.
+  className: string
+  run: () => void
+}
+
 
 const inputClass =
   'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
@@ -186,15 +214,20 @@ export function InventoryPage() {
   )
   // Which row's swipe actions are showing (one at a time), phones only.
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null)
+  // The item whose "Void" swipe action is waiting on a confirmation.
+  const [voidTarget, setVoidTarget] = useState<InventoryItem | null>(null)
   // Expiry state per item, straight from the warnings the page already loads
   // (the same list the warnings modal shows), so "amber" means exactly what the
   // backend means by "expiring soon" and nothing here hardcodes a day count.
   const expiryWarningByItemId = useMemo(() => {
-    const map = new Map<string, { state: ExpiryState; daysUntil: number }>()
+    const map = new Map<string, { state: ExpiryState; daysUntil: number; text: string }>()
     for (const w of warnings?.expiry_warnings ?? []) {
+      const expired = w.type === 'EXPIRED'
       map.set(w.inventory_item_id, {
-        state: w.type === 'EXPIRED' ? 'expired' : 'soon',
+        state: expired ? 'expired' : 'soon',
         daysUntil: w.days_until,
+        // Amber says how long is left; red says when it expired.
+        text: expired ? `Expired ${shortDate(w.relevant_date)}` : daysLeftText(w.days_until),
       })
     }
     return map
@@ -404,31 +437,52 @@ export function InventoryPage() {
     const warning = expiryWarningByItemId.get(item.id)
     const expiryState: ExpiryState =
       warning?.state ?? (item.expiry_date || item.best_by_date ? 'ok' : 'none')
-    const discardFromSwipe = (reason: RemovalReason) => {
-      setOpenSwipeId(null)
-      void discard(item, reason)
-    }
+    const swipeActions: SwipeAction[] = [
+      {
+        key: 'EMPTY',
+        label: 'Empty',
+        icon: PackageX,
+        className: 'bg-warning text-bg',
+        run: () => void discard(item, 'EMPTY'),
+      },
+      {
+        key: 'EXPIRED',
+        label: 'Expired',
+        icon: Hourglass,
+        className: 'bg-orange text-bg',
+        run: () => void discard(item, 'EXPIRED'),
+      },
+      {
+        key: 'VOIDED',
+        label: 'Void',
+        icon: Trash2,
+        className: 'bg-danger text-bg',
+        // Voiding can permanently delete the item, so it asks first.
+        run: () => setVoidTarget(item),
+      },
+    ]
     return (
       <li key={item.id}>
         <SwipeActionRow
-          className="rounded-card border border-subtle shadow-card"
+          tileClassName="rounded-card border border-subtle shadow-card"
           open={openSwipeId === item.id}
           onOpenChange={(open) => setOpenSwipeId(open ? item.id : null)}
-          actionsWidth={REMOVAL_REASONS.length * SWIPE_ACTION_WIDTH}
+          actionsWidth={swipeActions.length * (SWIPE_ACTION_WIDTH + SWIPE_ACTION_GAP)}
           actions={({ tabIndex }) =>
-            REMOVAL_REASONS.map(({ reason, label, icon: Icon }) => (
+            swipeActions.map(({ key, label, icon: Icon, className, run }) => (
               <button
-                key={reason}
+                key={key}
                 type="button"
                 tabIndex={tabIndex}
-                onClick={() => discardFromSwipe(reason)}
+                onClick={() => {
+                  setOpenSwipeId(null)
+                  run()
+                }}
                 style={{ width: SWIPE_ACTION_WIDTH }}
-                className={`flex flex-col items-center justify-center gap-1 text-xs font-medium ${
-                  reason === 'EXPIRED' ? 'bg-danger-soft text-danger' : 'bg-surface-2 text-text'
-                }`}
+                className={`flex flex-col items-center justify-center gap-1 rounded-card text-xs font-semibold ${className}`}
               >
-                <Icon size={18} strokeWidth={1.75} />
-                {label.replace('Mark ', '')}
+                <Icon size={20} strokeWidth={1.9} />
+                {label}
               </button>
             ))
           }
@@ -443,7 +497,7 @@ export function InventoryPage() {
                 navigate(itemHref)
               }
             }}
-            className="flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-surface-hover md:p-4"
+            className="flex cursor-pointer items-center gap-3 rounded-card p-3 transition-colors hover:bg-surface-hover md:p-4"
           >
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-2">
@@ -460,12 +514,18 @@ export function InventoryPage() {
                     Not yours
                   </span>
                 )}
-                <ExpiryIcon state={expiryState} daysUntil={warning?.daysUntil} />
               </div>
-              <p className="mt-0.5 line-clamp-2 text-sm text-muted">
-                {formatQuantity(item.quantity)} / {formatQuantity(item.total_quantity)}{' '}
-                {UNIT_LABELS[item.preferred_unit]} · {item.storage_location_name}
-              </p>
+              <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-sm text-muted">
+                  {formatQuantity(item.quantity)} / {formatQuantity(item.total_quantity)}{' '}
+                  {UNIT_LABELS[item.preferred_unit]} · {item.storage_location_name}
+                </p>
+                <ExpiryIcon
+                  state={expiryState}
+                  daysUntil={warning?.daysUntil}
+                  text={warning?.text}
+                />
+              </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -476,8 +536,8 @@ export function InventoryPage() {
               >
                 Use
               </button>
-              {/* Desktop: room for the buttons inline. On phones the same two
-                  actions live behind a swipe (see SwipeActionRow), and on every
+              {/* Desktop: room for the buttons inline. On phones the same actions
+                  (plus Void) live behind a swipe (see SwipeActionRow), and on every
                   screen size on the item's own page. */}
               <div className="hidden items-center gap-0.5 md:flex">
                 {REMOVAL_REASONS.map(({ reason, label, icon: Icon }) => (
@@ -757,6 +817,37 @@ export function InventoryPage() {
         <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map(renderItemCard)}
         </ul>
+      )}
+
+      {voidTarget && (
+        <Modal title="Void this item?" onClose={() => setVoidTarget(null)}>
+          <p className="mb-4 text-sm text-muted">
+            Void this when {voidTarget.food_name} shouldn't count for some reason other than
+            running out, going bad, or getting lost, like a duplicate entry or someone else taking
+            it. If nothing's been used from it yet, this removes it completely. Otherwise it's kept
+            and marked voided in the activity feed.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const target = voidTarget
+                setVoidTarget(null)
+                void discard(target, 'VOIDED')
+              }}
+              className="rounded-control bg-danger px-3 py-2 text-sm font-semibold text-bg transition-colors hover:bg-danger/90"
+            >
+              Yes, void it
+            </button>
+            <button
+              type="button"
+              onClick={() => setVoidTarget(null)}
+              className="rounded-control px-3 py-2 text-sm font-medium text-muted hover:bg-surface-hover"
+            >
+              Cancel
+            </button>
+          </div>
+        </Modal>
       )}
 
       {addPickerOpen && (

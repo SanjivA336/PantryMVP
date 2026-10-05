@@ -1,34 +1,40 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { withResistance } from '../lib/swipeResistance'
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
-  // Buttons laid out behind the row, flush right; revealed by swiping left.
-  // `tabIndex` is 0 only while open, so keyboard focus never lands on a button
-  // that's hidden behind the row.
+  // The action buttons, laid out in a row to the right of the tile. Include any
+  // gaps in `actionsWidth`. `tabIndex` is 0 only while open, so keyboard focus
+  // never lands on a button that is off-screen.
   actions: (props: { tabIndex: number }) => ReactNode
+  // Total width the actions take up (buttons plus gaps), in px.
   actionsWidth: number
-  className?: string
+  // Styles for the tile itself (border, rounding, background, shadow). The
+  // actions are separate cards beside it, so the container has no chrome.
+  tileClassName?: string
   children: ReactNode
 }
 
 const DESKTOP_QUERY = '(min-width: 768px)'
 
-// A row you swipe left to reveal action buttons behind it, for touch screens.
+// A row you swipe left to reveal action buttons beside it, for touch screens.
+// The tile and its actions sit in one strip that slides as a unit, so the
+// actions come in from the right as their own cards (like swiping a message in
+// Mail) and are clipped away while the row is closed.
+//
 // Touch only: a mouse pointer never starts a drag, and from the app's desktop
 // breakpoint up there's nothing to reveal (the buttons sit inline instead), so
-// the gesture is off there too.
-//
-// The row only claims a *horizontal* drag. Vertical movement is left to the
-// browser (touch-action: pan-y) so scrolling the list, and pull to refresh,
-// are unaffected. One open row at a time is the parent's job (it owns `open`);
-// tapping anywhere outside an open row closes it.
+// the gesture is off there too. The row only claims a *horizontal* drag; vertical
+// movement is left to the browser (touch-action: pan-y), so scrolling the list
+// and pull to refresh are unaffected. One open row at a time is the parent's job
+// (it owns `open`); tapping anywhere outside an open row closes it.
 export function SwipeActionRow({
   open,
   onOpenChange,
   actions,
   actionsWidth,
-  className = '',
+  tileClassName = '',
   children,
 }: Props) {
   const [dragX, setDragX] = useState<number | null>(null)
@@ -45,8 +51,6 @@ export function SwipeActionRow({
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [open, onOpenChange])
-
-  const clamp = (x: number) => Math.max(-actionsWidth, Math.min(0, x))
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'mouse' || window.matchMedia(DESKTOP_QUERY).matches) return
@@ -69,7 +73,7 @@ export function SwipeActionRow({
       // element it landed on, so the moves keep arriving here.
       g.active = true
     }
-    setDragX(clamp(g.base + dx))
+    setDragX(withResistance(g.base + dx, actionsWidth))
   }
 
   const finish = (commit: boolean) => {
@@ -104,28 +108,36 @@ export function SwipeActionRow({
   const offset = dragX ?? (open ? -actionsWidth : 0)
   const dragging = dragX !== null
 
+  // `overflow-hidden` clips the actions away to the right while closed; from the
+  // desktop breakpoint up it is lifted so the cards keep their shadow.
   return (
-    <div ref={container} className={`relative overflow-hidden ${className}`}>
+    <div ref={container} className="relative overflow-hidden md:overflow-visible">
       <div
-        className="absolute inset-y-0 right-0 flex md:hidden"
-        style={{ width: actionsWidth }}
-        aria-hidden={!open}
-      >
-        {actions({ tabIndex: open ? 0 : -1 })}
-      </div>
-      <div
-        className="relative touch-pan-y bg-surface"
+        className="flex md:w-full!"
         style={{
+          width: `calc(100% + ${actionsWidth}px)`,
           transform: `translateX(${offset}px)`,
-          transition: dragging ? 'none' : 'transform 200ms ease-out',
+          transition: dragging ? 'none' : 'transform 220ms ease-out',
         }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={() => finish(true)}
-        onPointerCancel={() => finish(false)}
-        onClickCapture={handleClickCapture}
       >
-        {children}
+        <div
+          className={`touch-pan-y bg-surface md:w-full! ${tileClassName}`}
+          style={{ width: `calc(100% - ${actionsWidth}px)` }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={() => finish(true)}
+          onPointerCancel={() => finish(false)}
+          onClickCapture={handleClickCapture}
+        >
+          {children}
+        </div>
+        <div
+          className="flex gap-2 pl-2 md:hidden"
+          style={{ width: actionsWidth }}
+          aria-hidden={!open}
+        >
+          {actions({ tabIndex: open ? 0 : -1 })}
+        </div>
       </div>
     </div>
   )

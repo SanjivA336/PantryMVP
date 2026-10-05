@@ -6,6 +6,9 @@ interface Props {
   state: ExpiryState
   // Whole days from today: negative once expired. Only used for the label.
   daysUntil?: number
+  // Short text shown beside the icon ("2 days left", "Expired Oct 1"). Leave it
+  // out for the icon-only form.
+  text?: string
   size?: number
 }
 
@@ -18,20 +21,38 @@ function label(state: ExpiryState, daysUntil: number | undefined): string {
   return `Expired ${days} ago`
 }
 
-// A small calendar that says where an item stands on expiry without a line of
-// text: blue = there is a date, amber = it's close, red = it's past. Each state
-// also has its own glyph, so the meaning doesn't depend on telling colours
-// apart. Renders nothing for an item with no date. The exact days are on the
-// item's page and in the warnings list.
-export function ExpiryIcon({ state, daysUntil, size = 15 }: Props) {
+// A small calendar that says where an item stands on expiry: blue = there is a
+// date, amber = it's close, red = it's past. Each state also has its own glyph,
+// so the meaning doesn't depend on telling colours apart. Renders nothing for an
+// item with no date. Amber and red can carry a few words beside the icon (how
+// long is left, or when it expired); blue stays icon-only. Exact details are on
+// the item's page and in the warnings list.
+export function ExpiryIcon({ state, daysUntil, text, size = 15 }: Props) {
   if (state === 'none') return null
 
   const Icon = state === 'ok' ? Calendar : state === 'soon' ? CalendarClock : CalendarX
   const color = state === 'ok' ? 'text-info' : state === 'soon' ? 'text-warning' : 'text-danger'
-  const text = label(state, daysUntil)
+  const description = label(state, daysUntil)
+
+  if (text) {
+    return (
+      <span
+        className={`inline-flex shrink-0 items-center gap-1 text-xs font-medium ${color}`}
+        title={description}
+      >
+        <Icon size={size - 1} strokeWidth={1.9} aria-hidden="true" />
+        {text}
+      </span>
+    )
+  }
 
   return (
-    <span className={`inline-flex shrink-0 ${color}`} title={text} role="img" aria-label={text}>
+    <span
+      className={`inline-flex shrink-0 ${color}`}
+      title={description}
+      role="img"
+      aria-label={description}
+    >
       <Icon size={size} strokeWidth={1.9} />
     </span>
   )

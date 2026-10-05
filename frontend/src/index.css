@@ -64,6 +64,8 @@
   --color-danger-soft: #2b1717;
   --color-warning: #f0b84f;
   --color-warning-soft: #2b2314;
+  /* Between warning (yellow) and danger (red): the "expired" swipe action. */
+  --color-orange: #ee8340;
   /* Used for "in progress / about to happen" indicators -- e.g. the Use
      modal's remaining-amount bar, where green (already primary) is taken
      by "what's left" and this needs to read as distinctly its own thing. */
