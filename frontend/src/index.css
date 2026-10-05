@@ -108,14 +108,15 @@
 */
 @layer base {
   /*
-    Space under the mobile bottom tab bar, so it clears the home-indicator
-    swipe area and the rounded screen corners without a big dead strip: 15%
-    of the phone's bottom inset (about 5px on a notched iPhone) with a 4px
-    floor for phones that report no inset. Single source of truth for the bar
-    and the page padding that clears it.
+    Space under the tab icons, inside the tab bar (so it is the bar's own colour,
+    not a separate strip): a small fixed 10px so the labels don't sit right on the
+    screen's bottom edge or its rounded corners. Single source of truth for the
+    bar's height, its bottom padding, and the page padding that clears it.
+    The installed app no longer needs the phone's safe-area inset here: the bar
+    reaches the true bottom edge and the home indicator floats over this padding.
   */
   :root {
-    --bottom-bar-gap: max(4px, calc(env(safe-area-inset-bottom) * 0.15));
+    --bottom-bar-gap: 10px;
 
     /*
       The height a full-screen page should be. Normally the dynamic viewport
