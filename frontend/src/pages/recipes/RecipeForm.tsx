@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, X } from 'lucide-react'
+import { AutoGrowTextarea } from '../../components/AutoGrowTextarea'
 import { FoodSearchInput } from '../../components/FoodSearchInput'
+import { useHideTabBar } from '../../hooks/useHideTabBar'
 import { ApiError } from '../../lib/apiClient'
 import { DIMENSION_LABELS, UNITS_BY_DIMENSION, UNIT_LABELS } from '../../lib/units'
 import type { Dimension, FoodDefinition, Unit } from '../../types/entities'
@@ -59,6 +61,9 @@ interface IngredientRow {
   unit: Unit | ''
   note: string
   suggestedName?: string
+  // The note box is tucked behind a "+ note" button until it's needed (or until the
+  // row already has a note). Not saved; it only controls what's shown.
+  noteOpen?: boolean
 }
 
 const emptyIngredientRow = (): IngredientRow => ({ food: null, quantity: '', unit: '', note: '' })
@@ -78,6 +83,8 @@ interface Props {
 }
 
 export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
+  // The Save bar below takes the tab bar's place on a phone.
+  useHideTabBar()
   const {
     register,
     handleSubmit,
@@ -170,21 +177,41 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
         <textarea rows={2} className={inputClass} {...register('description')} />
       </div>
 
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <label className="mb-1.5 block text-sm font-medium text-muted">Servings</label>
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-muted">Serves</label>
           <input type="number" min={1} className={inputClass} {...register('servings')} />
           {errors.servings && (
             <p className="mt-1.5 text-sm text-danger">{errors.servings.message}</p>
           )}
         </div>
-        <div className="flex-1">
-          <label className="mb-1.5 block text-sm font-medium text-muted">Prep time (min)</label>
-          <input type="number" min={0} className={inputClass} {...register('prep_time_minutes')} />
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-muted">Prep</label>
+          <div className="relative">
+            <input
+              type="number"
+              min={0}
+              className={`${inputClass} pr-10`}
+              {...register('prep_time_minutes')}
+            />
+            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-faint">
+              min
+            </span>
+          </div>
         </div>
-        <div className="flex-1">
-          <label className="mb-1.5 block text-sm font-medium text-muted">Cook time (min)</label>
-          <input type="number" min={0} className={inputClass} {...register('cook_time_minutes')} />
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-muted">Cook</label>
+          <div className="relative">
+            <input
+              type="number"
+              min={0}
+              className={`${inputClass} pr-10`}
+              {...register('cook_time_minutes')}
+            />
+            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-faint">
+              min
+            </span>
+          </div>
         </div>
       </div>
 
@@ -201,17 +228,17 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
                 onChange={(food) => updateIngredient(index, { food })}
                 initialQuery={row.suggestedName}
               />
-              <div className="flex flex-wrap gap-2">
+              <div className="flex items-center gap-2">
                 <input
                   type="number"
                   step="any"
                   placeholder="Qty"
-                  className={`w-20 ${fieldClass}`}
+                  className={`w-20 shrink-0 ${fieldClass}`}
                   value={row.quantity}
                   onChange={(e) => updateIngredient(index, { quantity: e.target.value })}
                 />
                 <select
-                  className={`w-28 ${fieldClass}`}
+                  className={`min-w-0 flex-1 ${fieldClass}`}
                   value={row.unit}
                   onChange={(e) => updateIngredient(index, { unit: e.target.value as Unit | '' })}
                 >
@@ -226,22 +253,39 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
                     </optgroup>
                   ))}
                 </select>
-                <input
-                  type="text"
-                  placeholder="Note (optional)"
-                  className={`min-w-32 flex-1 ${fieldClass}`}
-                  value={row.note}
-                  onChange={(e) => updateIngredient(index, { note: e.target.value })}
-                />
+                {!row.noteOpen && row.note === '' && (
+                  <button
+                    type="button"
+                    onClick={() => updateIngredient(index, { noteOpen: true })}
+                    className="shrink-0 rounded-control px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary-soft"
+                  >
+                    + note
+                  </button>
+                )}
                 <button
                   type="button"
-                  title="Remove"
+                  title="Remove ingredient"
+                  aria-label="Remove ingredient"
                   onClick={() => removeIngredient(index)}
                   className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
                 >
                   <X size={16} strokeWidth={1.75} />
                 </button>
               </div>
+              {(row.noteOpen || row.note !== '') && (
+                <input
+                  type="text"
+                  placeholder="Note (optional)"
+                  autoFocus={row.noteOpen && row.note === ''}
+                  className={`w-full ${fieldClass}`}
+                  value={row.note}
+                  onChange={(e) => updateIngredient(index, { note: e.target.value })}
+                  onBlur={() => {
+                    // An opened-but-left-empty note folds back into "+ note".
+                    if (row.note === '') updateIngredient(index, { noteOpen: false })
+                  }}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -261,15 +305,15 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
           {instructions.map((step, index) => (
             <div key={index} className="flex items-start gap-2">
               <span className="mt-2 text-sm text-faint">{index + 1}.</span>
-              <textarea
-                rows={1}
+              <AutoGrowTextarea
                 className={`flex-1 ${inputClass}`}
                 value={step}
                 onChange={(e) => updateInstruction(index, e.target.value)}
               />
               <button
                 type="button"
-                title="Remove"
+                title="Remove step"
+                aria-label="Remove step"
                 onClick={() => removeInstruction(index)}
                 className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
               >
@@ -288,15 +332,18 @@ export function RecipeForm({ initial, submitLabel, onSubmit }: Props) {
         </button>
       </div>
 
-      {formError && <p className="text-sm text-danger">{formError}</p>}
-
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="self-start rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
-      >
-        {isSubmitting ? 'Saving…' : submitLabel}
-      </button>
+      {/* Pinned to the bottom on a phone (in the tab bar's place); an ordinary button at
+          the end of the form from the desktop breakpoint up. */}
+      <div className="pin-bottom fixed inset-x-0 bottom-0 z-20 border-t border-subtle bg-surface px-4 pb-[var(--bottom-bar-gap)] pt-3 md:static md:z-auto md:border-0 md:bg-transparent md:p-0">
+        {formError && <p className="mb-2 text-sm text-danger md:mb-3">{formError}</p>}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full rounded-control bg-primary px-3 py-2.5 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50 md:w-auto md:px-2 md:py-2"
+        >
+          {isSubmitting ? 'Saving…' : submitLabel}
+        </button>
+      </div>
     </form>
   )
 }

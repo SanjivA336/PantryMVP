@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
   ChefHat,
@@ -17,6 +17,7 @@ import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { MobileShortcutMenu } from '../../components/MobileShortcutMenu'
 import { PullToRefreshIndicator } from '../../components/PullToRefreshIndicator'
 import { SupportLink } from '../../components/SupportLink'
+import { ShellChromeContext } from '../../context/shellChrome'
 import { useAuth } from '../../hooks/useAuth'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import { usePullToRefresh } from '../../hooks/usePullToRefresh'
@@ -69,6 +70,10 @@ export function HouseholdShell() {
   // page remounts and every fetch and live subscription on it starts over.
   // (Any half-typed form on the page is lost, which is why modals block it.)
   const [refreshKey, setRefreshKey] = useState(0)
+  // Editing screens hide the phone tab bar and pin their own Save bar there
+  // instead (see hooks/useHideTabBar).
+  const [tabBarHidden, setTabBarHidden] = useState(false)
+  const chrome = useMemo(() => ({ setTabBarHidden }), [])
   const { pull, dragging, refreshing } = usePullToRefresh(() => setRefreshKey((k) => k + 1))
   const [loggingOut, setLoggingOut] = useState(false)
 
@@ -291,7 +296,9 @@ export function HouseholdShell() {
       <main className="flex-1 px-4 pb-[calc(6rem+var(--bottom-bar-gap))] pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
         <PullToRefreshIndicator pull={pull} dragging={dragging} refreshing={refreshing} />
         <div className="mx-auto w-full max-w-5xl">
-          <Outlet key={refreshKey} />
+          <ShellChromeContext.Provider value={chrome}>
+            <Outlet key={refreshKey} />
+          </ShellChromeContext.Provider>
         </div>
       </main>
 
@@ -301,21 +308,23 @@ export function HouseholdShell() {
           exactly evenly regardless of label length, which puts the middle
           slot dead center for free -- no separate "center it in the
           viewport" math to keep in sync with the bar's own layout. */}
-      <nav className="tab-bar fixed inset-x-0 bottom-0 z-20 flex h-[calc(4rem+var(--bottom-bar-gap))] items-stretch border-t border-subtle bg-surface pb-[var(--bottom-bar-gap)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
-        <div className="flex flex-1">
-          {MOBILE_BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
-            <BottomTabLink key={item.label} {...item} />
-          ))}
-        </div>
-        <div className="relative flex w-16 shrink-0 items-center justify-center">
-          {householdId && <MobileShortcutMenu householdId={householdId} />}
-        </div>
-        <div className="flex flex-1">
-          {MOBILE_BOTTOM_NAV_ITEMS.slice(2).map((item) => (
-            <BottomTabLink key={item.label} {...item} />
-          ))}
-        </div>
-      </nav>
+      {!tabBarHidden && (
+        <nav className="tab-bar fixed inset-x-0 bottom-0 z-20 flex h-[calc(4rem+var(--bottom-bar-gap))] items-stretch border-t border-subtle bg-surface pb-[var(--bottom-bar-gap)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
+          <div className="flex flex-1">
+            {MOBILE_BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
+              <BottomTabLink key={item.label} {...item} />
+            ))}
+          </div>
+          <div className="relative flex w-16 shrink-0 items-center justify-center">
+            {householdId && <MobileShortcutMenu householdId={householdId} />}
+          </div>
+          <div className="flex flex-1">
+            {MOBILE_BOTTOM_NAV_ITEMS.slice(2).map((item) => (
+              <BottomTabLink key={item.label} {...item} />
+            ))}
+          </div>
+        </nav>
+      )}
     </div>
   )
 }

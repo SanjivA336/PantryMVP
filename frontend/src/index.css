@@ -227,3 +227,16 @@
     top: calc(100lvh - 4rem - var(--bottom-bar-gap));
   }
 }
+
+/*
+  Other bars pinned to the bottom of the screen (the recipe editor's Save bar).
+  In the installed iOS app the layout viewport is reported short at launch (see
+  --app-height), so `bottom: 0` would sit above the real bottom edge. The gap
+  between the small and large viewport heights is exactly that missing amount,
+  and zero once iOS corrects itself. Unlayered so it overrides `bottom-0`.
+*/
+@media (display-mode: standalone) {
+  .pin-bottom {
+    bottom: calc(100dvh - 100lvh);
+  }
+}
