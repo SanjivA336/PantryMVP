@@ -34,7 +34,7 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-surface px-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-text md:bg-bg md:p-4">
+    <div className="flex min-h-app items-center justify-center bg-surface px-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-text md:bg-bg md:p-4">
       <div className="w-full max-w-sm bg-surface p-7 md:rounded-card md:border md:border-subtle md:shadow-card">
         <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
         <h1 className="mb-6 text-2xl font-semibold">Set a new password</h1>

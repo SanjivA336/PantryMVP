@@ -6,7 +6,7 @@ export function AuthGuard() {
 
   if (loading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center">
+      <div className="flex min-h-app items-center justify-center">
         <p style={{ color: 'var(--color-text)' }}>Loading…</p>
       </div>
     )

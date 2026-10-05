@@ -133,7 +133,7 @@ export function HouseholdShell() {
 
   if (accessError || loadError) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-bg p-4 text-text">
+      <div className="flex min-h-app items-center justify-center bg-bg p-4 text-text">
         <div className="w-full max-w-sm rounded-card border border-subtle bg-surface p-7 text-center shadow-card">
           <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
           <h1 className="mb-3 text-xl font-semibold">
@@ -156,7 +156,7 @@ export function HouseholdShell() {
   }
 
   return (
-    <div className="min-h-dvh bg-bg text-text md:flex md:h-dvh md:overflow-hidden">
+    <div className="min-h-app bg-bg text-text md:flex md:h-dvh md:overflow-hidden">
       {/* Desktop sidebar -- fixed height, never scrolls as a whole; only the
           nav links scroll internally if they ever overflow (the household
           name/code header and the settings/sign-out footer stay pinned). */}
@@ -324,7 +324,7 @@ export function HouseholdShell() {
           exactly evenly regardless of label length, which puts the middle
           slot dead center for free -- no separate "center it in the
           viewport" math to keep in sync with the bar's own layout. */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-[calc(4rem+var(--bottom-bar-gap))] items-stretch border-t border-subtle bg-surface pb-[var(--bottom-bar-gap)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
+      <nav className="tab-bar fixed inset-x-0 bottom-0 z-20 flex h-[calc(4rem+var(--bottom-bar-gap))] items-stretch border-t border-subtle bg-surface pb-[var(--bottom-bar-gap)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
         <div className="flex flex-1">
           {MOBILE_BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
             <BottomTabLink key={item.label} {...item} />

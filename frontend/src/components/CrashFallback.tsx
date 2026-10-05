@@ -3,7 +3,7 @@
 // this point, since whatever component tree broke is already unmounted.
 export function CrashFallback() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-bg p-4 text-text">
+    <div className="flex min-h-app items-center justify-center bg-bg p-4 text-text">
       <div className="w-full max-w-sm rounded-card border border-subtle bg-surface p-7 text-center shadow-card">
         <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
         <h1 className="mb-3 text-xl font-semibold">Something went wrong</h1>

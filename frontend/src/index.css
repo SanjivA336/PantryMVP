@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+/* `min-h-app`: at least one full screen tall; see --app-height below. */
+@utility min-h-app {
+  min-height: var(--app-height);
+}
+
 /*
   Dark, off-black + green design system. Tokens are declared inside @theme
   so Tailwind auto-generates matching utilities (bg-surface, text-muted,
@@ -111,6 +116,25 @@
   */
   :root {
     --bottom-bar-gap: max(4px, calc(env(safe-area-inset-bottom) * 0.15));
+
+    /*
+      The height a full-screen page should be. Normally the dynamic viewport
+      height. In the installed iOS app, though, iOS reports the viewport at
+      launch as the screen minus the status bar (793 on a 852pt-tall phone)
+      even though the page is drawn under the status bar at full height, which
+      left a dark strip under the tab bar until some page happened to be taller
+      than the viewport and made iOS re-measure. 100lvh (the large viewport)
+      reports the true screen height from the start, and the installed app has
+      no browser toolbars, so there the large and dynamic viewports are the
+      same thing. Measured on a real phone with the diagnostics readout.
+    */
+    --app-height: 100dvh;
+  }
+
+  @media (display-mode: standalone) {
+    :root {
+      --app-height: 100lvh;
+    }
   }
 
   /*
@@ -176,3 +200,16 @@
   }
 }
 */
+
+/*
+  The mobile tab bar normally sits at `bottom: 0`, but "bottom" is the bottom of
+  the layout viewport, which iOS reports 59px short at launch in the installed
+  app (see --app-height). Position it from the top using the true screen height
+  instead. Deliberately unlayered so it overrides the `bottom-0` utility.
+*/
+@media (display-mode: standalone) {
+  .tab-bar {
+    bottom: auto;
+    top: calc(100lvh - 4rem - var(--bottom-bar-gap));
+  }
+}
