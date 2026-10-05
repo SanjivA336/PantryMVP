@@ -218,6 +218,9 @@ export function PurchaseWizardModal({
   // as you move between lines, so someone who always fills them in only opens
   // it once.
   const [showMore, setShowMore] = useState(false)
+  // The full-width slot under the Cost / Buyer row where the Buyer list opens (the
+  // Buyer control itself is only half a row wide).
+  const [buyerPanel, setBuyerPanel] = useState<HTMLElement | null>(null)
   // Closing (the X, or the backdrop) always asks what to do with the
   // session rather than silently either keeping or discarding it -- see the
   // confirm modal below for the exact wording/options, which depend on
@@ -907,8 +910,8 @@ export function PurchaseWizardModal({
                       </div>
 
 
-                      <div className="flex gap-2">
-                        <div className="flex-1">
+                      <div className="grid grid-cols-2 gap-x-2">
+                        <div>
                           <label className={fieldLabelClass}>
                             Cost (optional)
                             <FieldTooltip text="Auto-filled from the last time you bought this exact food and quantity, if we've seen it before. Edit or clear it any time." />
@@ -945,15 +948,17 @@ export function PurchaseWizardModal({
                             </button>
                           </div>
                         </div>
-                        <div className="flex-1">
+                        <div>
                           <label className={fieldLabelClass}>Buyer</label>
                           <MemberPicker
                             mode="single"
                             members={activeMembers}
                             value={draft.buyerId}
+                            panelContainer={buyerPanel}
                             onChange={(id) => setDraft({ ...draft, buyerId: id })}
                           />
                         </div>
+                        <div ref={setBuyerPanel} className="col-span-2 empty:hidden" />
                       </div>
 
 
