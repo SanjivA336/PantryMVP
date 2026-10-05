@@ -371,23 +371,27 @@ function SidebarLink({ to, label, end, icon: Icon, onClick }: NavItemProps) {
   )
 }
 
+// Icon-only on purpose. The text label is kept as the accessible name (and a
+// tooltip on hover/long-press), so screen readers still announce each tab, and
+// NavLink marks the current page with aria-current.
 function BottomTabLink({ to, label, end, icon: Icon }: NavItemProps) {
   return (
     <NavLink
       to={to}
       end={end}
+      aria-label={label}
+      title={label}
       className={({ isActive }) =>
-        `flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors duration-150 ${
+        `flex flex-1 items-center justify-center transition-colors duration-150 ${
           isActive ? 'text-primary' : 'text-muted hover:text-text'
         }`
       }
     >
       <Icon
-        size={22}
+        size={26}
         strokeWidth={1.75}
         className="transition-transform duration-150 hover:scale-110"
       />
-      {label}
     </NavLink>
   )
 }

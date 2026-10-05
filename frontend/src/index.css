@@ -109,14 +109,14 @@
 @layer base {
   /*
     Space under the tab icons, inside the tab bar (so it is the bar's own colour,
-    not a separate strip): a small fixed 10px so the labels don't sit right on the
+    not a separate strip): a fixed 20px so the icons don't sit right on the
     screen's bottom edge or its rounded corners. Single source of truth for the
     bar's height, its bottom padding, and the page padding that clears it.
     The installed app no longer needs the phone's safe-area inset here: the bar
     reaches the true bottom edge and the home indicator floats over this padding.
   */
   :root {
-    --bottom-bar-gap: 10px;
+    --bottom-bar-gap: 20px;
 
     /*
       The height a full-screen page should be. Normally the dynamic viewport
