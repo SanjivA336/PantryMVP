@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Download } from 'lucide-react'
+import { formatQuantity } from '../../lib/formatQuantity'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
@@ -59,12 +60,10 @@ type SubstitutionState =
   | { status: 'loaded'; suggestions: SubstitutionSuggestion[] }
 
 function scaledQuantityLabel(ingredient: RecipeIngredient, scale: number): string {
-  const scaled = Number(ingredient.quantity) * scale
-  // Trim trailing zeros from the multiplication without ever showing more
-  // than 2 decimal places (scaling e.g. 1/3 servings can produce long
-  // floats that aren't meaningful at kitchen-measurement precision).
-  const rounded = Math.round(scaled * 100) / 100
-  return `${rounded} ${UNIT_LABELS[ingredient.unit]}`
+  // Scaling e.g. 1/3 servings can produce long floats that aren't meaningful at
+  // kitchen-measurement precision, so this shares the app-wide display rule:
+  // at most 2 decimal places, trailing zeros dropped.
+  return `${formatQuantity(Number(ingredient.quantity) * scale)} ${UNIT_LABELS[ingredient.unit]}`
 }
 
 function AvailabilityBadge({ ingredient, scale }: { ingredient: RecipeIngredient; scale: number }) {

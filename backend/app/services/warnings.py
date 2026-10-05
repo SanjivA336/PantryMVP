@@ -21,7 +21,7 @@ _EXPIRY_IGNORES_TABLE = "expiry_warning_ignores"
 # How many days out counts as "expiring soon" -- a plain constant rather than
 # a per-household setting, since nothing in this MVP needs it configurable
 # yet.
-EXPIRY_WARNING_DAYS = 3
+EXPIRY_WARNING_DAYS = 5
 
 # A food is "low stock" once what's left drops below this fraction of the
 # most recent purchase's size. Relative rather than a fixed configured

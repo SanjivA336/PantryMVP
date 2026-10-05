@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, PackageX, Trash2 } from 'lucide-react'
+import { formatQuantity } from '../../lib/formatQuantity'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
 import { UnitSelect } from '../../components/UnitSelect'
@@ -50,6 +51,7 @@ export function InventoryItemDetailPage() {
   const [tab, setTab] = useState<'details' | 'history'>('details')
   const [confirmingVoid, setConfirmingVoid] = useState(false)
   const [voiding, setVoiding] = useState(false)
+  const [removing, setRemoving] = useState<'EXPIRED' | 'EMPTY' | null>(null)
 
   const sortedMembers = useMemo(
     () => [...members].sort((a, b) => a.nickname.localeCompare(b.nickname)),
@@ -105,6 +107,23 @@ export function InventoryItemDetailPage() {
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
       setVoiding(false)
+    }
+  }
+
+  // "Mark expired" / "Mark empty": the same two removal reasons as the swipe
+  // actions on the inventory list, here so they're reachable without a gesture
+  // (keyboard, screen reader, desktop) and sit beside "Void this item".
+  const removeAs = async (reason: 'EXPIRED' | 'EMPTY') => {
+    setActionError(null)
+    setRemoving(reason)
+    try {
+      await apiClient.delete(
+        `/api/households/${householdId}/inventory-items/${itemId}?reason=${reason}`,
+      )
+      navigate(`/households/${householdId}`)
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
+      setRemoving(null)
     }
   }
 
@@ -273,6 +292,29 @@ export function InventoryItemDetailPage() {
             Done
           </button>
 
+          {!isFrozen && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={removing !== null}
+                onClick={() => void removeAs('EXPIRED')}
+                className="flex items-center justify-center gap-2 rounded-control border border-subtle px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
+              >
+                <Trash2 size={16} strokeWidth={1.75} />
+                {removing === 'EXPIRED' ? 'Marking…' : 'Mark expired'}
+              </button>
+              <button
+                type="button"
+                disabled={removing !== null}
+                onClick={() => void removeAs('EMPTY')}
+                className="flex items-center justify-center gap-2 rounded-control border border-subtle px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
+              >
+                <PackageX size={16} strokeWidth={1.75} />
+                {removing === 'EMPTY' ? 'Marking…' : 'Mark empty'}
+              </button>
+            </div>
+          )}
+
           {!isFrozen &&
             (confirmingVoid ? (
               <div className="rounded-control border border-danger/30 bg-danger-soft p-3">
@@ -336,7 +378,7 @@ export function InventoryItemDetailPage() {
                     )}
                     {c.new_total_quantity !== null && (
                       <p>
-                        Amount: {c.previous_total_quantity} → {c.new_total_quantity}
+                        Amount: {formatQuantity(c.previous_total_quantity)} → {formatQuantity(c.new_total_quantity)}
                       </p>
                     )}
                     {c.note && <p className="italic">"{c.note}"</p>}
@@ -427,7 +469,7 @@ function UsageSection({
           event.kind === 'CORRECTION' ? (
             <li key={event.id} className="ml-4 text-xs text-faint">
               ↳ adjusted by {Number(event.quantity_used) > 0 ? '+' : ''}
-              {event.quantity_used} {UNIT_LABELS[event.unit]}
+              {formatQuantity(event.quantity_used)} {UNIT_LABELS[event.unit]}
               {event.note && <span className="italic"> · "{event.note}"</span>}
             </li>
           ) : (

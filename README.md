@@ -329,6 +329,13 @@ leaving localhost.
 
 ### Longer-term
 
+- [ ] **Per-burrow "Split costs" setting**: a toggle that hides the Cost and
+  Buyer fields (and the Balances tab) for burrows that never split anything,
+  typically families, and keeps them for roommate groups, where cost is used
+  almost every time. Needs a new setting on the household (a migration), so
+  it is queued on its own rather than bundled into the mobile-density work.
+  Decided 2026-10-05; deliberately *not* a placeholder toggle in Settings
+  first, since testers would see a control that does nothing.
 - **Comprehensive/exhaustive test suite in CI**: go beyond Phase 4's
   current scope (running the existing unit-marked `pytest` suite plus
   `tsc`/`oxlint`) toward broader, deeper coverage in CI, e.g. the

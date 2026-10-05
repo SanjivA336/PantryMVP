@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
+import { formatQuantity } from '../../lib/formatQuantity'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { Modal } from '../../components/Modal'
 import { convertAmount, guessDimension, UNIT_LABELS, UNITS_BY_DIMENSION } from '../../lib/units'
@@ -220,7 +221,7 @@ export function UseItemModal({ item, householdId, myMemberId, onClose, onConsume
           <div className="flex items-baseline justify-between text-sm">
             <span className="text-muted">Remaining</span>
             <span className="font-medium">
-              {Number(remainingInUnit.toFixed(3))} of {Number(totalInUnit.toFixed(3))}{' '}
+              {formatQuantity(remainingInUnit)} of {formatQuantity(totalInUnit)}{' '}
               {UNIT_LABELS[unit]}
             </span>
           </div>

@@ -13,6 +13,7 @@ import {
   UserPlus,
   Utensils,
 } from 'lucide-react'
+import { formatQuantity } from '../../lib/formatQuantity'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { EmptyState } from '../../components/EmptyState'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
@@ -135,7 +136,7 @@ function describe(event: ActivityEvent, subject: ReactNode): ReactNode {
       return (
         <>
           <b>{actor}</b> added {subject}
-          {d.quantity ? ` · ${d.quantity} ${unitLabel(d.unit)}` : ''}
+          {d.quantity ? ` · ${formatQuantity(d.quantity as string | number)} ${unitLabel(d.unit)}` : ''}
           {d.storage_location ? ` to ${d.storage_location}` : ''}
         </>
       )

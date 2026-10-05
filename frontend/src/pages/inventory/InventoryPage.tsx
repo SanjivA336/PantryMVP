@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
-  CalendarX,
   ChevronDown,
   ChevronRight,
   Download,
@@ -12,6 +11,7 @@ import {
   Pencil,
   Plus,
   Rows3,
+  Trash2,
   UtensilsCrossed,
 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -19,7 +19,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
+import { ExpiryIcon, type ExpiryState } from '../../components/ExpiryIcon'
 import { Modal } from '../../components/Modal'
+import { SwipeActionRow } from '../../components/SwipeActionRow'
 import { WarningCounts } from '../../components/WarningCounts'
 import { useAddItemWizard } from '../../hooks/useAddItemWizard'
 import { useAuth } from '../../hooks/useAuth'
@@ -37,6 +39,7 @@ import {
 import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
+import { formatQuantity } from '../../lib/formatQuantity'
 import { UNIT_LABELS } from '../../lib/units'
 import { EmptyState } from '../../components/EmptyState'
 import { UseItemModal } from './UseItemModal'
@@ -61,9 +64,12 @@ import { WarningsButton } from './WarningsButton'
 // whoever clicked the button); the only real difference is which word shows
 // up afterward, on the item and in the activity feed.
 const REMOVAL_REASONS: { reason: RemovalReason; label: string; icon: typeof Package }[] = [
-  { reason: 'EXPIRED', label: 'Mark expired', icon: CalendarX },
+  { reason: 'EXPIRED', label: 'Mark expired', icon: Trash2 },
   { reason: 'EMPTY', label: 'Mark empty', icon: PackageX },
 ]
+
+// Width of one swipe-revealed button (phones); two buttons are revealed.
+const SWIPE_ACTION_WIDTH = 76
 
 const inputClass =
   'w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary'
@@ -148,23 +154,6 @@ function downloadInventoryAsCsv(items: InventoryItem[], members: Member[]) {
 // are both simple sign/magnitude checks on the same days-until number, and
 // the color swap (muted -> danger) carries the "past due" signal on its own
 // without a second visual element competing for attention.
-function expiryText(expiryDate: string): { text: string; expired: boolean } {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const target = new Date(`${expiryDate}T00:00:00`)
-  const daysUntil = Math.round((target.getTime() - today.getTime()) / 86_400_000)
-  const expired = daysUntil < 0
-  const n = Math.abs(daysUntil)
-  const dayWord = n === 1 ? 'day' : 'days'
-  if (daysUntil === 0) return { text: 'Expires today', expired: false }
-  return {
-    text: expired
-      ? `Expired on ${expiryDate} (${n} ${dayWord} ago)`
-      : `Expires on ${expiryDate} (${n} ${dayWord})`,
-    expired,
-  }
-}
-
 export function InventoryPage() {
   const { householdId, storageLocationId } = useParams<{
     householdId: string
@@ -195,6 +184,21 @@ export function InventoryPage() {
   const { data: warnings, reload: reloadWarnings } = useHouseholdResource<HouseholdWarnings>(
     householdId ? `/api/households/${householdId}/warnings` : null,
   )
+  // Which row's swipe actions are showing (one at a time), phones only.
+  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null)
+  // Expiry state per item, straight from the warnings the page already loads
+  // (the same list the warnings modal shows), so "amber" means exactly what the
+  // backend means by "expiring soon" and nothing here hardcodes a day count.
+  const expiryWarningByItemId = useMemo(() => {
+    const map = new Map<string, { state: ExpiryState; daysUntil: number }>()
+    for (const w of warnings?.expiry_warnings ?? []) {
+      map.set(w.inventory_item_id, {
+        state: w.type === 'EXPIRED' ? 'expired' : 'soon',
+        daysUntil: w.days_until,
+      })
+    }
+    return map
+  }, [warnings])
   const { data: members } = useHouseholdResource<Member[]>(
     householdId ? `/api/households/${householdId}/members` : null,
   )
@@ -395,75 +399,103 @@ export function InventoryPage() {
   }
 
   const renderItemCard = (item: InventoryItem) => {
-    const expiry = item.expiry_date ? expiryText(item.expiry_date) : null
     const itemHref = `/households/${householdId}/inventory-items/${item.id}`
+    // A warning wins; otherwise a plain blue calendar if any date is set.
+    const warning = expiryWarningByItemId.get(item.id)
+    const expiryState: ExpiryState =
+      warning?.state ?? (item.expiry_date || item.best_by_date ? 'ok' : 'none')
+    const discardFromSwipe = (reason: RemovalReason) => {
+      setOpenSwipeId(null)
+      void discard(item, reason)
+    }
     return (
-      <li
-        key={item.id}
-        role="button"
-        tabIndex={0}
-        onClick={() => navigate(itemHref)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            navigate(itemHref)
-          }
-        }}
-        className="flex cursor-pointer flex-col gap-3 rounded-card border border-subtle bg-surface p-4 shadow-card transition-colors hover:border-subtle-strong hover:bg-surface-hover"
-      >
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <CategoryDot category={item.category} />
-            <span className="font-medium">{item.food_name}</span>
-            {/* Inverse-only: most items are shared with everyone by
-                default, so flagging that plainly stated fact on every
-                single card would be noise. The one thing worth a flag is
-                the exception -- and even then, "not yours" describes
-                whose share this counts against, not a hard rule; the
-                actual owner can still say "go ahead and have some." */}
-            {myMemberId && !item.allowed_member_ids.includes(myMemberId) && (
-              <span className="rounded-pill bg-warning-soft px-2 py-0.5 text-xs text-warning">
-                Not yours
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-muted">
-            {item.quantity} / {item.total_quantity} {UNIT_LABELS[item.preferred_unit]} ·{' '}
-            {item.storage_location_name}
-          </p>
-          {expiry && (
-            <p className={`text-xs ${expiry.expired ? 'text-danger' : 'text-faint'}`}>
-              {expiry.text}
-            </p>
-          )}
-        </div>
-
-        <div
-          className="mt-auto flex items-center justify-between gap-2 border-t border-subtle pt-3"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            onClick={() => setUsingItem(item)}
-            className="rounded-control bg-primary-soft px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary hover:text-bg"
-          >
-            Use
-          </button>
-          <div className="flex items-center gap-0.5">
-            {REMOVAL_REASONS.map(({ reason, label, icon: Icon }) => (
+      <li key={item.id}>
+        <SwipeActionRow
+          className="rounded-card border border-subtle shadow-card"
+          open={openSwipeId === item.id}
+          onOpenChange={(open) => setOpenSwipeId(open ? item.id : null)}
+          actionsWidth={REMOVAL_REASONS.length * SWIPE_ACTION_WIDTH}
+          actions={({ tabIndex }) =>
+            REMOVAL_REASONS.map(({ reason, label, icon: Icon }) => (
               <button
                 key={reason}
                 type="button"
-                title={label}
-                aria-label={label}
-                onClick={() => void discard(item, reason)}
-                className="rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                tabIndex={tabIndex}
+                onClick={() => discardFromSwipe(reason)}
+                style={{ width: SWIPE_ACTION_WIDTH }}
+                className={`flex flex-col items-center justify-center gap-1 text-xs font-medium ${
+                  reason === 'EXPIRED' ? 'bg-danger-soft text-danger' : 'bg-surface-2 text-text'
+                }`}
               >
-                <Icon size={16} strokeWidth={1.75} />
+                <Icon size={18} strokeWidth={1.75} />
+                {label.replace('Mark ', '')}
               </button>
-            ))}
+            ))
+          }
+        >
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate(itemHref)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                navigate(itemHref)
+              }
+            }}
+            className="flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-surface-hover md:p-4"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <CategoryDot category={item.category} />
+                <span className="truncate font-medium">{item.food_name}</span>
+                {/* Inverse-only: most items are shared with everyone by
+                    default, so flagging that plainly stated fact on every
+                    single card would be noise. The one thing worth a flag is
+                    the exception -- and even then, "not yours" describes
+                    whose share this counts against, not a hard rule; the
+                    actual owner can still say "go ahead and have some." */}
+                {myMemberId && !item.allowed_member_ids.includes(myMemberId) && (
+                  <span className="shrink-0 rounded-pill bg-warning-soft px-2 py-0.5 text-xs text-warning">
+                    Not yours
+                  </span>
+                )}
+                <ExpiryIcon state={expiryState} daysUntil={warning?.daysUntil} />
+              </div>
+              <p className="mt-0.5 line-clamp-2 text-sm text-muted">
+                {formatQuantity(item.quantity)} / {formatQuantity(item.total_quantity)}{' '}
+                {UNIT_LABELS[item.preferred_unit]} · {item.storage_location_name}
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => setUsingItem(item)}
+                className="rounded-control bg-primary-soft px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary hover:text-bg"
+              >
+                Use
+              </button>
+              {/* Desktop: room for the buttons inline. On phones the same two
+                  actions live behind a swipe (see SwipeActionRow), and on every
+                  screen size on the item's own page. */}
+              <div className="hidden items-center gap-0.5 md:flex">
+                {REMOVAL_REASONS.map(({ reason, label, icon: Icon }) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    title={label}
+                    aria-label={label}
+                    onClick={() => void discard(item, reason)}
+                    className="rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                  >
+                    <Icon size={16} strokeWidth={1.75} />
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        </SwipeActionRow>
       </li>
     )
   }
@@ -713,7 +745,7 @@ export function InventoryPage() {
                   (locItems.length === 0 ? (
                     <p className="text-sm text-muted">Nothing here yet.</p>
                   ) : (
-                    <ul className="grid grid-cols-2 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {locItems.map(renderItemCard)}
                     </ul>
                   ))}
@@ -722,7 +754,7 @@ export function InventoryPage() {
           })}
         </div>
       ) : (
-        <ul className="grid grid-cols-2 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map(renderItemCard)}
         </ul>
       )}

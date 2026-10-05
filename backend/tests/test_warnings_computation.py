@@ -81,6 +81,29 @@ def test_item_expiring_far_out_is_not_flagged(monkeypatch) -> None:
     assert result.expiry_warnings == []
 
 
+def test_expiry_window_is_five_days_inclusive(monkeypatch) -> None:
+    # Pins the boundary itself, not just "near" and "far": the inventory cards
+    # and the warnings modal both mean "amber" by this exact cutoff.
+    assert warnings_service.EXPIRY_WARNING_DAYS == 5
+
+    on_edge = _item(expiry_date=date.today() + timedelta(days=5))
+    just_outside = _item(expiry_date=date.today() + timedelta(days=6))
+    result = _compute(monkeypatch, [on_edge, just_outside])
+
+    assert [w.inventory_item_id for w in result.expiry_warnings] == [on_edge.id]
+    assert result.expiry_warnings[0].type == "EXPIRING_SOON"
+    assert result.expiry_warnings[0].days_until == 5
+
+
+def test_item_expiring_today_is_expiring_soon_not_expired(monkeypatch) -> None:
+    item = _item(expiry_date=date.today())
+    result = _compute(monkeypatch, [item])
+
+    assert len(result.expiry_warnings) == 1
+    assert result.expiry_warnings[0].type == "EXPIRING_SOON"
+    assert result.expiry_warnings[0].days_until == 0
+
+
 def test_item_with_no_dates_is_not_flagged(monkeypatch) -> None:
     item = _item()
     result = _compute(monkeypatch, [item])
