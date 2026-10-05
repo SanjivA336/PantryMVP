@@ -24,7 +24,7 @@ import { ExpiryIcon, type ExpiryState } from '../../components/ExpiryIcon'
 import { Modal } from '../../components/Modal'
 import { SwipeActionRow } from '../../components/SwipeActionRow'
 import { WarningCounts } from '../../components/WarningCounts'
-import { useAddItemWizard } from '../../hooks/useAddItemWizard'
+import { useAddItemFlow } from '../../hooks/useAddItemFlow'
 import { useAuth } from '../../hooks/useAuth'
 import {
   FOOD_CATEGORIES,
@@ -230,7 +230,7 @@ export function InventoryPage() {
     reloadStorageLocations()
   }, [reload, reloadWarnings, reloadStorageLocations])
   useRealtimeSubscription('inventory_items', householdId ?? null, reloadAll)
-  const addItemWizard = useAddItemWizard(householdId, reloadAll)
+  const { open: openAddItem } = useAddItemFlow(reloadAll)
   const [actionError, setActionError] = useState<string | null>(null)
   const [usingItem, setUsingItem] = useState<InventoryItem | null>(null)
   const [search, setSearch] = useState('')
@@ -562,7 +562,7 @@ export function InventoryPage() {
           />
           <button
             type="button"
-            onClick={() => (storageLocationId ? addItemWizard.open() : setAddPickerOpen(true))}
+            onClick={() => (storageLocationId ? openAddItem() : setAddPickerOpen(true))}
             className="flex items-center gap-1.5 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
           >
             <Plus size={16} strokeWidth={2.25} />
@@ -719,7 +719,7 @@ export function InventoryPage() {
           title={storageLocationId ? 'Nothing stored here yet.' : 'Nothing in inventory yet.'}
           action={{
             label: 'Add an item',
-            onClick: () => (storageLocationId ? addItemWizard.open() : setAddPickerOpen(true)),
+            onClick: () => (storageLocationId ? openAddItem() : setAddPickerOpen(true)),
           }}
         />
       ) : filtered.length === 0 ? (
@@ -833,7 +833,7 @@ export function InventoryPage() {
               type="button"
               onClick={() => {
                 setAddPickerOpen(false)
-                addItemWizard.open()
+                openAddItem()
               }}
               className={addChoiceClass}
             >
@@ -910,12 +910,6 @@ export function InventoryPage() {
         />
       )}
 
-      {addItemWizard.modal}
-      {addItemWizard.error && (
-        <Modal title="Can't add an item yet" onClose={addItemWizard.dismissError}>
-          <p className="text-sm text-muted">{addItemWizard.error}</p>
-        </Modal>
-      )}
     </div>
   )
 }

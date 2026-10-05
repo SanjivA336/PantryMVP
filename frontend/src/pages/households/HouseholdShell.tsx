@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
   ChefHat,
@@ -11,10 +11,13 @@ import {
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { BurrowLogo } from '../../components/BurrowLogo'
 import { CopyButton } from '../../components/CopyButton'
+import { Modal } from '../../components/Modal'
 import { MobileShortcutMenu } from '../../components/MobileShortcutMenu'
 import { PullToRefreshIndicator } from '../../components/PullToRefreshIndicator'
 import { SupportLink } from '../../components/SupportLink'
+import { AddItemWizardContext } from '../../context/addItemWizard'
 import { ShellChromeContext } from '../../context/shellChrome'
+import { useAddItemWizard } from '../../hooks/useAddItemWizard'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import { usePullToRefresh } from '../../hooks/usePullToRefresh'
 import type { Household } from '../../types/entities'
@@ -68,6 +71,24 @@ export function HouseholdShell() {
   // instead (see hooks/useHideTabBar).
   const [tabBarHidden, setTabBarHidden] = useState(false)
   const chrome = useMemo(() => ({ setTabBarHidden }), [])
+  // The household's one add-item flow (see context/addItemWizard). It lives here,
+  // above every page, so there is only ever one copy that reopens an in-progress
+  // order from the address.
+  const onAddItemChanged = useRef<(() => void) | null>(null)
+  const addItemWizard = useAddItemWizard(householdId, () => onAddItemChanged.current?.())
+  const openAddItem = useRef(addItemWizard.open)
+  useEffect(() => {
+    openAddItem.current = addItemWizard.open
+  })
+  const addItemApi = useMemo(
+    () => ({
+      open: () => openAddItem.current(),
+      setOnChanged: (callback: (() => void) | null) => {
+        onAddItemChanged.current = callback
+      },
+    }),
+    [],
+  )
   const { pull, dragging, refreshing } = usePullToRefresh(() => setRefreshKey((k) => k + 1))
 
   useEffect(() => {
@@ -121,12 +142,77 @@ export function HouseholdShell() {
   }
 
   return (
-    <div className="min-h-app bg-bg text-text md:flex md:h-dvh md:overflow-hidden">
-      {/* Desktop sidebar -- fixed height, never scrolls as a whole; only the
-          nav links scroll internally if they ever overflow (the household
-          name/code header and the settings/sign-out footer stay pinned). */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-subtle bg-surface md:flex">
-        <div className="flex shrink-0 items-start gap-2 p-3">
+    <AddItemWizardContext.Provider value={addItemApi}>
+      <div className="min-h-app bg-bg text-text md:flex md:h-dvh md:overflow-hidden">
+        {/* Desktop sidebar -- fixed height, never scrolls as a whole; only the
+            nav links scroll internally if they ever overflow (the household
+            name/code header and the settings/sign-out footer stay pinned). */}
+        <aside className="hidden w-64 shrink-0 flex-col border-r border-subtle bg-surface md:flex">
+          <div className="flex shrink-0 items-start gap-2 p-3">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate('/', { state: { forcePicker: true } })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  navigate('/', { state: { forcePicker: true } })
+                }
+              }}
+              title="Switch burrows"
+              className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-control p-2 transition-colors hover:bg-surface-hover"
+            >
+              <BurrowLogo className="h-9 w-9 shrink-0 text-text transition-colors group-hover:text-primary" />
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold transition-colors group-hover:text-primary">
+                  {household?.name ?? 'Burrow'}
+                </p>
+                {household && (
+                  <div className="mt-0.5 flex items-center gap-1">
+                    <p className="font-mono text-xs tracking-wide text-faint">
+                      {household.join_code}
+                    </p>
+                    <CopyButton value={household.join_code} label="Copy join code" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
+            {PRIMARY_NAV_ITEMS.map((item) => (
+              <SidebarLink key={item.label} {...item} />
+            ))}
+            {isDeveloper &&
+              SECONDARY_NAV_ITEMS.map((item) => <SidebarLink key={item.label} {...item} />)}
+            <hr className="my-2 border-t border-subtle" />
+            {RECIPES_NAV_ITEMS.map((item) => (
+              <SidebarLink key={item.label} {...item} />
+            ))}
+          </nav>
+
+          <div className="shrink-0 border-t border-subtle p-3">
+            <SupportLink className="mb-1 rounded-control px-2 py-2 hover:bg-surface-hover" />
+            <div className="flex items-center gap-2">
+              <NavLink
+                to="settings"
+                className={({ isActive }) =>
+                  `flex flex-1 items-center gap-2 rounded-control px-2 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary-soft text-primary'
+                      : 'text-muted hover:bg-surface-hover hover:text-text'
+                  }`
+                }
+              >
+                <Settings size={18} strokeWidth={1.75} />
+                Settings
+              </NavLink>
+            </div>
+          </div>
+        </aside>
+
+        {/* Mobile top bar */}
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-subtle bg-surface px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
           <div
             role="button"
             tabIndex={0}
@@ -138,16 +224,16 @@ export function HouseholdShell() {
               }
             }}
             title="Switch burrows"
-            className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-control p-2 transition-colors hover:bg-surface-hover"
+            className="group -m-1 flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-control p-1 transition-colors hover:bg-surface-hover"
           >
-            <BurrowLogo className="h-9 w-9 shrink-0 text-text transition-colors group-hover:text-primary" />
+            <BurrowLogo className="h-7 w-7 shrink-0 text-text transition-colors group-hover:text-primary" />
             <div className="min-w-0">
-              <p className="truncate text-base font-semibold transition-colors group-hover:text-primary">
+              <p className="truncate text-sm font-semibold transition-colors group-hover:text-primary">
                 {household?.name ?? 'Burrow'}
               </p>
               {household && (
                 <div className="mt-0.5 flex items-center gap-1">
-                  <p className="font-mono text-xs tracking-wide text-faint">
+                  <p className="font-mono text-[11px] tracking-wide text-faint">
                     {household.join_code}
                   </p>
                   <CopyButton value={household.join_code} label="Copy join code" />
@@ -155,118 +241,62 @@ export function HouseholdShell() {
               )}
             </div>
           </div>
-        </div>
-
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
-          {PRIMARY_NAV_ITEMS.map((item) => (
-            <SidebarLink key={item.label} {...item} />
-          ))}
-          {isDeveloper &&
-            SECONDARY_NAV_ITEMS.map((item) => <SidebarLink key={item.label} {...item} />)}
-          <hr className="my-2 border-t border-subtle" />
-          {RECIPES_NAV_ITEMS.map((item) => (
-            <SidebarLink key={item.label} {...item} />
-          ))}
-        </nav>
-
-        <div className="shrink-0 border-t border-subtle p-3">
-          <SupportLink className="mb-1 rounded-control px-2 py-2 hover:bg-surface-hover" />
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1">
             <NavLink
               to="settings"
+              aria-label="Settings"
               className={({ isActive }) =>
-                `flex flex-1 items-center gap-2 rounded-control px-2 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary-soft text-primary'
-                    : 'text-muted hover:bg-surface-hover hover:text-text'
+                `rounded-control p-2 transition-colors ${
+                  isActive ? 'text-primary' : 'text-muted hover:bg-surface-hover hover:text-text'
                 }`
               }
             >
               <Settings size={18} strokeWidth={1.75} />
-              Settings
             </NavLink>
           </div>
-        </div>
-      </aside>
+        </header>
 
-      {/* Mobile top bar */}
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-subtle bg-surface px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => navigate('/', { state: { forcePicker: true } })}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              navigate('/', { state: { forcePicker: true } })
-            }
-          }}
-          title="Switch burrows"
-          className="group -m-1 flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-control p-1 transition-colors hover:bg-surface-hover"
-        >
-          <BurrowLogo className="h-7 w-7 shrink-0 text-text transition-colors group-hover:text-primary" />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold transition-colors group-hover:text-primary">
-              {household?.name ?? 'Burrow'}
-            </p>
-            {household && (
-              <div className="mt-0.5 flex items-center gap-1">
-                <p className="font-mono text-[11px] tracking-wide text-faint">
-                  {household.join_code}
-                </p>
-                <CopyButton value={household.join_code} label="Copy join code" />
-              </div>
-            )}
+        <main className="flex-1 px-4 pb-[calc(6rem+var(--bottom-bar-gap))] pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
+          <PullToRefreshIndicator pull={pull} dragging={dragging} refreshing={refreshing} />
+          <div className="mx-auto w-full max-w-5xl">
+            <ShellChromeContext.Provider value={chrome}>
+              <Outlet key={refreshKey} />
+            </ShellChromeContext.Provider>
           </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <NavLink
-            to="settings"
-            aria-label="Settings"
-            className={({ isActive }) =>
-              `rounded-control p-2 transition-colors ${
-                isActive ? 'text-primary' : 'text-muted hover:bg-surface-hover hover:text-text'
-              }`
-            }
-          >
-            <Settings size={18} strokeWidth={1.75} />
-          </NavLink>
-        </div>
-      </header>
+        </main>
 
-      <main className="flex-1 px-4 pb-[calc(6rem+var(--bottom-bar-gap))] pt-5 md:overflow-y-auto md:px-8 md:pb-8 md:pt-8">
-        <PullToRefreshIndicator pull={pull} dragging={dragging} refreshing={refreshing} />
-        <div className="mx-auto w-full max-w-5xl">
-          <ShellChromeContext.Provider value={chrome}>
-            <Outlet key={refreshKey} />
-          </ShellChromeContext.Provider>
-        </div>
-      </main>
+        {/* Mobile bottom tab bar -- three real flex sections, not two tab
+            groups plus a separately-positioned floating FAB. The two tab
+            groups are each `flex-1`, so they always split the remaining width
+            exactly evenly regardless of label length, which puts the middle
+            slot dead center for free -- no separate "center it in the
+            viewport" math to keep in sync with the bar's own layout. */}
+        {!tabBarHidden && (
+          <nav className="tab-bar fixed inset-x-0 bottom-0 z-20 flex h-[calc(4rem+var(--bottom-bar-gap))] items-stretch border-t border-subtle bg-surface pb-[var(--bottom-bar-gap)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
+            <div className="flex flex-1">
+              {MOBILE_BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
+                <BottomTabLink key={item.label} {...item} />
+              ))}
+            </div>
+            <div className="relative flex w-16 shrink-0 items-center justify-center">
+              {householdId && <MobileShortcutMenu householdId={householdId} />}
+            </div>
+            <div className="flex flex-1">
+              {MOBILE_BOTTOM_NAV_ITEMS.slice(2).map((item) => (
+                <BottomTabLink key={item.label} {...item} />
+              ))}
+            </div>
+          </nav>
+        )}
 
-      {/* Mobile bottom tab bar -- three real flex sections, not two tab
-          groups plus a separately-positioned floating FAB. The two tab
-          groups are each `flex-1`, so they always split the remaining width
-          exactly evenly regardless of label length, which puts the middle
-          slot dead center for free -- no separate "center it in the
-          viewport" math to keep in sync with the bar's own layout. */}
-      {!tabBarHidden && (
-        <nav className="tab-bar fixed inset-x-0 bottom-0 z-20 flex h-[calc(4rem+var(--bottom-bar-gap))] items-stretch border-t border-subtle bg-surface pb-[var(--bottom-bar-gap)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
-          <div className="flex flex-1">
-            {MOBILE_BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
-              <BottomTabLink key={item.label} {...item} />
-            ))}
-          </div>
-          <div className="relative flex w-16 shrink-0 items-center justify-center">
-            {householdId && <MobileShortcutMenu householdId={householdId} />}
-          </div>
-          <div className="flex flex-1">
-            {MOBILE_BOTTOM_NAV_ITEMS.slice(2).map((item) => (
-              <BottomTabLink key={item.label} {...item} />
-            ))}
-          </div>
-        </nav>
-      )}
-    </div>
+        {addItemWizard.modal}
+        {addItemWizard.error && (
+          <Modal title="Can't add an item yet" onClose={addItemWizard.dismissError}>
+            <p className="text-sm text-muted">{addItemWizard.error}</p>
+          </Modal>
+        )}
+      </div>
+    </AddItemWizardContext.Provider>
   )
 }
 

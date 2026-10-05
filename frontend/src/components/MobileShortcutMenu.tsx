@@ -3,7 +3,7 @@ import { Plus, ShoppingCart, Utensils } from 'lucide-react'
 import { apiClient, ApiError } from '../lib/apiClient'
 import { FoodSearchInput } from './FoodSearchInput'
 import { Modal } from './Modal'
-import { useAddItemWizard } from '../hooks/useAddItemWizard'
+import { useAddItemFlow } from '../hooks/useAddItemFlow'
 import { useAuth } from '../hooks/useAuth'
 import { useHouseholdResource } from '../hooks/useHouseholdResource'
 import { UseItemModal } from '../pages/inventory/UseItemModal'
@@ -70,7 +70,7 @@ function arcPosition(index: number, count: number) {
 export function MobileShortcutMenu({ householdId }: Props) {
   const [open, setOpen] = useState(false)
   const [panel, setPanel] = useState<Panel>(null)
-  const addItemWizard = useAddItemWizard(householdId)
+  const { open: openAddItem } = useAddItemFlow()
 
   const close = () => {
     setOpen(false)
@@ -84,7 +84,7 @@ export function MobileShortcutMenu({ householdId }: Props) {
       icon: Plus,
       onSelect: () => {
         close()
-        addItemWizard.open()
+        openAddItem()
       },
     },
     {
@@ -210,12 +210,6 @@ export function MobileShortcutMenu({ householdId }: Props) {
       )}
       {panel === 'shop' && (
         <QuickAddToListModal householdId={householdId} onClose={() => setPanel(null)} />
-      )}
-      {addItemWizard.modal}
-      {addItemWizard.error && (
-        <Modal title="Can't add an item yet" onClose={addItemWizard.dismissError}>
-          <p className="text-sm text-muted">{addItemWizard.error}</p>
-        </Modal>
       )}
     </>
   )

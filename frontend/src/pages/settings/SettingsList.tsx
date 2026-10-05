@@ -175,7 +175,7 @@ export function SettingsList({ ctx }: { ctx: SettingsContext }) {
 
       <Group title="You">
         <ScreenRow to="account" icon={UserCircle} label="Account" value={user?.email} />
-        <ActionRow icon={LogOut} label="Log out" onClick={() => setLogoutOpen(true)} />
+        <ActionRow danger icon={LogOut} label="Log out" onClick={() => setLogoutOpen(true)} />
       </Group>
 
       <Group title="Help and about">
