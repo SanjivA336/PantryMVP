@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { DiagnosticsHost } from './components/DiagnosticsPanel'
-import { ServerWakingBanner } from './components/ServerWakingBanner'
+import { ServerWakingScreen } from './components/ServerWakingScreen'
 import { warmUpServer } from './lib/apiClient'
 import { AuthProvider } from './context/AuthContext'
 import { AuthGuard } from './components/AuthGuard'
@@ -39,7 +39,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <ServerWakingBanner />
+      <ServerWakingScreen />
       <DiagnosticsHost />
       <AuthProvider>
         <Routes>

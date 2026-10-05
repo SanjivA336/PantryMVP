@@ -22,14 +22,8 @@ export function isInstalledApp(): boolean {
 // version did). That was suspected of causing a dark strip under the tab bar in
 // the installed iOS app, though the strip turned out to survive its removal, so
 // it isn't the proven cause. The tag stays as written in index.html.
-//
-// TEMPORARILY OFF while chasing the dark strip under the iOS tab bar: set to
-// true to block pinch-zoom in the installed app again. (index.css has a matching
-// `touch-action: pan-x pan-y` rule for the installed app, also commented out.)
-const ZOOM_LOCK_ENABLED = false
-
 export function lockZoomWhenInstalled(): void {
-  if (!ZOOM_LOCK_ENABLED || !isInstalledApp()) return
+  if (!isInstalledApp()) return
 
   const block = (event: Event) => event.preventDefault()
   document.addEventListener('gesturestart', block)

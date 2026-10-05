@@ -8,7 +8,7 @@
 // reliable "the server is waking up" signal without a dedicated status check.
 //
 // A tiny external store rather than React state, because the thing being
-// observed (apiClient's fetches) lives outside React. ServerWakingBanner
+// observed (apiClient's fetches) lives outside React. ServerWakingScreen
 // subscribes through useSyncExternalStore.
 
 export const SLOW_REQUEST_MS = 10_000

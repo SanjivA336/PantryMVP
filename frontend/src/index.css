@@ -1,5 +1,18 @@
 @import 'tailwindcss';
 
+/* A short fade for things that appear (the server-waking screen). */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@utility animate-fade-in {
+  animation: fade-in 400ms ease-out;
+}
+
 /* `min-h-app`: at least one full screen tall; see --app-height below. */
 @utility min-h-app {
   min-height: var(--app-height);
@@ -193,14 +206,11 @@
 
 /* Installed to the home screen: also block pinch-zoom. (lib/lockZoom.ts adds
    the iOS-specific gesture handling; this is the standards-based half.) */
-/* TEMPORARILY OFF while chasing the dark strip under the iOS tab bar (see
-   ZOOM_LOCK_ENABLED in lib/lockZoom.ts). Restore both together.
 @media (display-mode: standalone) {
   html {
     touch-action: pan-x pan-y;
   }
 }
-*/
 
 /*
   The mobile tab bar normally sits at `bottom: 0`, but "bottom" is the bottom of

@@ -11,6 +11,7 @@ import {
   UserCircle,
 } from 'lucide-react'
 import { apiClient, ApiError } from '../../lib/apiClient'
+import { BurrowLogo } from '../../components/BurrowLogo'
 import { CopyButton } from '../../components/CopyButton'
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { MobileShortcutMenu } from '../../components/MobileShortcutMenu'
@@ -20,30 +21,6 @@ import { useAuth } from '../../hooks/useAuth'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import { usePullToRefresh } from '../../hooks/usePullToRefresh'
 import type { Household } from '../../types/entities'
-import logoSource from '../../assets/logo.svg?raw'
-
-// The raw SVG source (Vite's `?raw` import), recolored to `currentColor` and
-// resized to fill its container -- injected as real inline SVG so it can
-// follow hover state via a wrapping element's `text-*` class, the same way
-// lucide-react's icons already do. An <img> can't do this: its pixels are
-// opaque to CSS, so its color could never follow the sidebar's hover state.
-// Safe to inject as-is (dangerouslySetInnerHTML) since it's our own
-// build-time asset, never user- or runtime-supplied content.
-const coloredLogo = logoSource
-  .replace(/#ffffff/gi, 'currentColor')
-  .replace(/width="[\d.]+"/, 'width="100%"')
-  .replace(/height="[\d.]+"/, 'height="100%"')
-
-function BurrowLogo({ className }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={className}
-      dangerouslySetInnerHTML={{ __html: coloredLogo }}
-    />
-  )
-}
-
 // Activity now lives inside Settings (see SettingsPage's third tab) rather
 // than as its own destination -- it's a look-back log, not a daily action,
 // so it doesn't need a permanent slot in the primary nav on either platform.
