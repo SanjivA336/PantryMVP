@@ -73,27 +73,12 @@ const REMOVAL_REASONS: { reason: RemovalReason; label: string; icon: typeof Pack
 const SWIPE_ACTION_WIDTH = 72
 const SWIPE_ACTION_GAP = 8
 
-// "Oct 1", or "Oct 1, 2025" when it isn't this year. `date` is a plain YYYY-MM-DD.
-function shortDate(date: string): string {
-  const d = new Date(`${date}T00:00:00`)
-  const sameYear = d.getFullYear() === new Date().getFullYear()
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    ...(sameYear ? {} : { year: 'numeric' }),
-  })
-}
-
-function daysLeftText(daysUntil: number): string {
-  if (daysUntil <= 0) return 'Expires today'
-  return `${daysUntil} ${daysUntil === 1 ? 'day' : 'days'} left`
-}
-
 interface SwipeAction {
   key: string
   label: string
   icon: typeof Package
-  // Solid fill with dark text, e.g. 'bg-danger text-bg'.
+  // The app's own status style: a dark tinted fill, a coloured icon and label,
+  // and a faint coloured border (same recipe as the "Not yours" tag).
   className: string
   run: () => void
 }
@@ -220,14 +205,11 @@ export function InventoryPage() {
   // (the same list the warnings modal shows), so "amber" means exactly what the
   // backend means by "expiring soon" and nothing here hardcodes a day count.
   const expiryWarningByItemId = useMemo(() => {
-    const map = new Map<string, { state: ExpiryState; daysUntil: number; text: string }>()
+    const map = new Map<string, { state: ExpiryState; daysUntil: number }>()
     for (const w of warnings?.expiry_warnings ?? []) {
-      const expired = w.type === 'EXPIRED'
       map.set(w.inventory_item_id, {
-        state: expired ? 'expired' : 'soon',
+        state: w.type === 'EXPIRED' ? 'expired' : 'soon',
         daysUntil: w.days_until,
-        // Amber says how long is left; red says when it expired.
-        text: expired ? `Expired ${shortDate(w.relevant_date)}` : daysLeftText(w.days_until),
       })
     }
     return map
@@ -442,21 +424,21 @@ export function InventoryPage() {
         key: 'EMPTY',
         label: 'Empty',
         icon: PackageX,
-        className: 'bg-warning text-bg',
+        className: 'border border-warning/35 bg-warning-soft text-warning',
         run: () => void discard(item, 'EMPTY'),
       },
       {
         key: 'EXPIRED',
         label: 'Expired',
         icon: Hourglass,
-        className: 'bg-orange text-bg',
+        className: 'border border-orange/35 bg-orange-soft text-orange',
         run: () => void discard(item, 'EXPIRED'),
       },
       {
         key: 'VOIDED',
         label: 'Void',
         icon: Trash2,
-        className: 'bg-danger text-bg',
+        className: 'border border-danger/35 bg-danger-soft text-danger',
         // Voiding can permanently delete the item, so it asks first.
         run: () => setVoidTarget(item),
       },
@@ -514,18 +496,12 @@ export function InventoryPage() {
                     Not yours
                   </span>
                 )}
+                <ExpiryIcon state={expiryState} daysUntil={warning?.daysUntil} />
               </div>
-              <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-sm text-muted">
-                  {formatQuantity(item.quantity)} / {formatQuantity(item.total_quantity)}{' '}
-                  {UNIT_LABELS[item.preferred_unit]} · {item.storage_location_name}
-                </p>
-                <ExpiryIcon
-                  state={expiryState}
-                  daysUntil={warning?.daysUntil}
-                  text={warning?.text}
-                />
-              </div>
+              <p className="mt-0.5 line-clamp-2 text-sm text-muted">
+                {formatQuantity(item.quantity)} / {formatQuantity(item.total_quantity)}{' '}
+                {UNIT_LABELS[item.preferred_unit]} · {item.storage_location_name}
+              </p>
             </div>
 
             <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
