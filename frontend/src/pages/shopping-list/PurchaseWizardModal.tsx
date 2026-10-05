@@ -3,11 +3,13 @@ import { ChevronDown, ChevronLeft, ChevronRight, Check, Plus, Trash2, X } from '
 import { apiClient, ApiError } from '../../lib/apiClient'
 import { CategoryDot } from '../../components/CategoryDot'
 import { FieldTooltip } from '../../components/FieldTooltip'
+import { MemberPicker } from '../../components/MemberPicker'
 import { Modal } from '../../components/Modal'
 import { TypeSearchField, type TypeSearchFieldHandle } from '../../components/TypeSearchField'
 import { UnitSelect } from '../../components/UnitSelect'
 import { useAuth } from '../../hooks/useAuth'
 import { FOOD_CATEGORY_LABELS } from '../../lib/foodCategories'
+import { shortDate } from '../../lib/formatDate'
 import type {
   FoodDefinition,
   InventoryItem,
@@ -158,6 +160,17 @@ function buildManualPatchBody(draft: Draft): Record<string, unknown> {
   return body
 }
 
+// What's tucked away inside "More details", as one short line, so a collapsed
+// section never hides a value (an autofilled expiry date, say).
+function moreSummary(draft: Draft): string {
+  const parts: string[] = []
+  const nickname = draft.nickname.trim()
+  if (nickname && nickname !== draft.food?.name) parts.push(`"${nickname}"`)
+  if (draft.expiryDate) parts.push(`Expires ${shortDate(draft.expiryDate)}`)
+  if (draft.bestByDate) parts.push(`Best by ${shortDate(draft.bestByDate)}`)
+  return parts.length > 0 ? parts.join(' · ') : 'Nickname, dates'
+}
+
 export function PurchaseWizardModal({
   householdId,
   sessionId,
@@ -170,10 +183,6 @@ export function PurchaseWizardModal({
   const { user } = useAuth()
   const activeMembers = useMemo(() => members.filter((m) => m.is_active), [members])
   const activeMemberIds = useMemo(() => activeMembers.map((m) => m.id), [activeMembers])
-  const sortedActiveMembers = useMemo(
-    () => [...activeMembers].sort((a, b) => a.nickname.localeCompare(b.nickname)),
-    [activeMembers],
-  )
   const myMemberId = useMemo(
     () => activeMembers.find((m) => m.user_id === user?.id)?.id,
     [activeMembers, user?.id],
@@ -205,6 +214,10 @@ export function PurchaseWizardModal({
   // line" action rather than something that needs to be in the way by
   // default, especially on mobile where it can't sit beside the form at all.
   const [linesOpen, setLinesOpen] = useState(false)
+  // Nickname and the two dates live behind "More details". Kept open or closed
+  // as you move between lines, so someone who always fills them in only opens
+  // it once.
+  const [showMore, setShowMore] = useState(false)
   // Closing (the X, or the backdrop) always asks what to do with the
   // session rather than silently either keeping or discarding it -- see the
   // confirm modal below for the exact wording/options, which depend on
@@ -711,7 +724,7 @@ export function PurchaseWizardModal({
   const multiLine = (session?.items.length ?? 0) > 1
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+    <div className="fixed inset-x-0 top-0 z-40 flex h-[var(--app-height)] items-center justify-center md:inset-0 md:h-auto md:p-4">
       <button
         type="button"
         aria-label="Close"
@@ -719,8 +732,9 @@ export function PurchaseWizardModal({
         onClick={() => void attemptClose()}
         className="absolute inset-0 bg-black/60"
       />
-      <div className="relative flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-card border border-subtle bg-surface-2 shadow-raised">
-        <div className="flex items-center justify-between gap-2 border-b border-subtle px-4 py-3">
+      {/* A full-screen sheet on phones; a centred card from the desktop breakpoint up. */}
+      <div className="relative flex h-full w-full max-w-4xl flex-col overflow-hidden bg-surface-2 md:h-[85vh] md:rounded-card md:border md:border-subtle md:shadow-raised">
+        <div className="flex items-center justify-between gap-2 border-b border-subtle px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:py-3">
           <div className="flex min-w-0 items-center gap-2">
             <h3 className="shrink-0 text-base font-semibold">Order</h3>
             {multiLine && selectedItem && (
@@ -819,368 +833,338 @@ export function PurchaseWizardModal({
               </div>
             )}
 
-            {/* The line's form */}
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {/* The line's form: the fields scroll, the actions stay pinned below them. */}
+            <div className="flex min-h-0 flex-1 flex-col">
               {!draft || !selectedItem ? (
-                <p className="text-sm text-muted">Pick a line to edit.</p>
+                <p className="p-4 text-sm text-muted">Pick a line to edit.</p>
               ) : (
-                <div className="flex flex-col gap-3">
-                  <fieldset
-                    disabled={locked}
-                    className="m-0 flex flex-col gap-3 border-0 p-0 disabled:opacity-60"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <label className={fieldLabelClass}>Food type</label>
-                        <TypeSearchField
-                          ref={foodFieldRef}
-                          value={draft.food}
-                          onChange={(food) =>
-                            setDraft({
-                              ...draft,
-                              food,
-                              unit: food ? draft.unit || food.preferred_unit : draft.unit,
-                            })
-                          }
-                        />
-                        {draft.food?.category && (
-                          <p className="mt-1.5 text-xs text-faint">
-                            {FOOD_CATEGORY_LABELS[draft.food.category]}
-                          </p>
-                        )}
-                      </div>
-                      {multiLine && (
-                        <button
-                          type="button"
-                          onClick={removeLine}
-                          disabled={busy}
-                          aria-label="Remove from order"
-                          title="Remove from order"
-                          className="mt-6 shrink-0 rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger disabled:opacity-50"
-                        >
-                          <Trash2 size={15} strokeWidth={1.75} />
-                        </button>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className={fieldLabelClass}>Nickname (optional)</label>
-                      <input
-                        type="text"
-                        placeholder={draft.food?.name ?? 'e.g. HEB milk'}
-                        className={fieldClass(!customized.nickname && draft.nickname !== '')}
-                        value={draft.nickname}
-                        onChange={(e) => {
-                          setDraft({ ...draft, nickname: e.target.value })
-                          markCustomized('nickname')
-                        }}
-                      />
-                    </div>
-
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <label className={fieldLabelClass}>
-                          Quantity
-                          <FieldTooltip text="This becomes both the amount you have right now and the 100% mark it's tracked against as you use it up." />
-                        </label>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          placeholder="Amount"
-                          className={inputClass}
-                          value={draft.quantity}
-                          onChange={(e) => setDraft({ ...draft, quantity: e.target.value })}
-                        />
-                      </div>
-                      <div className="w-32">
-                        <label className={fieldLabelClass}>Unit</label>
-                        <UnitSelect
-                          className={inputClass}
-                          value={draft.unit}
-                          placeholder="Unit…"
-                          onChange={(unit) => setDraft({ ...draft, unit })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <label className={fieldLabelClass}>
-                          Cost (optional)
-                          <FieldTooltip text="Auto-filled from the last time you bought this exact food and quantity, if we've seen it before. Edit or clear it any time." />
-                        </label>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="0.00"
-                            className={fieldClass(!customized.cost && !!draft.cost)}
-                            value={draft.cost}
-                            onChange={(e) => {
-                              setDraft({ ...draft, cost: e.target.value })
-                              markCustomized('cost')
-                            }}
+                <>
+                  <div data-sheet-scroll className="min-h-0 flex-1 overflow-y-auto p-4">
+                    <fieldset
+                      disabled={locked}
+                      className="m-0 flex flex-col gap-3 border-0 p-0 disabled:opacity-60"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <label className={fieldLabelClass}>Food type</label>
+                          <TypeSearchField
+                            ref={foodFieldRef}
+                            value={draft.food}
+                            onChange={(food) =>
+                              setDraft({
+                                ...draft,
+                                food,
+                                unit: food ? draft.unit || food.preferred_unit : draft.unit,
+                              })
+                            }
                           />
+                          {draft.food?.category && (
+                            <p className="mt-1.5 text-xs text-faint">
+                              {FOOD_CATEGORY_LABELS[draft.food.category]}
+                            </p>
+                          )}
+                        </div>
+                        {multiLine && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setDraft({ ...draft, cost: '' })
-                              // Un-mark rather than mark customized: the
-                              // clear button's whole point is offering a
-                              // fresh autofill suggestion next time the
-                              // lookup fires, not declaring "hands off, I
-                              // typed this."
-                              setCustomized((prev) => ({ ...prev, cost: false }))
-                            }}
-                            title="Clear"
-                            aria-label="Clear cost"
-                            className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-surface-hover hover:text-text"
+                            onClick={removeLine}
+                            disabled={busy}
+                            aria-label="Remove from order"
+                            title="Remove from order"
+                            className="mt-6 shrink-0 rounded-control p-1.5 text-faint transition-colors hover:bg-danger-soft hover:text-danger disabled:opacity-50"
                           >
-                            <X size={16} strokeWidth={1.75} />
+                            <Trash2 size={15} strokeWidth={1.75} />
                           </button>
+                        )}
+                      </div>
+
+
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className={fieldLabelClass}>
+                            Quantity
+                            <FieldTooltip text="This becomes both the amount you have right now and the 100% mark it's tracked against as you use it up." />
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            placeholder="Amount"
+                            className={inputClass}
+                            value={draft.quantity}
+                            onChange={(e) => setDraft({ ...draft, quantity: e.target.value })}
+                          />
+                        </div>
+                        <div className="w-32">
+                          <label className={fieldLabelClass}>Unit</label>
+                          <UnitSelect
+                            className={inputClass}
+                            value={draft.unit}
+                            placeholder="Unit…"
+                            onChange={(unit) => setDraft({ ...draft, unit })}
+                          />
                         </div>
                       </div>
-                      <div className="flex-1">
-                        <label className={fieldLabelClass}>Buyer</label>
+
+
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className={fieldLabelClass}>
+                            Cost (optional)
+                            <FieldTooltip text="Auto-filled from the last time you bought this exact food and quantity, if we've seen it before. Edit or clear it any time." />
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              className={fieldClass(!customized.cost && !!draft.cost)}
+                              value={draft.cost}
+                              onChange={(e) => {
+                                setDraft({ ...draft, cost: e.target.value })
+                                markCustomized('cost')
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDraft({ ...draft, cost: '' })
+                                // Un-mark rather than mark customized: the
+                                // clear button's whole point is offering a
+                                // fresh autofill suggestion next time the
+                                // lookup fires, not declaring "hands off, I
+                                // typed this."
+                                setCustomized((prev) => ({ ...prev, cost: false }))
+                              }}
+                              title="Clear"
+                              aria-label="Clear cost"
+                              className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-surface-hover hover:text-text"
+                            >
+                              <X size={16} strokeWidth={1.75} />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <label className={fieldLabelClass}>Buyer</label>
+                          <MemberPicker
+                            mode="single"
+                            members={activeMembers}
+                            value={draft.buyerId}
+                            onChange={(id) => setDraft({ ...draft, buyerId: id })}
+                          />
+                        </div>
+                      </div>
+
+
+                      <div>
+                        <label className={fieldLabelClass}>Who's using this?</label>
+                        <MemberPicker
+                          mode="multi"
+                          members={activeMembers}
+                          value={draft.allowedMemberIds}
+                          autofilled={!customized.allowed_member_ids && !!draft.food}
+                          onChange={(ids) => {
+                            setDraft({ ...draft, allowedMemberIds: ids })
+                            markCustomized('allowed_member_ids')
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={fieldLabelClass}>Storage location</label>
                         <select
                           className={inputClass}
-                          value={draft.buyerId}
-                          onChange={(e) => setDraft({ ...draft, buyerId: e.target.value })}
+                          value={draft.storageLocationId}
+                          onChange={(e) => setDraft({ ...draft, storageLocationId: e.target.value })}
                         >
-                          {activeMembers.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.nickname}
+                          <option value="">Storage…</option>
+                          {storageLocations.map((loc) => (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.name}
                             </option>
                           ))}
                         </select>
+                        {storedInLocations.length > 0 && (
+                          <p className="mt-1.5 text-xs text-faint">
+                            Currently stored in: {storedInLocations.join(', ')}
+                          </p>
+                        )}
                       </div>
-                    </div>
 
-                    <div>
-                      <label className={fieldLabelClass}>Who's using this?</label>
-                      <div
-                        className={`grid grid-cols-3 gap-2 rounded-control border p-2 ${
-                          !customized.allowed_member_ids && draft.food
-                            ? 'border-primary'
-                            : 'border-transparent'
-                        }`}
-                      >
-                        {sortedActiveMembers.map((m) => {
-                          const on = draft.allowedMemberIds.includes(m.id)
-                          return (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() => {
-                                setDraft({
-                                  ...draft,
-                                  allowedMemberIds: on
-                                    ? draft.allowedMemberIds.filter((x) => x !== m.id)
-                                    : [...draft.allowedMemberIds, m.id],
-                                })
-                                markCustomized('allowed_member_ids')
-                              }}
-                              className={`flex h-10 items-center justify-center rounded-control border px-2 py-2 text-center text-sm font-medium transition-colors ${
-                                on
-                                  ? 'border-primary bg-primary-soft text-primary'
-                                  : 'border-subtle bg-surface-2 text-muted hover:bg-surface-hover'
-                              }`}
-                            >
-                              <span className="w-full truncate">{m.nickname}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDraft({
-                              ...draft,
-                              allowedMemberIds: myMemberId ? [myMemberId] : [],
-                            })
-                            markCustomized('allowed_member_ids')
-                          }}
-                          className="rounded-control border border-subtle px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text"
-                        >
-                          Select me
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDraft({ ...draft, allowedMemberIds: activeMemberIds })
-                            markCustomized('allowed_member_ids')
-                          }}
-                          className="rounded-control border border-subtle px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text"
-                        >
-                          Select all
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDraft({ ...draft, allowedMemberIds: [] })
-                            markCustomized('allowed_member_ids')
-                          }}
-                          className="rounded-control border border-subtle px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text"
-                        >
-                          Deselect all
-                        </button>
-                      </div>
-                    </div>
 
-                    <div>
-                      <label className={fieldLabelClass}>Storage location</label>
-                      <select
-                        className={inputClass}
-                        value={draft.storageLocationId}
-                        onChange={(e) => setDraft({ ...draft, storageLocationId: e.target.value })}
+                    <div className="rounded-control border border-subtle">
+                      <button
+                        type="button"
+                        aria-expanded={showMore}
+                        onClick={() => setShowMore((v) => !v)}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
                       >
-                        <option value="">Storage…</option>
-                        {storageLocations.map((loc) => (
-                          <option key={loc.id} value={loc.id}>
-                            {loc.name}
-                          </option>
-                        ))}
-                      </select>
-                      {storedInLocations.length > 0 && (
-                        <p className="mt-1.5 text-xs text-faint">
-                          Currently stored in: {storedInLocations.join(', ')}
-                        </p>
+                        <span className="text-sm font-medium text-muted">More details</span>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-xs text-faint">{moreSummary(draft)}</span>
+                          <ChevronDown
+                            size={16}
+                            strokeWidth={1.75}
+                            className={`shrink-0 text-faint transition-transform ${showMore ? 'rotate-180' : ''}`}
+                          />
+                        </span>
+                      </button>
+                      {showMore && (
+                        <div className="flex flex-col gap-3 border-t border-subtle p-3">
+                        <div>
+                          <label className={fieldLabelClass}>Nickname (optional)</label>
+                          <input
+                            type="text"
+                            placeholder={draft.food?.name ?? 'e.g. HEB milk'}
+                            className={fieldClass(!customized.nickname && draft.nickname !== '')}
+                            value={draft.nickname}
+                            onChange={(e) => {
+                              setDraft({ ...draft, nickname: e.target.value })
+                              markCustomized('nickname')
+                            }}
+                          />
+                        </div>
+
+
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <div className="flex-1">
+                            <label className={fieldLabelClass}>Expiry date (optional)</label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="date"
+                                className={fieldClass(!customized.expiry_date && !!draft.expiryDate)}
+                                value={draft.expiryDate}
+                                onChange={(e) => {
+                                  setDraft({ ...draft, expiryDate: e.target.value })
+                                  markCustomized('expiry_date')
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDraft({ ...draft, expiryDate: '' })
+                                  markCustomized('expiry_date')
+                                }}
+                                title="Clear"
+                                aria-label="Clear expiry date"
+                                className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-surface-hover hover:text-text"
+                              >
+                                <X size={16} strokeWidth={1.75} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <label className={fieldLabelClass}>Best-by date (optional)</label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="date"
+                                className={inputClass}
+                                value={draft.bestByDate}
+                                onChange={(e) => setDraft({ ...draft, bestByDate: e.target.value })}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setDraft({ ...draft, bestByDate: '' })}
+                                title="Clear"
+                                aria-label="Clear best-by date"
+                                className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-surface-hover hover:text-text"
+                              >
+                                <X size={16} strokeWidth={1.75} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        </div>
                       )}
                     </div>
+                    </fieldset>
+                  </div>
 
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <label className={fieldLabelClass}>Expiry date (optional)</label>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="date"
-                            className={fieldClass(!customized.expiry_date && !!draft.expiryDate)}
-                            value={draft.expiryDate}
-                            onChange={(e) => {
-                              setDraft({ ...draft, expiryDate: e.target.value })
-                              markCustomized('expiry_date')
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDraft({ ...draft, expiryDate: '' })
-                              markCustomized('expiry_date')
-                            }}
-                            title="Clear"
-                            aria-label="Clear expiry date"
-                            className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-surface-hover hover:text-text"
-                          >
-                            <X size={16} strokeWidth={1.75} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <label className={fieldLabelClass}>Best-by date (optional)</label>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="date"
-                            className={inputClass}
-                            value={draft.bestByDate}
-                            onChange={(e) => setDraft({ ...draft, bestByDate: e.target.value })}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setDraft({ ...draft, bestByDate: '' })}
-                            title="Clear"
-                            aria-label="Clear best-by date"
-                            className="shrink-0 rounded-control p-2 text-faint transition-colors hover:bg-surface-hover hover:text-text"
-                          >
-                            <X size={16} strokeWidth={1.75} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </fieldset>
+                  <div className="shrink-0 border-t border-subtle bg-surface-2 px-4 pb-3 pt-3 max-md:pb-[var(--bottom-bar-gap)]">
+                    {error && <p className="mb-2 text-sm text-danger">{error}</p>}
+                    <div className="flex flex-col gap-2">
 
-                  {error && <p className="text-sm text-danger">{error}</p>}
-
-                  {multiLine ? (
-                    <div className="mt-1 flex gap-2">
-                      {/* Manual entry has no complete/incomplete to toggle --
-                          status is derived live off the fields themselves
-                          (see requiredFieldsFilled), autosaved as you go. */}
-                      {!isManual &&
-                        (selectedItem.status === 'PENDING' ? (
+                      {multiLine ? (
+                        <div className="flex gap-2">
+                          {/* Manual entry has no complete/incomplete to toggle --
+                              status is derived live off the fields themselves
+                              (see requiredFieldsFilled), autosaved as you go. */}
+                          {!isManual &&
+                            (selectedItem.status === 'PENDING' ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={markComplete}
+                                className="flex-1 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
+                              >
+                                Complete
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={markIncomplete}
+                                className="flex-1 rounded-control border border-subtle px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
+                              >
+                                Incomplete
+                              </button>
+                            ))}
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={markComplete}
+                            onClick={() => void addAnotherItem()}
+                            className="flex-1 rounded-control border border-primary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary-soft disabled:opacity-50"
+                          >
+                            Add another item
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={busy || (isManual && !requiredFieldsFilled(draft))}
+                            onClick={() => void submitSolo()}
                             className="flex-1 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
                           >
-                            Complete
+                            Submit
                           </button>
-                        ) : (
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={markIncomplete}
-                            className="flex-1 rounded-control border border-subtle px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
+                            onClick={() => void addAnotherItem()}
+                            className="flex-1 rounded-control border border-primary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary-soft disabled:opacity-50"
                           >
-                            Incomplete
+                            Add another item
                           </button>
-                        ))}
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void addAnotherItem()}
-                        className="flex-1 rounded-control border border-primary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary-soft disabled:opacity-50"
-                      >
-                        Add another item
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="mt-1 flex gap-2">
-                      <button
-                        type="button"
-                        disabled={busy || (isManual && !requiredFieldsFilled(draft))}
-                        onClick={() => void submitSolo()}
-                        className="flex-1 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
-                      >
-                        Submit
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void addAnotherItem()}
-                        className="flex-1 rounded-control border border-primary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary-soft disabled:opacity-50"
-                      >
-                        Add another item
-                      </button>
-                    </div>
-                  )}
+                        </div>
+                      )}
 
-                  {multiLine && (
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={selectedIndex <= 0}
-                        onClick={() => goTo(-1)}
-                        className="flex flex-1 items-center justify-center gap-1 rounded-control border border-subtle px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-                      >
-                        <ChevronLeft size={16} strokeWidth={2} />
-                        Previous
-                      </button>
-                      <button
-                        type="button"
-                        disabled={selectedIndex < 0 || selectedIndex >= session.items.length - 1}
-                        onClick={() => goTo(1)}
-                        className="flex flex-1 items-center justify-center gap-1 rounded-control border border-subtle px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-                      >
-                        Next
-                        <ChevronRight size={16} strokeWidth={2} />
-                      </button>
+                      {multiLine && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={selectedIndex <= 0}
+                            onClick={() => goTo(-1)}
+                            className="flex flex-1 items-center justify-center gap-1 rounded-control border border-subtle px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                          >
+                            <ChevronLeft size={16} strokeWidth={2} />
+                            Previous
+                          </button>
+                          <button
+                            type="button"
+                            disabled={selectedIndex < 0 || selectedIndex >= session.items.length - 1}
+                            onClick={() => goTo(1)}
+                            className="flex flex-1 items-center justify-center gap-1 rounded-control border border-subtle px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                          >
+                            Next
+                            <ChevronRight size={16} strokeWidth={2} />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
