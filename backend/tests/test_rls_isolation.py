@@ -34,8 +34,8 @@ async def two_users():
     token_b = await sign_in(user_b["email"], _PASSWORD)
 
     yield {
-        "a": {"id": user_a["id"], "token": token_a},
-        "b": {"id": user_b["id"], "token": token_b},
+        "a": {"id": user_a["id"], "token": token_a, "email": user_a["email"]},
+        "b": {"id": user_b["id"], "token": token_b, "email": user_b["email"]},
     }
 
     await delete_test_user(user_a["id"])
@@ -228,5 +228,41 @@ async def test_admin_cannot_change_household_owner_via_direct_rest(api_client, t
             )
 
         assert patch_response.status_code in (401, 403)
+    finally:
+        await _delete_household(api_client, two_users["a"]["token"], household["id"])
+
+
+async def test_member_cannot_read_a_co_members_email_via_direct_rest(api_client, two_users) -> None:
+    # The Privacy Policy tells people that other members see their nickname, not
+    # their email. Migration 0043 limits public.users to the person's own row;
+    # before it, anyone sharing an active household could read a co-member's email
+    # straight from the database API.
+    settings = get_settings()
+    household = await _create_household(api_client, two_users["a"]["token"], "RLS Test Household G")
+
+    try:
+        join_response = await api_client.post(
+            "/api/households/join",
+            json={"join_code": household["join_code"], "nickname": "Joiner"},
+            headers={"Authorization": f"Bearer {two_users['b']['token']}"},
+        )
+        assert join_response.status_code == 200, join_response.text
+
+        async with httpx.AsyncClient(base_url=settings.supabase_url) as rest_client:
+            others_email = await rest_client.get(
+                "/rest/v1/users",
+                params={"id": f"eq.{two_users['a']['id']}", "select": "email"},
+                headers=_rest_headers(two_users["b"]["token"]),
+            )
+            all_visible = await rest_client.get(
+                "/rest/v1/users",
+                params={"select": "email"},
+                headers=_rest_headers(two_users["b"]["token"]),
+            )
+
+        assert others_email.status_code == 200
+        assert others_email.json() == []
+        # Only their own row is readable.
+        assert all_visible.json() == [{"email": two_users["b"]["email"]}]
     finally:
         await _delete_household(api_client, two_users["a"]["token"], household["id"])

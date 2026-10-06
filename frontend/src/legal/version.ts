@@ -11,5 +11,7 @@
 // accepts any non-empty value up to 32 characters.
 //
 // History: 2026-10-01 (first version), 2026-10-01.2 (named Cloudflare and
-// Render as hosting providers before launch).
-export const LEGAL_VERSION = '2026-10-01.2'
+// Render as hosting providers before launch), 2026-10-06 (age and parental-consent
+// wording, expiry dates described as suggestions, conspicuous warranty and liability
+// clauses, Do Not Track statement).
+export const LEGAL_VERSION = '2026-10-06'

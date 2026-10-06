@@ -4,7 +4,7 @@ import type { LegalDocument } from './types'
 // here, update the Word file (and the "updated" date) to match.
 export const privacyPolicy: LegalDocument = {
   title: 'Privacy Policy',
-  updated: 'October 1, 2026',
+  updated: 'October 6, 2026',
   blocks: [
     {
       type: 'p',
@@ -60,7 +60,7 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       type: 'p',
-      text: "Burrow is a multi-person tool by design. Everything you add to a household, including your nickname, the items you buy and use, the costs you enter, your balances with other members and your activity, is visible to the other members of that household. This is how the Service works, not a disclosure to a third party. Do not join or create a household with someone whose access to this information you are not comfortable with. Households cannot see each other's data.",
+      text: 'Burrow is a multi-person tool by design. Everything you add to a household (called a "burrow" in the app), including your nickname, the items you buy and use, the costs you enter, your balances with other members and your activity, is visible to the other members of that household. This is how the Service works, not a disclosure to a third party. Do not join or create a household with someone whose access to this information you are not comfortable with. Other members see your nickname, not your email address. Households cannot see each other\'s data, with one exception: the names of custom foods you add to Burrow\'s shared food list are visible to all users.',
     },
     {
       type: 'h2',
@@ -124,7 +124,7 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       type: 'p',
-      text: "**Burrow does not set cookies.** The app stores a small amount of data in your browser's local storage: your sign-in session (so you stay signed in), and a few display preferences. It is strictly necessary for the Service to work and is not used for tracking or advertising. Because the app is installable, your browser may also cache the app's own files (not your data) so it can load offline.",
+      text: '**Burrow does not set cookies.** The app stores a small amount of data in your browser\'s local storage: your sign-in session (so you stay signed in), and a few display preferences. It is strictly necessary for the Service to work and is not used for tracking or advertising. Because the app is installable, your browser may also cache the app\'s own files (not your data) so it can load offline. We do not track you across other websites or services, so we do not respond to "Do Not Track" browser signals.',
     },
     {
       type: 'h2',
@@ -164,7 +164,7 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       type: 'p',
-      text: "Burrow is intended for people aged 13 and over and is not directed to children under 13. We do not knowingly collect personal information from anyone under 13, and if we learn that we have, we will delete it. People under 18 may use the Service only with a parent or legal guardian's permission, as described in the Terms of Service. If you believe a child under 13 has created an account, contact us and we will remove it.",
+      text: "Burrow is intended for people aged 18 and over, and for people aged 13 to 17 whose parent or legal guardian has read and agreed to the Terms of Service and this Privacy Policy. It is not directed to children under 13, and we do not knowingly collect personal information from anyone under 13; if we learn that we have, we will delete it. We do not ask for a date of birth: when you sign up, you confirm your age or your parent or guardian's permission. A parent or guardian can ask us to review or delete a minor's account at any time using the support form linked in Section 12. If you believe a child under 13 has created an account, contact us and we will remove it.",
     },
     {
       type: 'h2',

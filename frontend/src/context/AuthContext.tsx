@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { LEGAL_VERSION } from '../legal/version'
 import { supabase } from '../lib/supabaseClient'
 import { AuthContext } from './authContextValue'
+import { clearResourceCache } from '../lib/resourceCache'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -23,7 +24,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // The shared data cache must never outlive the account that loaded it.
+      if (event === 'SIGNED_OUT') clearResourceCache()
       if (!cancelled) setSession(newSession)
     })
 
@@ -47,7 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         emailRedirectTo: window.location.origin,
-        data: { accepted_terms_version: LEGAL_VERSION },
+        // age_confirmed: the signup form only submits once the age / parental-consent
+        // box is ticked, so its presence records that the person confirmed it.
+        data: { accepted_terms_version: LEGAL_VERSION, age_confirmed: true },
       },
     })
     if (error) throw error

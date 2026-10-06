@@ -20,6 +20,7 @@ import { ShellChromeContext } from '../../context/shellChrome'
 import { useAddItemWizard } from '../../hooks/useAddItemWizard'
 import { useIsDeveloper } from '../../hooks/useIsDeveloper'
 import { usePullToRefresh } from '../../hooks/usePullToRefresh'
+import { invalidateResources } from '../../lib/resourceCache'
 import type { Household } from '../../types/entities'
 // Activity now lives inside Settings (see SettingsList) rather
 // than as its own destination -- it's a look-back log, not a daily action,
@@ -89,7 +90,11 @@ export function HouseholdShell() {
     }),
     [],
   )
-  const { pull, dragging, refreshing } = usePullToRefresh(() => setRefreshKey((k) => k + 1))
+  const { pull, dragging, refreshing } = usePullToRefresh(() => {
+    // Keep showing what's loaded, but make every screen refetch it.
+    invalidateResources()
+    setRefreshKey((k) => k + 1)
+  })
 
   useEffect(() => {
     if (!householdId) return

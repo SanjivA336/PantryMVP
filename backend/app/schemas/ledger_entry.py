@@ -57,3 +57,12 @@ class Settlement(BaseModel):
     debtor_member_id: UUID
     creditor_member_id: UUID
     amount: Decimal
+
+
+class LedgerSummary(BaseModel):
+    """The Balances screen's two headline numbers from one calculation: the
+    pairwise balances and the settle-up plan derived from them. They used to be
+    two separate requests that each recomputed the same balances."""
+
+    balances: list[LedgerBalance]
+    settlements: list[Settlement]

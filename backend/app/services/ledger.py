@@ -2,8 +2,15 @@ from collections import defaultdict
 from decimal import Decimal
 from uuid import UUID
 
+from app.core.concurrency import run_parallel
 from app.core.supabase import get_service_client
-from app.schemas.ledger_entry import LedgerBalance, LedgerEntry, LedgerEntryDetail, Settlement
+from app.schemas.ledger_entry import (
+    LedgerBalance,
+    LedgerEntry,
+    LedgerEntryDetail,
+    LedgerSummary,
+    Settlement,
+)
 from app.services import accounting as accounting_service
 
 _TABLE = "ledger_entries"
@@ -122,7 +129,26 @@ def _ghost_member_ids(household_id: UUID) -> set[UUID]:
     return {UUID(row["id"]) for row in result.data}
 
 
+def _live_items(household_id: UUID) -> list[dict]:
+    """The household's shared items whose debt hasn't frozen yet: the fetch half
+    of _live_shares, split out so compute_balances can run it alongside its other
+    reads."""
+    client = get_service_client()
+    return (
+        client.table("inventory_items")
+        .select("id, purchase_event_id, total_quantity, cost")
+        .eq("household_id", str(household_id))
+        .eq("accounting_type", "SHARED")
+        .is_("debt_frozen_at", "null")
+        .execute()
+    ).data
+
+
 def _live_shares(household_id: UUID) -> list[tuple[UUID, UUID, Decimal]]:
+    return _live_shares_from_items(_live_items(household_id))
+
+
+def _live_shares_from_items(items: list[dict]) -> list[tuple[UUID, UUID, Decimal]]:
     """(debtor, creditor, amount) triples for every item whose debt hasn't
     frozen yet (debt_frozen_at is null) -- computed live from whatever
     consumption_events exist right now, via the same compute_item_shares
@@ -134,45 +160,50 @@ def _live_shares(household_id: UUID) -> list[tuple[UUID, UUID, Decimal]]:
     one per item) since a household can easily have a dozen+ live items at
     once.
     """
-    client = get_service_client()
-    items = (
-        client.table("inventory_items")
-        .select("id, purchase_event_id, total_quantity, cost")
-        .eq("household_id", str(household_id))
-        .eq("accounting_type", "SHARED")
-        .is_("debt_frozen_at", "null")
-        .execute()
-    ).data
     if not items:
         return []
 
     item_ids = [row["id"] for row in items]
     purchase_event_ids = list({row["purchase_event_id"] for row in items})
 
-    purchase_events = (
-        client.table("purchase_events")
-        .select("id, member_id")
-        .in_("id", purchase_event_ids)
-        .execute()
-    ).data
+    # Three reads that don't depend on each other, issued together.
+    def fetch_purchase_events() -> list[dict]:
+        return (
+            get_service_client()
+            .table("purchase_events")
+            .select("id, member_id")
+            .in_("id", purchase_event_ids)
+            .execute()
+        ).data
+
+    def fetch_allowed() -> list[dict]:
+        return (
+            get_service_client()
+            .table("inventory_item_allowed_members")
+            .select("inventory_item_id, member_id")
+            .in_("inventory_item_id", item_ids)
+            .execute()
+        ).data
+
+    def fetch_consumption() -> list[dict]:
+        return (
+            get_service_client()
+            .table("consumption_events")
+            .select("inventory_item_id, member_id, quantity_used")
+            .in_("inventory_item_id", item_ids)
+            .execute()
+        ).data
+
+    purchase_events, allowed, consumption = run_parallel(
+        fetch_purchase_events, fetch_allowed, fetch_consumption
+    )
+
     buyer_by_purchase_event = {row["id"]: UUID(row["member_id"]) for row in purchase_events}
 
-    allowed = (
-        client.table("inventory_item_allowed_members")
-        .select("inventory_item_id, member_id")
-        .in_("inventory_item_id", item_ids)
-        .execute()
-    ).data
     members_by_item: dict[str, list[UUID]] = defaultdict(list)
     for row in allowed:
         members_by_item[row["inventory_item_id"]].append(UUID(row["member_id"]))
 
-    consumption = (
-        client.table("consumption_events")
-        .select("inventory_item_id, member_id, quantity_used")
-        .in_("inventory_item_id", item_ids)
-        .execute()
-    ).data
     usage_by_item: dict[str, dict[UUID, Decimal]] = defaultdict(dict)
     for row in consumption:
         item_id = row["inventory_item_id"]
@@ -224,6 +255,16 @@ def _recorded_settlement_deltas(household_id: UUID) -> list[tuple[UUID, UUID, De
     ]
 
 
+def _ledger_balance_rows(household_id: UUID) -> list[dict]:
+    client = get_service_client()
+    return (
+        client.table(_TABLE)
+        .select("creditor_member_id, debtor_member_id, amount")
+        .eq("household_id", str(household_id))
+        .execute()
+    ).data
+
+
 def compute_balances(household_id: UUID) -> list[LedgerBalance]:
     """Net, pairwise balances across three blended sources: every posted
     ledger entry, every not-yet-frozen item's live computed share (see
@@ -239,26 +280,28 @@ def compute_balances(household_id: UUID) -> list[LedgerBalance]:
     owes B $2" row) isn't naturally expressible as a simple aggregate, and
     keeping it out of the database means it stays easy to unit test.
     """
-    client = get_service_client()
-    result = (
-        client.table(_TABLE)
-        .select("creditor_member_id, debtor_member_id, amount")
-        .eq("household_id", str(household_id))
-        .execute()
+    # Four reads that don't depend on each other, issued together rather than one
+    # after another (each is a network round trip). Reading them all before
+    # folding any of them in is also what lets this stay a plain function over
+    # plain rows.
+    ledger_rows, ghost_ids, live_items, settlement_deltas = run_parallel(
+        lambda: _ledger_balance_rows(household_id),
+        lambda: _ghost_member_ids(household_id),
+        lambda: _live_items(household_id),
+        lambda: _recorded_settlement_deltas(household_id),
     )
-    ghost_ids = _ghost_member_ids(household_id)
 
     # net[(debtor, creditor)] = total debtor owes creditor, before netting
     # the reverse direction away.
     net: dict[tuple[UUID, UUID], Decimal] = defaultdict(lambda: Decimal(0))
-    for row in result.data:
+    for row in ledger_rows:
         debtor = UUID(row["debtor_member_id"])
         creditor = UUID(row["creditor_member_id"])
         if debtor in ghost_ids or creditor in ghost_ids:
             continue
         net[(debtor, creditor)] += Decimal(str(row["amount"]))
 
-    for debtor, creditor, amount in _live_shares(household_id):
+    for debtor, creditor, amount in _live_shares_from_items(live_items):
         if debtor in ghost_ids or creditor in ghost_ids:
             continue
         net[(debtor, creditor)] += amount
@@ -266,7 +309,7 @@ def compute_balances(household_id: UUID) -> list[LedgerBalance]:
     # A recorded payment from payer to payee reduces what payer owes payee.
     # Modeled as debt in the opposite direction (payee "owes" payer that
     # much), so after the forward/reverse netting below it cancels cleanly.
-    for payer, payee, amount in _recorded_settlement_deltas(household_id):
+    for payer, payee, amount in settlement_deltas:
         if payer in ghost_ids or payee in ghost_ids:
             continue
         net[(payee, payer)] += amount
@@ -298,7 +341,7 @@ def compute_balances(household_id: UUID) -> list[LedgerBalance]:
     return balances
 
 
-def compute_settlements(household_id: UUID) -> list[Settlement]:
+def _settlements_from_balances(balances: list[LedgerBalance]) -> list[Settlement]:
     """A minimal-transfer settle-up plan: collapses the whole group's net
     positions (not just pairwise ones -- three people in a $10 cycle have
     three nonzero pairwise balances but a zero net each, needing no
@@ -309,8 +352,6 @@ def compute_settlements(household_id: UUID) -> list[Settlement]:
     resolve at least one person per step, so it never produces more than
     (people with a nonzero net - 1) transactions.
     """
-    balances = compute_balances(household_id)
-
     net: dict[UUID, Decimal] = defaultdict(lambda: Decimal(0))
     for balance in balances:
         net[balance.creditor_member_id] += balance.amount
@@ -346,3 +387,15 @@ def compute_settlements(household_id: UUID) -> list[Settlement]:
             j += 1
 
     return settlements
+
+
+def compute_settlements(household_id: UUID) -> list[Settlement]:
+    return _settlements_from_balances(compute_balances(household_id))
+
+
+def compute_summary(household_id: UUID) -> LedgerSummary:
+    """Balances and the settle-up plan from ONE balance calculation. The plan is
+    a pure function of the balances, so computing them separately (as the two
+    endpoints do) repeats all the database reads for nothing."""
+    balances = compute_balances(household_id)
+    return LedgerSummary(balances=balances, settlements=_settlements_from_balances(balances))

@@ -24,6 +24,10 @@ import type {
 interface Props {
   householdId: string
   sessionId: string
+  // The order as the caller already has it (it just created or loaded it). With
+  // this the sheet starts from it instead of fetching the same order again, which
+  // saves a round trip every time it opens. Without it the sheet fetches its own.
+  initialSession?: PurchaseSessionWithItems
   members: Member[]
   storageLocations: StorageLocation[]
   onClose: () => void
@@ -174,6 +178,7 @@ function moreSummary(draft: Draft): string {
 export function PurchaseWizardModal({
   householdId,
   sessionId,
+  initialSession,
   members,
   storageLocations,
   onClose,
@@ -188,8 +193,14 @@ export function PurchaseWizardModal({
     [activeMembers, user?.id],
   )
 
-  const [session, setSession] = useState<PurchaseSessionWithItems | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [session, setSession] = useState<PurchaseSessionWithItems | null>(initialSession ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    if (!initialSession) return null
+    const firstPending = initialSession.items.find((i) => i.status === 'PENDING')
+    return (firstPending ?? initialSession.items[0])?.id ?? null
+  })
+  // True until the first load effect has run, when we were handed the order.
+  const startedWithSession = useRef(initialSession !== undefined)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [customized, setCustomized] = useState<Record<AutofillField, boolean>>({
     nickname: false,
@@ -266,6 +277,10 @@ export function PurchaseWizardModal({
   )
 
   useEffect(() => {
+    if (startedWithSession.current) {
+      startedWithSession.current = false
+      return
+    }
     loadSession(false).catch((err) =>
       setError(err instanceof ApiError ? err.message : 'Failed to load order'),
     )
@@ -1058,6 +1073,11 @@ export function PurchaseWizardModal({
                                 <X size={16} strokeWidth={1.75} />
                               </button>
                             </div>
+                            <p className="mt-1 text-xs text-muted">
+                              {!customized.expiry_date && draft.expiryDate
+                                ? 'Estimated from typical shelf life. Check the package and the food itself.'
+                                : 'A suggestion. Check the package and the food itself.'}
+                            </p>
                           </div>
                           <div className="flex-1">
                             <label className={fieldLabelClass}>Best-by date (optional)</label>

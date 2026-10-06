@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import require_household_membership
 from app.core.responses import Envelope, ok
-from app.schemas.ledger_entry import LedgerBalance, LedgerEntryDetail, Settlement
+from app.schemas.ledger_entry import LedgerBalance, LedgerEntryDetail, LedgerSummary, Settlement
 from app.schemas.member import Member
 from app.schemas.settlement import RecordSettlementRequest, SettlementRecord
 from app.services import ledger as ledger_service
@@ -27,6 +27,16 @@ def get_ledger_balances(
     _member: Member = Depends(require_household_membership),
 ) -> Envelope[list[LedgerBalance]]:
     return ok(ledger_service.compute_balances(household_id))
+
+
+@router.get("/summary", response_model=Envelope[LedgerSummary])
+def get_ledger_summary(
+    household_id: UUID,
+    _member: Member = Depends(require_household_membership),
+) -> Envelope[LedgerSummary]:
+    """Balances and the settle-up plan together, from a single calculation --
+    what the Balances screen loads instead of /balances and /settlements."""
+    return ok(ledger_service.compute_summary(household_id))
 
 
 @router.get("/settlements", response_model=Envelope[list[Settlement]])

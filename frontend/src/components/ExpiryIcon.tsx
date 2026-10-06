@@ -28,7 +28,7 @@ export function ExpiryIcon({ state, daysUntil, size = 15 }: Props) {
 
   const Icon = state === 'ok' ? Calendar : state === 'soon' ? CalendarClock : CalendarX
   const color = state === 'ok' ? 'text-info' : state === 'soon' ? 'text-warning' : 'text-danger'
-  const text = label(state, daysUntil)
+  const text = `${label(state, daysUntil)} (suggestion)`
 
   return (
     <span className={`inline-flex shrink-0 ${color}`} title={text} role="img" aria-label={text}>

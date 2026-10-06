@@ -190,6 +190,12 @@ export interface Settlement {
   amount: string
 }
 
+// Balances and the settle-up plan from one calculation (GET /ledger/summary).
+export interface LedgerSummary {
+  balances: LedgerBalance[]
+  settlements: Settlement[]
+}
+
 // A payment that actually happened, logged after the fact -- distinct from
 // Settlement above (a step in the computed settle-up plan). A row with
 // reverses_settlement_id set is a reversal (parties swapped) that undoes

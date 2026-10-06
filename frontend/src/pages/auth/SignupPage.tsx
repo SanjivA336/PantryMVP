@@ -32,8 +32,8 @@ export function SignupPage() {
     formState: { errors, isSubmitting },
   } = useForm<SignupForm>({ resolver: zodResolver(signupSchema) })
 
-  const [acceptedTerms, acceptedPrivacy] = watch(['acceptedTerms', 'acceptedPrivacy'])
-  const agreedToBoth = Boolean(acceptedTerms && acceptedPrivacy)
+  const [acceptedLegal, confirmedAge] = watch(['acceptedLegal', 'confirmedAge'])
+  const agreedToAll = Boolean(acceptedLegal && confirmedAge)
 
   const onSubmit = async (values: SignupForm) => {
     setServerError(null)
@@ -85,7 +85,17 @@ export function SignupPage() {
                 what's already typed into this form. */}
             <div className="flex flex-col gap-2.5">
               <label className="flex cursor-pointer items-start gap-2 text-sm text-muted">
-                <input type="checkbox" className={checkboxClass} {...register('acceptedTerms')} />
+                <input type="checkbox" className={checkboxClass} {...register('confirmedAge')} />
+                <span>
+                  I'm 18 or older, or I'm 13 to 17 and my parent or guardian has read and agrees to
+                  the Terms of Service and Privacy Policy.
+                </span>
+              </label>
+              {errors.confirmedAge && (
+                <p className="text-sm text-danger">{errors.confirmedAge.message}</p>
+              )}
+              <label className="flex cursor-pointer items-start gap-2 text-sm text-muted">
+                <input type="checkbox" className={checkboxClass} {...register('acceptedLegal')} />
                 <span>
                   I agree to the{' '}
                   <Link
@@ -95,16 +105,8 @@ export function SignupPage() {
                     className={legalLinkClass}
                   >
                     Terms of Service
-                  </Link>
-                </span>
-              </label>
-              {errors.acceptedTerms && (
-                <p className="text-sm text-danger">{errors.acceptedTerms.message}</p>
-              )}
-              <label className="flex cursor-pointer items-start gap-2 text-sm text-muted">
-                <input type="checkbox" className={checkboxClass} {...register('acceptedPrivacy')} />
-                <span>
-                  I've read the{' '}
+                  </Link>{' '}
+                  and have read the{' '}
                   <Link
                     to="/privacy"
                     target="_blank"
@@ -115,14 +117,14 @@ export function SignupPage() {
                   </Link>
                 </span>
               </label>
-              {errors.acceptedPrivacy && (
-                <p className="text-sm text-danger">{errors.acceptedPrivacy.message}</p>
+              {errors.acceptedLegal && (
+                <p className="text-sm text-danger">{errors.acceptedLegal.message}</p>
               )}
             </div>
             {serverError && <p className="text-sm text-danger">{serverError}</p>}
             <button
               type="submit"
-              disabled={isSubmitting || !agreedToBoth}
+              disabled={isSubmitting || !agreedToAll}
               className="mt-1 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover disabled:opacity-50"
             >
               {isSubmitting ? 'Creating account…' : 'Sign up'}

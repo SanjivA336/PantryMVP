@@ -184,6 +184,7 @@ export function InventoryPage() {
     loading,
     error: loadError,
     reload,
+    setData: setItems,
   } = useHouseholdResource<InventoryItem[]>(itemsUrl)
   const { data: storageLocation } = useHouseholdResource<StorageLocation>(
     householdId && storageLocationId
@@ -403,12 +404,20 @@ export function InventoryPage() {
 
   const discard = async (item: InventoryItem, reason: RemovalReason) => {
     setActionError(null)
+    // Optimistic: take the card off the list now instead of after the server
+    // answers (that's a round trip or two of nothing happening on screen). If the
+    // server refuses, put the list back and say why.
+    const before = items
+    setItems((current) => current?.filter((i) => i.id !== item.id) ?? current)
     try {
       await apiClient.delete(
         `/api/households/${householdId}/inventory-items/${item.id}?reason=${reason}`,
       )
-      reloadAll()
+      // Only the item list and its warnings change; storage locations don't.
+      reload()
+      reloadWarnings()
     } catch (err) {
+      setItems(before)
       setActionError(err instanceof ApiError ? err.message : 'Something went wrong')
     }
   }

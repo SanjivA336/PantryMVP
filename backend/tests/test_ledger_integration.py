@@ -530,10 +530,12 @@ async def test_roster_editable_while_live_frozen_once_debt_finalized(api_client,
     (nothing posted yet, so nothing to protect), but blocked once frozen,
     same as cost/quantity. PERSONAL items stay free forever regardless.
 
-    Checked via INSERT (a WITH CHECK failure is a real 401/403), not
-    DELETE -- an RLS-blocked DELETE just matches zero rows and still
-    returns 204, so it can't distinguish "blocked" from "nothing to
-    delete" the way a blocked INSERT can.
+    Checked through the API's item-update endpoint, the only way a client can
+    change a roster now: migration 0041 took every direct database write away
+    from logged-in users (RLS only filtered rows, so a member could forge usage
+    or edit a settled item through the database API). The second half pins that
+    too: the same insert, done straight against the database as a member, is
+    refused for every item, live or not.
     """
     settings = get_settings()
     household = await provision(3)
@@ -569,13 +571,28 @@ async def test_roster_editable_while_live_frozen_once_debt_finalized(api_client,
                 },
             )
 
-    live_attempt = await _try_add(live_item["id"], 2)
-    frozen_attempt = await _try_add(frozen_item["id"], 2)
-    personal_attempt = await _try_add(personal_item["id"], 1)
+    everyone = household["member_ids"]
+    live_edit = await _patch(
+        api_client, household, live_item["id"], {"allowed_member_ids": [everyone[0], everyone[2]]}
+    )
+    frozen_edit = await _patch(
+        api_client, household, frozen_item["id"], {"allowed_member_ids": [everyone[0], everyone[2]]}
+    )
+    personal_edit = await _patch(
+        api_client,
+        household,
+        personal_item["id"],
+        {"allowed_member_ids": [everyone[0], everyone[1]]},
+    )
 
-    assert live_attempt.status_code == 201, live_attempt.text
-    assert frozen_attempt.status_code in (401, 403), frozen_attempt.text
-    assert personal_attempt.status_code == 201, personal_attempt.text
+    assert live_edit.status_code == 200, live_edit.text
+    assert frozen_edit.status_code == 409, frozen_edit.text
+    assert personal_edit.status_code == 200, personal_edit.text
+
+    # Straight to the database as a logged-in member: refused no matter what.
+    for item in (live_item, frozen_item, personal_item):
+        attempt = await _try_add(item["id"], 1)
+        assert attempt.status_code in (401, 403), attempt.text
 
 
 async def test_balances_endpoint_reflects_net_amounts(api_client, provision) -> None:

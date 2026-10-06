@@ -171,6 +171,12 @@ export function WarningsButton({ householdId, stockWarnings, expiryWarnings, onI
         <Modal title="Warnings" onClose={() => setOpen(false)}>
           {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}
           {!hasWarnings && <p className="text-sm text-muted">No warnings right now.</p>}
+          {expiryWarnings.length > 0 && (
+            <p className="mb-3 text-xs text-muted">
+              Expiry warnings are suggestions based on the dates entered. Always check the food
+              itself before eating.
+            </p>
+          )}
           <div className="flex max-h-[70vh] flex-col gap-2 overflow-y-auto">
             {GROUP_ORDER.filter((key) => groups[key].length > 0).map((key) => {
               const rows = groups[key]

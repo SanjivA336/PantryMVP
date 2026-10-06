@@ -1,10 +1,18 @@
 import { useEffect, useRef } from 'react'
+import { createCoalescer } from '../lib/coalesce'
 import { supabase } from '../lib/supabaseClient'
+
+// A burst of changes (finalizing an order with eight items is eight row changes
+// in a few milliseconds) should cause one refresh, not eight. Wait this long
+// after the last change, but never longer than MAX_WAIT_MS after the first, so a
+// steady stream can't postpone the refresh forever.
+const QUIET_MS = 400
+const MAX_WAIT_MS = 2000
 
 /**
  * Subscribes to Postgres row changes (insert/update/delete) for `table`,
- * scoped to one household, and calls `onChange` whenever one lands. The
- * call sites here just use it to trigger a `reload()` from
+ * scoped to one household, and calls `onChange` once things settle after a
+ * change lands. The call sites here just use it to trigger a `reload()` from
  * useHouseholdResource rather than trying to hand-patch local state from
  * the change payload.
  *
@@ -36,6 +44,17 @@ export function useRealtimeSubscription(
     // and the real channel. Same class of race useHouseholdResource's
     // `cancelled` flag guards against for plain fetches.
     let active = true
+    const coalescer = createCoalescer(
+      () => {
+        if (active) onChangeRef.current()
+      },
+      QUIET_MS,
+      MAX_WAIT_MS,
+    )
+
+    const onRowChange = () => {
+      if (active) coalescer.trigger()
+    }
 
     const channel = supabase
       .channel(`${table}:${householdId}`)
@@ -47,14 +66,13 @@ export function useRealtimeSubscription(
           table,
           filter: `household_id=eq.${householdId}`,
         },
-        () => {
-          if (active) onChangeRef.current()
-        },
+        onRowChange,
       )
       .subscribe()
 
     return () => {
       active = false
+      coalescer.cancel()
       supabase.removeChannel(channel)
     }
   }, [table, householdId])

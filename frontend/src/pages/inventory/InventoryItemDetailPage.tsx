@@ -283,6 +283,9 @@ export function InventoryItemDetailPage() {
               />
             </div>
           </div>
+          <p className="text-xs text-muted">
+            Dates are suggestions. Check the package and the food itself before eating.
+          </p>
 
           <button
             type="button"

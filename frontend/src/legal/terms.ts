@@ -4,7 +4,7 @@ import type { LegalDocument } from './types'
 // here, update the Word file (and the "updated" date) to match.
 export const termsOfService: LegalDocument = {
   title: 'Terms of Service',
-  updated: 'October 1, 2026',
+  updated: 'October 6, 2026',
   blocks: [
     {
       type: 'p',
@@ -24,7 +24,7 @@ export const termsOfService: LegalDocument = {
     },
     {
       type: 'p',
-      text: 'You must be at least 13 years old to create an account. If you are under 18 (or under the age of majority where you live), you may use Burrow only with the permission of a parent or legal guardian, who is responsible for your use of the Service and agrees to these Terms on your behalf. You must give a working email address and confirm it. You are responsible for keeping your login credentials secure and for everything that happens under your account. Tell us promptly if you believe your account has been compromised.',
+      text: 'You must be at least 13 years old to create an account. If you are 18 or older (or at the age of majority where you live), you may use Burrow on your own. If you are 13 to 17, you may use Burrow only if a parent or legal guardian has read and agreed to these Terms and our Privacy Policy and is responsible for your use of the Service. When you create an account, you confirm that you meet one of these two conditions. Children under 13 may not use Burrow. If a minor uses your account or your household, you are responsible for their use. You must give a working email address and confirm it. You are responsible for keeping your login credentials secure and for everything that happens under your account. Tell us promptly if you believe your account has been compromised.',
     },
     {
       type: 'h2',
@@ -32,11 +32,11 @@ export const termsOfService: LegalDocument = {
     },
     {
       type: 'p',
-      text: 'Burrow is built around households (called "kitchens" in the app). When you create or join one:',
+      text: 'Burrow is built around households, called "burrows" in the app. When you create or join one:',
     },
     {
       type: 'bullet',
-      text: '**Everyone in a household can see its data**, including inventory, costs, balances, the activity feed, shopping lists and recipes, as well as the nicknames of its members. Adding or admitting someone shares that data with them.',
+      text: '**Everyone in a household can see its data**, including inventory, costs, balances, the activity feed, shopping lists and recipes, as well as the nicknames of its members. Other members see your nickname, not your email address. Adding or admitting someone shares that data with them.',
     },
     {
       type: 'bullet',
@@ -48,7 +48,7 @@ export const termsOfService: LegalDocument = {
     },
     {
       type: 'bullet',
-      text: '**History stays with the household.** Records that other members rely on, such as purchases, usage, cost splits and settlements, are append-only by design. Removing yourself or deleting your account does not erase them (see Section 11).',
+      text: '**History stays with the household.** Records that other members rely on, such as purchases, usage, cost splits and settlements, are append-only by design. Removing yourself or deleting your account does not erase them (see Section 12).',
     },
     {
       type: 'h2',
@@ -56,7 +56,7 @@ export const termsOfService: LegalDocument = {
     },
     {
       type: 'p',
-      text: 'You keep ownership of what you enter into Burrow ("Your Content"). You give us a limited, non-exclusive license to store, process and display Your Content solely as needed to operate the Service for you and your household. You are responsible for the accuracy of Your Content and for having the right to submit it, including the recipes you enter.',
+      text: 'You keep ownership of what you enter into Burrow ("Your Content"). You give us a limited, non-exclusive license to store, process and display Your Content solely as needed to operate the Service for you and your household. You are responsible for the accuracy of Your Content and for having the right to submit it, including the recipes you enter. The names of custom foods you add to Burrow\'s shared food list are visible to all users of the Service.',
     },
     {
       type: 'h2',
@@ -108,7 +108,7 @@ export const termsOfService: LegalDocument = {
     },
     {
       type: 'bullet',
-      text: '**Expiry and freshness.** Expiry and best-by dates, and related warnings, come from data you or your household entered. They are not a food-safety determination. Use your own judgment (and your senses) about whether food is safe to eat, regardless of what the Service displays.',
+      text: "**Expiry and freshness.** Expiry and best-by dates, and related warnings, are suggestions only. They come from data you or your household entered, or are estimated automatically from a food's typical shelf life, and they may be wrong. They are not a food-safety determination. Always check the package and the food itself, and use your own judgment (and your senses) about whether food is safe to eat, regardless of what the Service displays.",
     },
     {
       type: 'bullet',
@@ -152,7 +152,7 @@ export const termsOfService: LegalDocument = {
     },
     {
       type: 'p',
-      text: 'The Service is provided "as is" and "as available," without warranties of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose, accuracy and non-infringement, to the fullest extent permitted by law.',
+      text: '**THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY AND NON-INFRINGEMENT, TO THE FULLEST EXTENT PERMITTED BY LAW.**',
     },
     {
       type: 'h2',
@@ -160,7 +160,7 @@ export const termsOfService: LegalDocument = {
     },
     {
       type: 'p',
-      text: 'To the fullest extent permitted by law, Burrow and its operator will not be liable for any indirect, incidental, special, consequential or punitive damages, or any loss of data, money, food or goodwill, arising from your use of (or inability to use) the Service. This includes, without limitation, any dispute between household members over cost splitting or balances, and any harm from relying on an expiry date or food-safety inference. To the extent any liability cannot be excluded, our total liability for any claim is limited to the amount you paid to use the Service in the past twelve months (which, for a free Service, is zero). Some places do not allow certain limitations, so parts of this Section may not apply to you.',
+      text: '**TO THE FULLEST EXTENT PERMITTED BY LAW, BURROW AND ITS OPERATOR WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL OR PUNITIVE DAMAGES, OR ANY LOSS OF DATA, MONEY, FOOD OR GOODWILL, ARISING FROM YOUR USE OF (OR INABILITY TO USE) THE SERVICE. THIS INCLUDES, WITHOUT LIMITATION, ANY DISPUTE BETWEEN HOUSEHOLD MEMBERS OVER COST SPLITTING OR BALANCES, AND ANY HARM FROM RELYING ON AN EXPIRY DATE OR FOOD-SAFETY INFERENCE. TO THE EXTENT ANY LIABILITY CANNOT BE EXCLUDED, OUR TOTAL LIABILITY FOR ANY CLAIM IS LIMITED TO THE AMOUNT YOU PAID TO USE THE SERVICE IN THE PAST TWELVE MONTHS (WHICH, FOR A FREE SERVICE, IS ZERO).** Some places do not allow certain limitations, so parts of this Section may not apply to you.',
     },
     {
       type: 'h2',

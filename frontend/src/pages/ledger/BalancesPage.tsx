@@ -7,10 +7,9 @@ import { useHouseholdResource } from '../../hooks/useHouseholdResource'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription'
 import type {
-  LedgerBalance,
   LedgerEntryDetail,
+  LedgerSummary,
   Member,
-  Settlement,
   SettlementRecord,
 } from '../../types/entities'
 import { BalancesDashboard } from './BalancesDashboard'
@@ -28,14 +27,18 @@ export function BalancesPage() {
   const { householdId } = useParams<{ householdId: string }>()
   const { user } = useAuth()
 
+  // Balances and the settle-up plan come from one request: the plan is worked out
+  // from the balances, so asking for them separately made the server do it twice.
   const {
-    data: balances,
+    data: summary,
     loading: balancesLoading,
     error: balancesError,
-    reload: reloadBalances,
-  } = useHouseholdResource<LedgerBalance[]>(
-    householdId ? `/api/households/${householdId}/ledger/balances` : null,
+    reload: reloadSummary,
+  } = useHouseholdResource<LedgerSummary>(
+    householdId ? `/api/households/${householdId}/ledger/summary` : null,
   )
+  const balances = summary?.balances ?? null
+  const settlements = summary?.settlements ?? null
   const { data: members, loading: membersLoading } = useHouseholdResource<Member[]>(
     householdId ? `/api/households/${householdId}/members` : null,
   )
@@ -47,13 +50,6 @@ export function BalancesPage() {
     householdId ? `/api/households/${householdId}/ledger/entries` : null,
   )
   const {
-    data: settlements,
-    loading: settlementsLoading,
-    reload: reloadSettlements,
-  } = useHouseholdResource<Settlement[]>(
-    householdId ? `/api/households/${householdId}/ledger/settlements` : null,
-  )
-  const {
     data: settlementRecords,
     loading: recordsLoading,
     reload: reloadRecords,
@@ -62,11 +58,10 @@ export function BalancesPage() {
   )
 
   const reloadAll = useCallback(() => {
-    reloadBalances()
+    reloadSummary()
     reloadEntries()
-    reloadSettlements()
     reloadRecords()
-  }, [reloadBalances, reloadEntries, reloadSettlements, reloadRecords])
+  }, [reloadSummary, reloadEntries, reloadRecords])
   // A purchase/consumption on any device changes balances, the dashboard's
   // charts, and the settle-up plan all at once; a recorded (or reversed)
   // payment moves the same numbers. One reload for both channels keeps the
@@ -104,7 +99,7 @@ export function BalancesPage() {
           settlements={settlements}
           settlementRecords={settlementRecords}
           members={members}
-          loading={settlementsLoading || recordsLoading}
+          loading={balancesLoading || recordsLoading}
           onChange={reloadAll}
         />
       </section>
