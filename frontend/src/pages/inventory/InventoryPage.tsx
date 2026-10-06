@@ -572,6 +572,7 @@ export function InventoryPage() {
           <button
             type="button"
             onClick={() => (storageLocationId ? openAddItem() : setAddPickerOpen(true))}
+            aria-label="Add item"
             className="flex items-center gap-1.5 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
           >
             <Plus size={16} strokeWidth={2.25} />

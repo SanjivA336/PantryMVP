@@ -63,19 +63,27 @@ export function SignupPage() {
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-muted">Email</label>
+              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-muted">
+                Email
+              </label>
               <input
                 type="email"
                 className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
+                id="email"
+                autoComplete="email"
                 {...register('email')}
               />
               {errors.email && <p className="mt-1.5 text-sm text-danger">{errors.email.message}</p>}
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-muted">Password</label>
+              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-muted">
+                Password
+              </label>
               <input
                 type="password"
                 className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
+                id="password"
+                autoComplete="new-password"
                 {...register('password')}
               />
               {errors.password && (

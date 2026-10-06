@@ -33,6 +33,7 @@ export function RecipesPage() {
         <div className="flex flex-wrap gap-2">
           <Link
             to={`/households/${householdId}/recipes/import`}
+            aria-label="Import recipe"
             className="flex items-center gap-1.5 rounded-control border border-subtle bg-surface px-2 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-hover"
           >
             <Wand2 size={16} strokeWidth={1.75} />
@@ -41,6 +42,7 @@ export function RecipesPage() {
           {isDeveloper && (
             <Link
               to={`/households/${householdId}/recipes/generate`}
+              aria-label="Generate with AI"
               className="flex items-center gap-1.5 rounded-control border border-subtle bg-surface px-2 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-hover"
             >
               <Sparkles size={16} strokeWidth={1.75} />
@@ -49,6 +51,7 @@ export function RecipesPage() {
           )}
           <Link
             to={`/households/${householdId}/recipes/new`}
+            aria-label="New recipe"
             className="flex items-center gap-1.5 rounded-control bg-primary px-2 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
           >
             <Plus size={16} strokeWidth={2.25} />

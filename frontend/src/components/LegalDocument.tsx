@@ -79,7 +79,13 @@ function renderBlocks(blocks: LegalBlock[]): ReactNode[] {
       )
     } else {
       out.push(
-        <div key={i} className="mb-4 overflow-x-auto rounded-card border border-subtle">
+        <div
+          key={i}
+          role="region"
+          aria-label={`Table: ${block.header.join(', ')}`}
+          tabIndex={0}
+          className="mb-4 overflow-x-auto rounded-card border border-subtle"
+        >
           <table className="w-full min-w-[32rem] border-collapse text-left text-sm">
             <thead className="bg-surface-2 text-text">
               <tr>

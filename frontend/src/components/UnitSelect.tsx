@@ -15,6 +15,8 @@ interface Props {
   placeholder?: string
   disabled?: boolean
   className?: string
+  // What a screen reader calls this control (the visible label next to it is a separate element).
+  label?: string
 }
 
 // One dropdown for every unit picker in the app -- grouped into Weight/
@@ -28,11 +30,13 @@ export function UnitSelect({
   placeholder,
   disabled,
   className,
+  label = 'Unit',
 }: Props) {
   const grouped = dimensions.length > 1
 
   return (
     <select
+      aria-label={label}
       disabled={disabled}
       className={className}
       value={value}

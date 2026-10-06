@@ -318,6 +318,15 @@ leaving localhost.
   household, inventory, shopping list, balances), not localhost. Passed: a
   12-step browser run plus hand-checked signup/reset emails (inbox, not spam,
   SPF/DKIM/DMARC pass).
+- [ ] **Many more seeded foods.** The built-in food list is small (about 115
+  entries) and was generated as typical averages (not copied from any
+  company's data), so people will often search for something that isn't there.
+  Grow it a lot, keeping the same approach: generated typical values with the
+  shelf-life numbers described as estimates. Added 2026-10-06.
+- [ ] **First-time hints / tutorial for new users.** Nothing guides a brand-new
+  person through the app yet. Not designed yet: the approach (coach marks, a
+  checklist, an empty-state walkthrough, a sample burrow) still has to be
+  chosen before anything is built. Added 2026-10-06.
 - [ ] Invite real users. That's v1.
 
 ### Deferred past v1 (developer-gated; not required for launch)

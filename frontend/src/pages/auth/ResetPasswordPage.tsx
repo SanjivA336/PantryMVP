@@ -41,10 +41,14 @@ export function ResetPasswordPage() {
         <h1 className="mb-6 text-2xl font-semibold">Set a new password</h1>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-muted">New password</label>
+            <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-muted">
+              New password
+            </label>
             <input
               type="password"
               className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
+              id="password"
+              autoComplete="new-password"
               {...register('password')}
             />
             {errors.password && (
@@ -52,10 +56,17 @@ export function ResetPasswordPage() {
             )}
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-muted">Confirm password</label>
+            <label
+              htmlFor="confirmPassword"
+              className="mb-1.5 block text-sm font-medium text-muted"
+            >
+              Confirm password
+            </label>
             <input
               type="password"
               className="w-full rounded-control border border-subtle bg-field px-2 py-2 text-sm text-text shadow-field outline-none placeholder:text-faint focus:border-primary"
+              id="confirmPassword"
+              autoComplete="new-password"
               {...register('confirmPassword')}
             />
             {errors.confirmPassword && (

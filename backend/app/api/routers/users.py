@@ -18,7 +18,7 @@ def delete_my_account(user_id: UUID = Depends(get_current_user_id)) -> Envelope[
             status.HTTP_409_CONFLICT,
             "You own "
             + ", ".join(exc.household_names)
-            + ". Transfer ownership to another admin or delete the kitchen before "
+            + ". Transfer ownership to another admin or delete the burrow before "
             "deleting your account.",
         ) from exc
     except users_service.LastAdminError as exc:

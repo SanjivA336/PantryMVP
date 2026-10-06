@@ -101,13 +101,17 @@ export function BurrowDetails() {
   return (
     <form onSubmit={handleSubmit(onSave)} className="flex flex-col gap-5">
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-muted">Burrow name</label>
-        <input type="text" className={inputClass} {...register('name')} />
+        <label htmlFor="burrow-name" className="mb-1.5 block text-sm font-medium text-muted">
+          Burrow name
+        </label>
+        <input type="text" className={inputClass} id="burrow-name" {...register('name')} />
         {errors.name && <p className="mt-1.5 text-sm text-danger">{errors.name.message}</p>}
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-muted">Address (optional)</label>
-        <input type="text" className={inputClass} {...register('address')} />
+        <label htmlFor="burrow-address" className="mb-1.5 block text-sm font-medium text-muted">
+          Address (optional)
+        </label>
+        <input type="text" className={inputClass} id="burrow-address" {...register('address')} />
       </div>
 
       <div>

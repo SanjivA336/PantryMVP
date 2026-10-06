@@ -994,6 +994,7 @@ export function PurchaseWizardModal({
                       <div>
                         <label className={fieldLabelClass}>Storage location</label>
                         <select
+                          aria-label="Storage location"
                           className={inputClass}
                           value={draft.storageLocationId}
                           onChange={(e) => setDraft({ ...draft, storageLocationId: e.target.value })}

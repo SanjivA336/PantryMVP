@@ -31,7 +31,7 @@ def _ensure_not_owner(household_id: UUID, target: Member) -> None:
     if household is not None and target.user_id == household.owner_id:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "This member owns the kitchen. Transfer ownership before removing their "
+            "This member owns the burrow. Transfer ownership before removing their "
             "admin status or removing them.",
         )
 
