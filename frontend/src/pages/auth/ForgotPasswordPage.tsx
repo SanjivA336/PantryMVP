@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuth } from '../../hooks/useAuth'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { emailSchema, type EmailForm } from './schema'
+import { authCardClass, authScreenClass } from './authLayout'
 
 // Mirrors Supabase Auth's own per-email minimum interval between reset
 // emails (set in the Supabase Dashboard for the linked project -- see
@@ -48,8 +49,8 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-app items-center justify-center bg-surface px-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-text md:bg-bg md:p-4">
-      <div className="w-full max-w-sm bg-surface p-7 md:rounded-card md:border md:border-subtle md:shadow-card">
+    <div className={authScreenClass}>
+      <div className={authCardClass}>
         <p className="mb-1 text-sm font-medium text-primary">Burrow</p>
         <h1 className="mb-6 text-2xl font-semibold">Reset your password</h1>
         {sent && (
