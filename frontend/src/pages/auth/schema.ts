@@ -15,13 +15,12 @@ export const signupSchema = credentialsSchema.extend({
   // Either "I'm 18 or older" or "I'm 13-17 and a parent or guardian agrees". One box,
   // not a birthdate: we deliberately don't collect dates of birth.
   confirmedAge: z.literal(true, {
-    error: "You need to confirm your age (or your parent or guardian's permission) to sign up",
+    error: "Please confirm your age, or a parent or guardian's permission",
   }),
   // One box for both documents: the stored legal version identifies the Terms and
   // the Privacy Policy together, so a single acceptance records both.
   acceptedLegal: z.literal(true, {
-    error:
-      'You need to agree to the Terms of Service and confirm you have read the Privacy Policy to sign up',
+    error: 'Please agree to the Terms and Privacy Policy',
   }),
 })
 

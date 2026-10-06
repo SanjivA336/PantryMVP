@@ -116,6 +116,13 @@ export function invalidateResources() {
   for (const entry of entries.values()) entry.fetchedAt = 0
 }
 
+// Refetches everything a mounted screen is currently showing (used when the connection
+// comes back, to replace anything that went out of date while offline). Resources no
+// screen is showing are left alone; they refetch when they are next opened.
+export function refetchActiveResources() {
+  for (const path of listeners.keys()) void fetchResource(path, { force: true }).catch(() => {})
+}
+
 export function clearResourceCache() {
   generation += 1
   const paths = [...entries.keys()]

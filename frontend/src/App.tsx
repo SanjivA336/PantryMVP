@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Routes, Route, useParams } from 'react-router-dom'
 import { DiagnosticsHost } from './components/DiagnosticsPanel'
+import { OfflineBanner } from './components/OfflineBanner'
 import { ServerWakingScreen } from './components/ServerWakingScreen'
-import { warmUpServer } from './lib/apiClient'
+import { warmUpServer, watchForIdleReturn } from './lib/apiClient'
 import { AuthProvider } from './context/AuthContext'
 import { AuthGuard } from './components/AuthGuard'
 import { DeveloperGuard } from './components/DeveloperGuard'
@@ -40,14 +41,17 @@ function AccountRedirect() {
 }
 
 function App() {
-  // Once per page load: starts waking a sleeping backend right away.
+  // Once per page load: checks whether the backend is awake (and starts waking it if
+  // not), and checks again when the tab comes back after a long idle spell.
   useEffect(() => {
     warmUpServer()
+    return watchForIdleReturn()
   }, [])
 
   return (
     <BrowserRouter>
       <ServerWakingScreen />
+      <OfflineBanner />
       <DiagnosticsHost />
       <AuthProvider>
         <Routes>

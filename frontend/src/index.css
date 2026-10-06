@@ -133,6 +133,9 @@
   */
   :root {
     --bottom-bar-gap: 20px;
+    /* The top safe-area inset (iPhone clock / Dynamic Island). One variable so layouts
+       that sit at the top share it, and so it can be simulated in tests. */
+    --safe-top: env(safe-area-inset-top, 0px);
 
     /*
       The height a full-screen page should be. Normally the dynamic viewport

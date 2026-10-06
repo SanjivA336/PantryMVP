@@ -217,7 +217,7 @@ export function HouseholdShell() {
         </aside>
 
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-subtle bg-surface px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-subtle bg-surface px-4 pb-3 pt-[calc(0.75rem+var(--safe-top)+var(--offline-banner-h,0px))] md:hidden">
           <div
             role="button"
             tabIndex={0}

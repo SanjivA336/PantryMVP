@@ -76,7 +76,7 @@ export function HouseholdPickerPage() {
 
   return (
     <div className="min-h-app bg-bg p-6 text-text">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6 pt-12">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6 pt-[max(3rem,var(--offline-banner-total,0px))]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="mb-1 text-sm font-medium text-primary">Burrow</p>

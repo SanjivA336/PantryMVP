@@ -752,7 +752,7 @@ export function PurchaseWizardModal({
       />
       {/* A full-screen sheet on phones; a centred card from the desktop breakpoint up. */}
       <div className="relative flex h-full w-full max-w-4xl flex-col overflow-hidden bg-surface-2 md:h-[85vh] md:rounded-card md:border md:border-subtle md:shadow-raised">
-        <div className="flex items-center justify-between gap-2 border-b border-subtle px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:py-3">
+        <div className="flex items-center justify-between gap-2 border-b border-subtle px-4 pb-3 pt-[calc(0.75rem+var(--safe-top)+var(--offline-banner-h,0px))] md:py-3">
           <div className="flex min-w-0 items-center gap-2">
             <h3 className="shrink-0 text-base font-semibold">Order</h3>
             {multiLine && selectedItem && (

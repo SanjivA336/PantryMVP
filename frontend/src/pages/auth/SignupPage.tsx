@@ -86,10 +86,7 @@ export function SignupPage() {
             <div className="flex flex-col gap-2.5">
               <label className="flex cursor-pointer items-start gap-2 text-sm text-muted">
                 <input type="checkbox" className={checkboxClass} {...register('confirmedAge')} />
-                <span>
-                  I'm 18 or older, or I'm 13 to 17 and my parent or guardian has read and agrees to
-                  the Terms of Service and Privacy Policy.
-                </span>
+                <span>I'm 18 or older, or 13–17 with a parent or guardian's permission.</span>
               </label>
               {errors.confirmedAge && (
                 <p className="text-sm text-danger">{errors.confirmedAge.message}</p>
@@ -104,9 +101,9 @@ export function SignupPage() {
                     rel="noopener noreferrer"
                     className={legalLinkClass}
                   >
-                    Terms of Service
+                    Terms
                   </Link>{' '}
-                  and have read the{' '}
+                  and{' '}
                   <Link
                     to="/privacy"
                     target="_blank"

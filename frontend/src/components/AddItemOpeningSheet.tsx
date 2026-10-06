@@ -17,7 +17,7 @@ export function AddItemOpeningSheet({ onCancel }: { onCancel: () => void }) {
         className="absolute inset-0 bg-black/60"
       />
       <div className="relative flex h-full w-full max-w-4xl flex-col overflow-hidden bg-surface-2 md:h-[85vh] md:rounded-card md:border md:border-subtle md:shadow-raised">
-        <div className="flex items-center justify-between gap-2 border-b border-subtle px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:py-3">
+        <div className="flex items-center justify-between gap-2 border-b border-subtle px-4 pb-3 pt-[calc(0.75rem+var(--safe-top)+var(--offline-banner-h,0px))] md:py-3">
           <h3 className="text-base font-semibold">Order</h3>
           <button
             type="button"

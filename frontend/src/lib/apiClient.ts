@@ -1,4 +1,10 @@
-import { trackRequest } from './serverWake'
+import {
+  markServerAwake,
+  msSinceServerAwake,
+  setProbeWaking,
+  setUnreachable,
+  trackRequest,
+} from './serverWake'
 import { supabase } from './supabaseClient'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim()
@@ -7,17 +13,113 @@ if (!API_BASE_URL) {
   throw new Error('Missing VITE_API_BASE_URL. Check your .env file.')
 }
 
-// Fire-and-forget request to the backend's health check, sent as soon as the
-// app loads (even on the login page). On the free hosting tier the backend
-// sleeps when idle; waking it while someone is still typing their password
-// means it's usually ready by their first real request, so most people never
-// see the "waking up" banner at all. no-cors because the response is never
-// read, only the wake-up matters; /health is exempt from rate limiting and
-// doesn't touch the database.
+// Checks whether the backend is awake, as soon as the app loads (even on the login
+// page), and starts waking it if it was asleep.
+//
+// On the free hosting tier the backend sleeps when idle and the first request after
+// that can wait 30 to 60 seconds. Waiting for a real request to hang for 10 seconds
+// before saying anything left the app looking frozen, so this asks the health check
+// up front and, if there is no answer within PROBE_GRACE_MS, shows the "getting
+// things ready" screen right away. It keeps asking until the server answers, and the
+// screen disappears at that moment.
+//
+// The answer is read (not sent with no-cors) because the API allows this site's
+// origin. /health is exempt from rate limiting and doesn't touch the database.
+//
+// An offline phone is not a sleeping server: if the browser says it is offline the
+// check stops (the slim offline banner covers that case) and tries again when the
+// connection comes back. If the server has not answered after PROBE_GIVE_UP_MS it is
+// no longer "waking up": the screen switches to "we couldn't connect", and the check
+// carries on every PROBE_SLOW_RETRY_MS until it gets through. retryConnection() asks
+// right away (the "Try again" button).
+const PROBE_GRACE_MS = 1_500
+const PROBE_ATTEMPT_TIMEOUT_MS = 5_000
+const PROBE_RETRY_MS = 2_000
+const PROBE_GIVE_UP_MS = 90_000
+const PROBE_SLOW_RETRY_MS = 10_000
+// The free tier sleeps after about 15 minutes idle; checking again after a quarter of
+// that is cheap and keeps the early signal for people who come back to an open tab.
+const IDLE_RECHECK_MS = 5 * 60_000
+
+let probing = false
+let retryNow: (() => void) | undefined
+
 export function warmUpServer(): void {
-  fetch(`${API_BASE_URL}/health`, { mode: 'no-cors', cache: 'no-store' }).catch(() => {
-    // Nothing to do: if the server is down, the first real request reports it.
-  })
+  if (probing) return
+  probing = true
+  const startedAt = Date.now()
+  let answered = false
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
+
+  const showTimer = setTimeout(() => {
+    if (!answered) setProbeWaking(true)
+  }, PROBE_GRACE_MS)
+
+  const finish = () => {
+    probing = false
+    retryNow = undefined
+    clearTimeout(showTimer)
+    clearTimeout(retryTimer)
+    setProbeWaking(false)
+    setUnreachable(false)
+  }
+
+  const attempt = async () => {
+    const controller = new AbortController()
+    const abortTimer = setTimeout(() => controller.abort(), PROBE_ATTEMPT_TIMEOUT_MS)
+    try {
+      const response = await fetch(`${API_BASE_URL}/health`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+      clearTimeout(abortTimer)
+      if (response.ok) {
+        answered = true
+        markServerAwake()
+        finish()
+        return
+      }
+    } catch {
+      clearTimeout(abortTimer)
+    }
+
+    if (!navigator.onLine) {
+      finish()
+      window.addEventListener('online', warmUpServer, { once: true })
+      return
+    }
+
+    const gaveUp = Date.now() - startedAt > PROBE_GIVE_UP_MS
+    if (gaveUp) {
+      setProbeWaking(false)
+      setUnreachable(true)
+    }
+    retryTimer = setTimeout(() => void attempt(), gaveUp ? PROBE_SLOW_RETRY_MS : PROBE_RETRY_MS)
+  }
+
+  retryNow = () => {
+    clearTimeout(retryTimer)
+    void attempt()
+  }
+  void attempt()
+}
+
+// The "Try again" button: check the server right now instead of waiting for the next
+// scheduled check.
+export function retryConnection(): void {
+  retryNow?.()
+}
+
+// Checks again when the tab comes back to the foreground after a while, so someone
+// returning to an open tab gets the early signal too. Returns the cleanup function.
+export function watchForIdleReturn(): () => void {
+  const onVisible = () => {
+    if (document.visibilityState === 'visible' && msSinceServerAwake() > IDLE_RECHECK_MS) {
+      warmUpServer()
+    }
+  }
+  document.addEventListener('visibilitychange', onVisible)
+  return () => document.removeEventListener('visibilitychange', onVisible)
 }
 
 interface Envelope<T> {
@@ -123,6 +225,9 @@ async function request<T>(path: string, options: RequestInit = {}, timeoutMs?: n
     if (timeoutId !== undefined) clearTimeout(timeoutId)
     endTracking?.()
   }
+
+  // Whatever the status, an answer means the server is awake.
+  markServerAwake()
 
   let envelope: Envelope<T>
   try {
