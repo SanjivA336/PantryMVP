@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
-import { ChevronRight, Home, LogOut, Plus } from 'lucide-react'
+import { ChevronRight, Home, LogOut, Plus, RefreshCw } from 'lucide-react'
 import { apiClient } from '../../lib/apiClient'
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal'
 import { useAuth } from '../../hooks/useAuth'
@@ -32,32 +32,42 @@ export function HouseholdPickerPage() {
   const location = useLocation()
   const forcePicker = Boolean((location.state as { forcePicker?: boolean } | null)?.forcePicker)
 
+  // Bumping `attempt` re-runs the load below, which is all "Try again" needs to do.
+  const [attempt, setAttempt] = useState(0)
+
   useEffect(() => {
+    let cancelled = false
     apiClient
       .get<Household[]>('/api/households')
-      .then(setHouseholds)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong'))
-  }, [])
+      .then((data) => {
+        if (!cancelled) setHouseholds(data)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Something went wrong')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [attempt])
+
+  const retry = () => {
+    setError(null)
+    setHouseholds(null)
+    setAttempt((n) => n + 1)
+  }
 
   if (error) {
     return (
-      <div className="flex min-h-app flex-col items-center justify-center gap-4 bg-bg p-6">
+      <div className="flex min-h-app flex-col items-center justify-center gap-4 bg-bg p-6 text-center">
         <p className="text-sm text-danger">{error}</p>
         <button
           type="button"
-          onClick={() => setLogoutConfirmOpen(true)}
-          className="flex items-center gap-2 rounded-control border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger-soft"
+          onClick={retry}
+          className="flex items-center justify-center gap-2 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-bg transition-colors hover:bg-primary-hover"
         >
-          <LogOut size={16} strokeWidth={1.75} />
-          Log out
+          <RefreshCw size={16} strokeWidth={1.75} />
+          Try again
         </button>
-        {logoutConfirmOpen && (
-          <LogoutConfirmModal
-            loggingOut={loggingOut}
-            onClose={() => setLogoutConfirmOpen(false)}
-            onConfirm={() => void handleSignOut()}
-          />
-        )}
       </div>
     )
   }

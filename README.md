@@ -327,6 +327,14 @@ leaving localhost.
   person through the app yet. Not designed yet: the approach (coach marks, a
   checklist, an empty-state walkthrough, a sample burrow) still has to be
   chosen before anything is built. Added 2026-10-06.
+- [ ] **Tester kit.** The invite message, a short "what to try" list, and
+  check-in questions for the first testers. Added 2026-10-08.
+- [ ] **API rate limit + retry.** The API allows 120 requests per minute per
+  IP address, and roommates on one home network share one IP. A live test with
+  four simulated roommates reached 122 to 127 in a minute and was refused
+  (HTTP 429), after which the burrow page shows a hard "couldn't load" error
+  with no retry. Raise the limit (about 300 per minute) and make the page retry
+  after a 429 instead of giving up. Added 2026-10-08.
 - [ ] Invite real users. That's v1.
 
 ### Deferred past v1 (developer-gated; not required for launch)
